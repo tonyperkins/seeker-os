@@ -15,15 +15,15 @@ from __future__ import annotations
 
 import re
 import yaml
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+from pydantic import BaseModel, Field
 
 from seeker_os.config import Settings
 
 
-@dataclass
-class Violation:
+class Violation(BaseModel):
     """A single accuracy rule violation."""
     rule_id: str
     description: str
@@ -32,11 +32,10 @@ class Violation:
     matched_text: str = ""
 
 
-@dataclass
-class ValidationResult:
+class ValidationResult(BaseModel):
     """Result of validating a generated resume."""
     passed: bool
-    violations: list[Violation] = field(default_factory=list)
+    violations: list[Violation] = Field(default_factory=list)
     checked_at: str = ""
 
     @property
@@ -47,16 +46,7 @@ class ValidationResult:
         return {
             "passed": self.passed,
             "checked_at": self.checked_at,
-            "violations": [
-                {
-                    "rule_id": v.rule_id,
-                    "description": v.description,
-                    "violation": v.violation,
-                    "severity": v.severity,
-                    "matched_text": v.matched_text,
-                }
-                for v in self.violations
-            ],
+            "violations": [v.model_dump() for v in self.violations],
         }
 
 

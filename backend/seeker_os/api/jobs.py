@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException, Query
 from seeker_os.api.schemas import (
@@ -62,6 +62,7 @@ def _row_to_detail(row) -> JobDetail:
         score_gaps=json_decode(row["score_gaps"]) or [],
         reject_reason=row["reject_reason"],
         reject_details=row["reject_details"] if "reject_details" in row.keys() else None,
+        snoozed_until=row["snoozed_until"] if "snoozed_until" in row.keys() else None,
         jd_full=row["jd_full"] or "",
         jd_fetch_status=row["jd_fetch_status"] or "pending",
         source_id=row["source_id"] or "",
@@ -171,20 +172,21 @@ def reject_job(job_id: int, body: JobReject):
 
 @router.post("/{job_id}/snooze", response_model=MessageResponse)
 def snooze_job(job_id: int, body: JobSnooze):
-    """Snooze a job for N days (sets status to 'skipped')."""
+    """Snooze a job for N days (sets status to 'skipped' with snoozed_until timestamp)."""
     db = get_connection()
     try:
         row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
+        snoozed_until = (now + timedelta(days=body.days)).isoformat()
         db.execute(
-            "UPDATE jobs SET status='skipped', reject_reason=?, updated_at=? WHERE id=?",
-            (f"Snoozed for {body.days} days", now, job_id),
+            "UPDATE jobs SET status='skipped', snoozed_until=?, reject_reason=NULL, updated_at=? WHERE id=?",
+            (snoozed_until, now.isoformat(), job_id),
         )
         db.commit()
-        return MessageResponse(message=f"Job {job_id} snoozed for {body.days} days")
+        return MessageResponse(message=f"Job {job_id} snoozed for {body.days} days (until {snoozed_until[:10]})")
     finally:
         db.close()
 

@@ -70,6 +70,7 @@ export interface JobDetail extends JobSummary {
   score_reasons: string[];
   score_gaps: string[];
   reject_details: string | null;
+  snoozed_until: string | null;
   jd_full: string;
   jd_fetch_status: string;
   source_id: string;

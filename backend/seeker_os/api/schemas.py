@@ -65,6 +65,7 @@ class JobDetail(BaseModel):
     score_gaps: list[str] = []
     reject_reason: str | None = None
     reject_details: str | None = None
+    snoozed_until: str | None = None
 
     # JD
     jd_full: str = ""

@@ -6,6 +6,7 @@ Run with:
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -36,10 +37,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow the Next.js dev server
+# CORS — configurable via env var CORS_ORIGINS (comma-separated).
+# Defaults to localhost:3000 for local dev. For Docker/production, set
+# CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+_default_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+_cors_env = os.environ.get("CORS_ORIGINS", "")
+allow_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] if _cors_env else _default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
