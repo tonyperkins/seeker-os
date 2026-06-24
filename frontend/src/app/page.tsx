@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { RunPipelineButton } from "@/components/run-pipeline-button";
 import { SetupGuide } from "@/components/setup-guide";
-import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo } from "@/lib/api";
+import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
 
 function StatCard({
   label,
@@ -130,15 +130,17 @@ export default async function DashboardPage() {
   let topMatches: JobSummary[] = [];
   let settings: SettingsResponse | null = null;
   let resumeInfo: MasterResumeInfo | null = null;
+  let providers: ProvidersConfigResponse | null = null;
   let error: string | null = null;
 
   try {
-    [funnel, runs, topMatches, settings, resumeInfo] = await Promise.all([
+    [funnel, runs, topMatches, settings, resumeInfo, providers] = await Promise.all([
       api.analytics.funnel(),
       api.pipeline.runs(),
       api.jobs.list({ status: "ready", limit: 5 }),
       api.settings.get(),
       api.resumes.getMaster().catch(() => null),
+      api.models.getConfig().catch(() => null),
     ]);
     // Sort top matches by score desc (defensive — API may already sort)
     topMatches = [...topMatches].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
@@ -164,10 +166,13 @@ export default async function DashboardPage() {
   const jdFetchSuccess = funnel?.jd_fetch_success ?? 0;
   const jdFetchPct = jdFetchTotal > 0 ? Math.round((jdFetchSuccess / jdFetchTotal) * 100) : 0;
 
-  // Detect new-install state: placeholder profile name or no resume
+  // Detect new-install state: no provider, placeholder profile, no resume, or no jobs
   const isProfilePlaceholder = !settings?.profile_loaded;
   const totalJobs = funnel?.total_jobs ?? 0;
-  const isNewInstall = isProfilePlaceholder || !resumeInfo?.exists || totalJobs === 0;
+  const hasProvider = (providers?.providers ?? []).some(
+    (p) => p.enabled && (p.api_key_set || p.healthy === true) && p.models.length > 0,
+  );
+  const isNewInstall = !hasProvider || isProfilePlaceholder || !resumeInfo?.exists || totalJobs === 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -186,6 +191,7 @@ export default async function DashboardPage() {
           resumeInfo={resumeInfo}
           isProfilePlaceholder={isProfilePlaceholder}
           totalJobs={totalJobs}
+          hasProvider={hasProvider}
         />
       )}
 

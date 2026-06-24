@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import {
+  Server,
   Upload,
   Sparkles,
   SlidersHorizontal,
@@ -26,10 +27,12 @@ export function SetupGuide({
   resumeInfo,
   isProfilePlaceholder,
   totalJobs,
+  hasProvider,
 }: {
   resumeInfo: MasterResumeInfo | null;
   isProfilePlaceholder: boolean;
   totalJobs: number;
+  hasProvider: boolean;
 }) {
   const [info, setInfo] = useState<MasterResumeInfo | null>(resumeInfo);
   const [parsing, setParsing] = useState(false);
@@ -37,7 +40,6 @@ export function SetupGuide({
   const [parseError, setParseError] = useState<string | null>(null);
 
   const onUploaded = useCallback(() => {
-    // Refresh resume info after upload
     api.resumes.getMaster().then(setInfo).catch(() => {});
   }, []);
 
@@ -55,6 +57,7 @@ export function SetupGuide({
   }, []);
 
   // Determine step completion
+  const step0Done = hasProvider;
   const step1Done = info?.exists ?? false;
   const step2Done = parsed;
   const step3Done = !isProfilePlaceholder;
@@ -62,16 +65,23 @@ export function SetupGuide({
 
   const steps = [
     {
+      icon: Server,
+      title: "Configure an LLM provider",
+      description: "Set up at least one provider with an API key and assign models to tiers. This powers resume parsing, scoring, and generation.",
+      done: step0Done,
+      action: !step0Done ? "providers" : null,
+    },
+    {
       icon: Upload,
       title: "Upload your master resume",
       description: "Upload your resume (.md, .docx, or .pdf). This is the source for all tailored resume generation.",
       done: step1Done,
-      action: step1Done ? null : "upload",
+      action: step0Done && !step1Done ? "upload" : null,
     },
     {
       icon: Sparkles,
       title: "Parse your resume",
-      description: "Extract contact info, experience, skills, and suggested filter parameters automatically.",
+      description: "Extract contact info, experience, skills, and suggested filter parameters automatically using your configured LLM.",
       done: step2Done,
       action: step1Done && !step2Done ? "parse" : null,
     },
@@ -80,7 +90,7 @@ export function SetupGuide({
       title: "Review your profile & filters",
       description: "Check the extracted data, adjust your filter parameters, and add any free-form instructions.",
       done: step3Done,
-      action: step2Done && !step3Done ? "settings" : (!step1Done ? null : "settings"),
+      action: step2Done && !step3Done ? "settings" : (step0Done && step1Done && !step3Done ? "settings" : null),
     },
     {
       icon: Play,
@@ -91,7 +101,7 @@ export function SetupGuide({
     },
   ];
 
-  const allDone = step1Done && step3Done && step4Done;
+  const allDone = step0Done && step1Done && step3Done && step4Done;
 
   if (allDone) return null;
 
@@ -148,6 +158,16 @@ export function SetupGuide({
           </div>
 
           {/* Current step action */}
+          {currentStep?.action === "providers" && (
+            <Link href="/models" className="inline-flex">
+              <Button variant="outline" size="lg" className="w-full">
+                <Server />
+                Configure Providers & Models
+                <ArrowRight />
+              </Button>
+            </Link>
+          )}
+
           {currentStep?.action === "upload" && (
             <div className="rounded-lg border border-border p-4">
               <MasterResumeUpload onUploaded={onUploaded} bare />
