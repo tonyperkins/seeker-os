@@ -12,6 +12,8 @@ dependencies = [
     "rich>=13.0",            # CLI output (tables, colors)
     "fastapi>=0.110",        # API backend (Phase 2)
     "uvicorn[standard]>=0.29",  # ASGI server
+    "anthropic>=0.40",       # Anthropic native API (Phase 3)
+    "openai>=1.50",          # OpenAI-compatible API client (Phase 3)
 ]
 
 [project.optional-dependencies]

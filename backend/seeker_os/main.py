@@ -196,6 +196,180 @@ def cmd_sync_config(args: argparse.Namespace) -> None:
     console.print("[bold green]Config sync complete.[/bold green]")
 
 
+def cmd_models(args: argparse.Namespace) -> None:
+    """LLM model management commands."""
+    from seeker_os.config import Settings
+    from seeker_os.llm.router import ModelRouter
+    from seeker_os.llm.cache import get_cached_models, save_cached_models
+
+    settings = Settings()
+
+    if not settings.providers:
+        console.print("[red]No providers configured (config/providers.yml missing)[/red]")
+        return
+
+    router = ModelRouter(settings)
+
+    if args.models_command == "list":
+        models = router.list_all_models(provider_id=args.provider)
+        if not models:
+            console.print("[yellow]No models found.[/yellow]")
+            return
+
+        from rich.table import Table
+        table = Table(title="Available Models")
+        table.add_column("ID", style="cyan")
+        table.add_column("Label")
+        table.add_column("Provider", style="green")
+        table.add_column("Tags", style="yellow")
+        table.add_column("Source", style="dim")
+        table.add_column("Available")
+
+        for m in models:
+            table.add_row(
+                m.id,
+                m.label,
+                m.provider_id,
+                ", ".join(m.tags) if m.tags else "-",
+                m.source,
+                "✓" if m.available else "✗",
+            )
+        console.print(table)
+
+    elif args.models_command == "search":
+        query = args.query.lower()
+        models = router.list_all_models(provider_id=args.provider)
+        filtered = [
+            m for m in models
+            if query in m.id.lower() or query in m.label.lower()
+        ]
+        if args.tag:
+            filtered = [m for m in filtered if args.tag in m.tags]
+
+        if not filtered:
+            console.print(f"[yellow]No models matching '{args.query}'[/yellow]")
+            return
+
+        from rich.table import Table
+        table = Table(title=f"Models matching '{args.query}'")
+        table.add_column("ID", style="cyan")
+        table.add_column("Label")
+        table.add_column("Provider", style="green")
+        table.add_column("Tags", style="yellow")
+
+        for m in filtered:
+            table.add_row(m.id, m.label, m.provider_id, ", ".join(m.tags) if m.tags else "-")
+        console.print(table)
+
+    elif args.models_command == "fetch":
+        providers = router.get_available_providers()
+        if args.provider:
+            providers = {args.provider: providers.get(args.provider)} if args.provider in providers else {}
+        if not providers:
+            console.print("[red]No providers available[/red]")
+            return
+
+        for pid, provider in providers.items():
+            console.print(f"Fetching models from [cyan]{pid}[/cyan]...")
+            try:
+                models = provider.list_models()
+                save_cached_models(pid, models)
+                console.print(f"  [green]Found {len(models)} models[/green]")
+            except Exception as e:
+                console.print(f"  [red]Failed: {e}[/red]")
+
+    elif args.models_command == "test":
+        providers = router.get_available_providers()
+        if args.provider:
+            providers = {args.provider: providers.get(args.provider)} if args.provider in providers else {}
+        if not providers:
+            console.print("[red]No providers available[/red]")
+            return
+
+        for pid, provider in providers.items():
+            console.print(f"Testing [cyan]{pid}[/cyan]...")
+            health = provider.test_connection()
+            if health.healthy:
+                console.print(f"  [green]✓ {health.message} ({health.latency_ms}ms)[/green]")
+            else:
+                console.print(f"  [red]✗ {health.message}[/red]")
+
+    else:
+        console.print("[yellow]Usage: seeker_os models {list|search|fetch|test}[/yellow]")
+
+
+def cmd_resume(args: argparse.Namespace) -> None:
+    """Resume generation commands."""
+    from seeker_os.config import Settings
+
+    settings = Settings()
+
+    if args.resume_command == "generate":
+        from seeker_os.resume.generator import generate_resume
+        console.print(f"Generating resume for job {args.job_id}...")
+        try:
+            result = generate_resume(settings, job_id=args.job_id, task=args.task)
+            console.print(f"[green]✓ Resume generated (ID: {result['resume_id']})[/green]")
+            console.print(f"  Provider: {result['provider']}/{result['model']}")
+            console.print(f"  Tokens: {result['input_tokens']} in, {result['output_tokens']} out")
+            console.print(f"  Validation: {'PASSED' if result['validation_passed'] else 'VIOLATIONS FOUND'}")
+            if result["validation_violations"]:
+                for v in result["validation_violations"]:
+                    console.print(f"    [{v.get('severity', 'high')}] {v.get('violation', '')}")
+            console.print(f"  File: {result['markdown_path']}")
+        except Exception as e:
+            console.print(f"[red]Failed: {e}[/red]")
+
+    elif args.resume_command == "list":
+        from seeker_os.resume.generator import list_resumes
+        resumes = list_resumes(job_id=args.job if hasattr(args, "job") else None)
+
+        from rich.table import Table
+        table = Table(title="Generated Resumes")
+        table.add_column("ID", style="cyan")
+        table.add_column("Job ID")
+        table.add_column("Model", style="green")
+        table.add_column("Validation")
+        table.add_column("Generated", style="dim")
+
+        for r in resumes:
+            table.add_row(
+                str(r["id"]),
+                str(r["job_id"]),
+                r["model"],
+                "✓" if r["validation_passed"] else "✗",
+                r["generated_at"][:10] if r["generated_at"] else "",
+            )
+        console.print(table)
+
+    elif args.resume_command == "show":
+        from seeker_os.resume.generator import get_resume
+        resume = get_resume(args.resume_id)
+        if not resume:
+            console.print(f"[red]Resume {args.resume_id} not found[/red]")
+            return
+        console.print(f"[bold]{resume['job_title']}[/bold] at [bold]{resume['job_company']}[/bold]")
+        console.print(f"Generated: {resume['generated_at']}")
+        console.print(f"Model: {resume['provider']}/{resume['model']}")
+        console.print(f"Validation: {'PASSED' if resume['validation_passed'] else 'VIOLATIONS'}")
+        console.print()
+        console.print(resume["resume_text"])
+
+    elif args.resume_command == "validate":
+        from seeker_os.resume.validator import AccuracyValidator
+        validator = AccuracyValidator(settings)
+        try:
+            result = validator.revalidate(args.resume_id)
+            console.print(f"Validation: {'PASSED' if result.passed else 'VIOLATIONS FOUND'}")
+            for v in result.violations:
+                console.print(f"  [{v.severity}] {v.rule_id}: {v.violation}")
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+
+    else:
+        console.print("[yellow]Usage: seeker_os resume {generate|list|show|validate}[/yellow]")
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -228,6 +402,47 @@ def main() -> None:
     # sync-config
     sync_parser = subparsers.add_parser("sync-config", help="Sync yml files to DB")
     sync_parser.set_defaults(func=cmd_sync_config)
+
+    # models
+    models_parser = subparsers.add_parser("models", help="LLM model management")
+    models_sub = models_parser.add_subparsers(dest="models_command")
+
+    models_list = models_sub.add_parser("list", help="List all models")
+    models_list.add_argument("--provider", type=str, help="Filter by provider ID")
+
+    models_search = models_sub.add_parser("search", help="Search models")
+    models_search.add_argument("query", type=str, help="Search query")
+    models_search.add_argument("--provider", type=str, help="Filter by provider")
+    models_search.add_argument("--tag", type=str, help="Filter by tag (heavy/moderate/light)")
+
+    models_fetch = models_sub.add_parser("fetch", help="Fetch models from provider APIs")
+    models_fetch.add_argument("--provider", type=str, help="Fetch for specific provider")
+    models_fetch.add_argument("--all", action="store_true", help="Fetch for all providers")
+
+    models_test = models_sub.add_parser("test", help="Test provider connections")
+    models_test.add_argument("--provider", type=str, help="Test specific provider")
+
+    models_parser.set_defaults(func=cmd_models)
+
+    # resume
+    resume_parser = subparsers.add_parser("resume", help="Resume generation")
+    resume_sub = resume_parser.add_subparsers(dest="resume_command")
+
+    resume_gen = resume_sub.add_parser("generate", help="Generate resume for a job")
+    resume_gen.add_argument("job_id", type=int, help="Job ID")
+    resume_gen.add_argument("--task", type=str, default="resume_generation_standard",
+                           help="LLM task (resume_generation_standard or resume_generation_high_value)")
+
+    resume_list = resume_sub.add_parser("list", help="List generated resumes")
+    resume_list.add_argument("--job", type=int, help="Filter by job ID")
+
+    resume_show = resume_sub.add_parser("show", help="Show a resume")
+    resume_show.add_argument("resume_id", type=int, help="Resume ID")
+
+    resume_validate = resume_sub.add_parser("validate", help="Re-validate a resume")
+    resume_validate.add_argument("resume_id", type=int, help="Resume ID")
+
+    resume_parser.set_defaults(func=cmd_resume)
 
     args = parser.parse_args()
     if not args.command:
