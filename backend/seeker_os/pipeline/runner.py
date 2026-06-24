@@ -131,6 +131,18 @@ def run_pipeline(
                 dedup = check_duplicate(card, db, source_map)
                 if dedup.is_duplicate:
                     result.duplicates_skipped += 1
+                    # Backfill detail_url for existing jobs if the new card has one
+                    # and the existing job doesn't (e.g. jobs discovered before the
+                    # detail_url feature was added)
+                    if card.detail_url and dedup.matched_job_id:
+                        existing = db.execute(
+                            "SELECT detail_url FROM jobs WHERE id=?", (dedup.matched_job_id,)
+                        ).fetchone()
+                        if existing and not existing["detail_url"]:
+                            db.execute(
+                                "UPDATE jobs SET detail_url=?, updated_at=? WHERE id=?",
+                                (card.detail_url, datetime.now(timezone.utc).isoformat(), dedup.matched_job_id),
+                            )
                     continue
 
                 job_id = _insert_job(db, card)
@@ -211,6 +223,21 @@ def run_pipeline(
     # -----------------------------------------------------------------------
     if 3 in tier_set and not dry_run:
         print("\nTier 3: JD Fetch")
+        # Process new jobs (pending) AND retry previously failed JD fetches.
+        # Failed jobs have status='rejected' from the prior failure — we reset
+        # them back to 'filtered' so they can flow through the pipeline again.
+        retry_jobs = db.execute(
+            "SELECT * FROM jobs WHERE tier_passed=2 AND jd_fetch_status='failed' AND status='rejected'"
+        ).fetchall()
+        if retry_jobs:
+            print(f"  Retrying {len(retry_jobs)} previously failed JD fetches")
+            for row in retry_jobs:
+                db.execute(
+                    "UPDATE jobs SET status='filtered', jd_fetch_status='pending', reject_reason=NULL, updated_at=? WHERE id=?",
+                    (datetime.now(timezone.utc).isoformat(), row["id"]),
+                )
+            db.commit()
+
         jobs = db.execute(
             "SELECT * FROM jobs WHERE status='filtered' AND tier_passed=2 AND jd_fetch_status='pending'"
         ).fetchall()
