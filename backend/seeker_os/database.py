@@ -167,10 +167,6 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE jobs ADD COLUMN detail_url TEXT;
     """,
-    # Migration 5: Add snoozed_until column for job snooze tracking
-    """
-    ALTER TABLE jobs ADD COLUMN snoozed_until TEXT;
-    """,
 ]
 
 

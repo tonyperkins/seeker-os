@@ -33,7 +33,7 @@ const STATUS_OPTIONS = [
   { value: "reviewing", label: "Reviewing" },
   { value: "interested", label: "Interested" },
   { value: "applied", label: "Applied" },
-  { value: "snoozed", label: "Snoozed" },
+  { value: "skipped", label: "Skipped" },
 ];
 
 function statusBadgeVariant(status: string) {

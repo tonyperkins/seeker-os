@@ -70,7 +70,6 @@ export interface JobDetail extends JobSummary {
   score_reasons: string[];
   score_gaps: string[];
   reject_details: string | null;
-  snoozed_until: string | null;
   jd_full: string;
   jd_fetch_status: string;
   source_id: string;
@@ -369,8 +368,8 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ reason, details }),
       }),
-    snooze: (id: number, days: number) =>
-      fetchAPI<{ message: string }>(`/api/jobs/${id}/snooze`, { method: "POST", body: JSON.stringify({ days }) }),
+    skip: (id: number) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/skip`, { method: "POST" }),
     crossRef: (id: number) => fetchAPI<Record<string, unknown>>(`/api/jobs/${id}/cross-ref`),
   },
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   XCircle,
-  Clock,
+  SkipForward,
   Eye,
   Star,
   Loader2,
@@ -22,7 +22,6 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 
@@ -54,7 +53,6 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
   const [error, setError] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectDetails, setRejectDetails] = useState("");
-  const [snoozeDays, setSnoozeDays] = useState("7");
   const [rejectOpen, setRejectOpen] = useState(false);
 
   async function doAction(
@@ -163,50 +161,15 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
           </DialogContent>
         </Dialog>
 
-        {/* Snooze dialog */}
-        <Dialog>
-          <DialogTrigger
-            render={
-              <Button variant="outline" disabled={busy !== null}>
-                {busy === "snooze" ? <Loader2 className="animate-spin" /> : <Clock />}
-                Snooze
-              </Button>
-            }
-          />
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Snooze job</DialogTitle>
-              <DialogDescription>
-                Hide this job for a number of days.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="snooze-days">Days</Label>
-              <Input
-                id="snooze-days"
-                type="number"
-                min={1}
-                max={365}
-                value={snoozeDays}
-                onChange={(e) => setSnoozeDays(e.target.value)}
-              />
-            </div>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-              <Button
-                disabled={busy !== null}
-                onClick={() =>
-                  doAction("snooze", () =>
-                    api.jobs.snooze(jobId, parseInt(snoozeDays, 10) || 7),
-                  )
-                }
-              >
-                {busy === "snooze" ? <Loader2 className="animate-spin" /> : <Clock />}
-                Snooze {snoozeDays}d
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Skip — removes from active queue */}
+        <Button
+          variant="outline"
+          disabled={busy !== null}
+          onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
+        >
+          {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
+          Skip
+        </Button>
 
         <Button
           variant="outline"

@@ -65,7 +65,6 @@ class JobDetail(BaseModel):
     score_gaps: list[str] = []
     reject_reason: str | None = None
     reject_details: str | None = None
-    snoozed_until: str | None = None
 
     # JD
     jd_full: str = ""
@@ -103,11 +102,6 @@ class JobReject(BaseModel):
     """POST /api/jobs/{id}/reject."""
     reason: str
     details: str | None = None  # free-text feedback on why the job was rejected
-
-
-class JobSnooze(BaseModel):
-    """POST /api/jobs/{id}/snooze."""
-    days: int = 7
 
 
 # ---------------------------------------------------------------------------

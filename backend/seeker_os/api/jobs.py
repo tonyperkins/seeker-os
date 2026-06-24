@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from seeker_os.api.schemas import (
-    JobSummary, JobDetail, JobUpdate, JobReject, JobSnooze, MessageResponse,
+    JobSummary, JobDetail, JobUpdate, JobReject, MessageResponse,
 )
 from seeker_os.database import get_connection, json_decode
 
@@ -62,7 +62,6 @@ def _row_to_detail(row) -> JobDetail:
         score_gaps=json_decode(row["score_gaps"]) or [],
         reject_reason=row["reject_reason"],
         reject_details=row["reject_details"] if "reject_details" in row.keys() else None,
-        snoozed_until=row["snoozed_until"] if "snoozed_until" in row.keys() else None,
         jd_full=row["jd_full"] or "",
         jd_fetch_status=row["jd_fetch_status"] or "pending",
         source_id=row["source_id"] or "",
@@ -170,23 +169,22 @@ def reject_job(job_id: int, body: JobReject):
         db.close()
 
 
-@router.post("/{job_id}/snooze", response_model=MessageResponse)
-def snooze_job(job_id: int, body: JobSnooze):
-    """Snooze a job for N days (sets status to 'skipped' with snoozed_until timestamp)."""
+@router.post("/{job_id}/skip", response_model=MessageResponse)
+def skip_job(job_id: int):
+    """Skip a job — removes it from the active queue (sets status to 'skipped')."""
     db = get_connection()
     try:
         row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        now = datetime.now(timezone.utc)
-        snoozed_until = (now + timedelta(days=body.days)).isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         db.execute(
-            "UPDATE jobs SET status='skipped', snoozed_until=?, reject_reason=NULL, updated_at=? WHERE id=?",
-            (snoozed_until, now.isoformat(), job_id),
+            "UPDATE jobs SET status='skipped', reject_reason=NULL, updated_at=? WHERE id=?",
+            (now, job_id),
         )
         db.commit()
-        return MessageResponse(message=f"Job {job_id} snoozed for {body.days} days (until {snoozed_until[:10]})")
+        return MessageResponse(message=f"Job {job_id} skipped")
     finally:
         db.close()
 
