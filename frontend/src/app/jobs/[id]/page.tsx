@@ -27,6 +27,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { JobActions } from "@/components/job-actions";
+import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { api, type JobDetail } from "@/lib/api";
 
 function formatComp(job: JobDetail): string {
@@ -191,6 +192,8 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
               Apply on {job.ats_source ?? "site"}
             </Button>
           )}
+
+          <GenerateResumeButton jobId={job.id} />
         </div>
 
         {/* Right: score breakdown + JD */}
