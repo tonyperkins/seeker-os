@@ -251,9 +251,19 @@ def _save_parsed_to_config(settings, result: ResumeParseResult) -> None:
         if result.experience_years >= 10:
             profile.experience.anchor_phrase = f"{result.experience_years}+ years"
 
-    # Update comp floor from suggestion
+    # Update comp from suggestion.
+    # Keep the three values sane: floor <= target <= stretch.
+    # If the suggested floor exceeds the current target, bump target up to
+    # floor + 10% so the scoring modifier still makes sense.
     if result.suggested_comp_floor and hasattr(profile, "comp"):
-        profile.comp.floor = result.suggested_comp_floor
+        new_floor = result.suggested_comp_floor
+        profile.comp.floor = new_floor
+        # Ensure target stays above floor
+        if profile.comp.target and profile.comp.target < new_floor:
+            profile.comp.target = int(new_floor * 1.10)
+        # Ensure stretch stays above target
+        if profile.comp.stretch and profile.comp.stretch < (profile.comp.target or new_floor):
+            profile.comp.stretch = int((profile.comp.target or new_floor) * 1.30)
 
     write_profile(profile)
 
