@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Loader2, AlertCircle, FileText, RefreshCw } from "lucide-react";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2, AlertCircle, FileText, RefreshCw, X } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -30,7 +30,18 @@ function formatDate(iso: string): string {
 }
 
 export default function ResumesPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-12 text-sm text-muted-foreground">Loading…</div>}>
+      <ResumesContent />
+    </Suspense>
+  );
+}
+
+function ResumesContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const jobIdParam = searchParams.get("job_id");
+  const jobId = jobIdParam ? Number(jobIdParam) : null;
   const [resumes, setResumes] = useState<ResumeSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,14 +50,14 @@ export default function ResumesPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.resumes.list();
+      const data = await api.resumes.list(jobId ?? undefined);
       setResumes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load resumes");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [jobId]);
 
   const handleDelete = useCallback(async (id: number) => {
     await api.resumes.delete(id);
@@ -67,6 +78,19 @@ export default function ResumesPage() {
           <p className="text-sm text-muted-foreground">
             AI-generated tailored resumes with accuracy validation.
           </p>
+          {jobId && (
+            <div className="mt-2 flex items-center gap-2">
+              <Badge variant="secondary">Filtered by job #{jobId}</Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/resumes")}
+                className="h-6 px-2 text-xs"
+              >
+                <X className="size-3" /> Clear
+              </Button>
+            </div>
+          )}
         </div>
         <Button variant="outline" size="sm" onClick={fetchResumes} disabled={loading}>
           {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}

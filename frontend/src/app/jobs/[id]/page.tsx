@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   Pin,
+  FileText,
 } from "lucide-react";
 import {
   Card,
@@ -193,6 +194,16 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
               Apply on {job.ats_source ?? "site"}
             </Button>
           )}
+
+          <Button
+            size="lg"
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={`/resumes?job_id=${job.id}`} />}
+          >
+            <FileText />
+            View Resumes
+          </Button>
 
           <GenerateResumeButton jobId={job.id} />
         </div>
