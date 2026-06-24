@@ -96,7 +96,7 @@ class HiringCafeAdapter:
             raise RuntimeError("__NEXT_DATA__ script tag not found in HTML response")
         return json.loads(match.group(1))
 
-    def _parse_job_card(self, hit: dict, query_slug: str) -> JobCard | None:
+    def _parse_job_card(self, hit: dict, query_slug: str, detail_slug: str | None = None) -> JobCard | None:
         """Parse a single ssrHits[] entry into a JobCard.
 
         Returns None if the job should be skipped (pinned, malformed).
@@ -131,6 +131,9 @@ class HiringCafeAdapter:
         # Company name may be missing — fall back through multiple sources
         company = v5.get("company_name") or enriched.get("name") or ""
 
+        # Build detail URL from the slug extracted from HTML
+        detail_url = f"{self.base_url}/job/{detail_slug}" if detail_slug else None
+
         return JobCard(
             source_id=self._id,
             source_job_id=raw_id,
@@ -156,6 +159,7 @@ class HiringCafeAdapter:
             role_type=v5.get("role_type"),
             is_pinned=is_pinned,
             discovered_query=query_slug,
+            detail_url=detail_url,
         )
 
     def fetch_jobs(self, query: SourceQuery, page: int = 0) -> SourcePage:
@@ -180,9 +184,21 @@ class HiringCafeAdapter:
         total_count = page_props.get("ssrTotalCount", 0)
         is_last_page = page_props.get("ssrIsLastPage", True)
 
+        # Extract /job/{slug} links from HTML and map them to hits by requisition_id
+        # The slug format is {title}-{company}-{location}-{requisition_id}
+        # We match using the requisition_id suffix which is unique per job
+        detail_slugs: dict[str, str] = {}  # requisition_id → slug
+        for slug in re.findall(r'href="/job/([^"]+)"', html):
+            # The last segment after the final dash is the requisition_id
+            parts = slug.rsplit("-", 1)
+            if len(parts) == 2:
+                detail_slugs[parts[1]] = slug
+
         jobs: list[JobCard] = []
         for hit in hits:
-            card = self._parse_job_card(hit, query.slug)
+            req_id = hit.get("requisition_id", "")
+            detail_slug = detail_slugs.get(req_id)
+            card = self._parse_job_card(hit, query.slug, detail_slug=detail_slug)
             if card is not None:
                 jobs.append(card)
 

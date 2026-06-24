@@ -44,8 +44,9 @@ def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
             location, workplace_type, workplace_countries, seniority_level,
             commitment, comp_min, comp_max, comp_currency,
             technical_tools, requirements_summary, date_posted, role_type,
-            status, tier_passed, discovered_at, discovered_query, updated_at, is_pinned
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'discovered', 1, ?, ?, ?, ?)
+            status, tier_passed, discovered_at, discovered_query, updated_at, is_pinned,
+            detail_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'discovered', 1, ?, ?, ?, ?, ?)
         """,
         (
             job.source_id, job.source_job_id, job.ats_source, job.ats_board_token, job.ats_job_id,
@@ -55,6 +56,7 @@ def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
             json_encode(job.commitment), job.comp_min, job.comp_max, job.comp_currency,
             json_encode(job.technical_tools), job.requirements_summary, job.date_posted, job.role_type,
             now, job.discovered_query, now, job.is_pinned,
+            job.detail_url,
         ),
     )
     return cursor.lastrowid
@@ -234,6 +236,7 @@ def run_pipeline(
                 apply_url=row["apply_url"],
                 user_agent=user_agent,
                 delay=jd_delay,
+                detail_url=row["detail_url"] if "detail_url" in row.keys() else None,
             )
 
             if jd_result.status == "fetched":

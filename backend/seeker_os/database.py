@@ -161,6 +161,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE jobs ADD COLUMN reject_details TEXT;
     """,
+    # Migration 4: Add detail_url column for hiring.cafe job detail page URL
+    """
+    ALTER TABLE jobs ADD COLUMN detail_url TEXT;
+    """,
 ]
 
 

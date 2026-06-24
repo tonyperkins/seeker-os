@@ -46,6 +46,7 @@ class JobCard(BaseModel):
 
     # Metadata
     discovered_query: str        # which query slug found this
+    detail_url: str | None = None  # source-specific detail page URL (e.g. hiring.cafe/job/{slug})
 
 
 class SourcePage(BaseModel):

@@ -68,6 +68,33 @@ def _fetch_lever(board: str, user_agent: str) -> str:
     raise NotImplementedError("Lever API fetch — falling back to apply_url")
 
 
+def _fetch_hiring_cafe_detail(detail_url: str, user_agent: str) -> str:
+    """Fetch JD from hiring.cafe job detail page.
+
+    The detail page has __NEXT_DATA__ with job.job_information.description (HTML).
+    Returns the raw HTML description (not stripped) for richer rendering.
+    """
+    import json
+    import re
+
+    html = _fetch_url(detail_url, user_agent)
+    match = re.search(
+        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+        html, re.DOTALL,
+    )
+    if not match:
+        # Fall back to stripping the whole page
+        return _strip_html(html)
+
+    data = json.loads(match.group(1))
+    job = data.get("props", {}).get("pageProps", {}).get("job", {})
+    desc = job.get("job_information", {}).get("description", "")
+    if desc:
+        return desc  # Return raw HTML — the frontend can render it
+    # Fallback: strip the whole page
+    return _strip_html(html)
+
+
 def fetch_jd(
     job_id: int,
     ats_source: str | None,
@@ -76,36 +103,61 @@ def fetch_jd(
     apply_url: str,
     user_agent: str = "Mozilla/5.0",
     delay: float = 2.0,
+    detail_url: str | None = None,
 ) -> JDFetchResult:
     """Fetch full JD for a single job.
 
-    Route by ats_source. Strip HTML tags, decode entities, normalize whitespace.
+    Fetch order:
+    1. ATS API (greenhouse) if available
+    2. apply_url HTML (original ATS posting)
+    3. hiring.cafe detail page (if detail_url is set) — most reliable fallback
+
     If fetch fails: return status='failed' with error message.
     """
     time.sleep(delay)  # human-like delay
 
-    try:
-        if ats_source == "greenhouse" and ats_board_token and ats_job_id:
+    # Try ATS API first (greenhouse)
+    if ats_source == "greenhouse" and ats_board_token and ats_job_id:
+        try:
             jd_text = _fetch_greenhouse(ats_board_token, ats_job_id, user_agent)
-            return JDFetchResult(job_id=job_id, jd_text=jd_text, status="fetched", source_used="greenhouse_api")
+            if jd_text and len(jd_text) >= 100:
+                return JDFetchResult(
+                    job_id=job_id, jd_text=jd_text, status="fetched",
+                    source_used="greenhouse_api",
+                )
+        except Exception:
+            pass  # Fall through to apply_url
 
-        # For all other ATS sources (or API failures), fall back to apply_url HTML
+    # Try apply_url (original ATS posting)
+    try:
         html = _fetch_url(apply_url, user_agent)
         jd_text = _strip_html(html)
+        if jd_text and len(jd_text) >= 100:
+            return JDFetchResult(
+                job_id=job_id, jd_text=jd_text, status="fetched",
+                source_used=f"apply_url ({ats_source or 'unknown'})",
+            )
+    except Exception:
+        pass  # Fall through to hiring.cafe detail
 
-        if not jd_text or len(jd_text) < 100:
+    # Fallback: hiring.cafe detail page
+    if detail_url:
+        try:
+            jd_html = _fetch_hiring_cafe_detail(detail_url, user_agent)
+            if jd_html and len(jd_html) >= 100:
+                return JDFetchResult(
+                    job_id=job_id, jd_text=jd_html, status="fetched",
+                    source_used="hiring_cafe_detail",
+                )
+        except Exception as e:
             return JDFetchResult(
                 job_id=job_id, jd_text="", status="failed",
-                source_used="apply_url", error="Extracted text too short or empty",
+                source_used="hiring_cafe_detail", error=str(e),
             )
 
-        return JDFetchResult(
-            job_id=job_id, jd_text=jd_text, status="fetched",
-            source_used=f"apply_url ({ats_source or 'unknown'})",
-        )
-
-    except Exception as e:
-        return JDFetchResult(
-            job_id=job_id, jd_text="", status="failed",
-            source_used=ats_source or "apply_url", error=str(e),
-        )
+    # All methods failed
+    return JDFetchResult(
+        job_id=job_id, jd_text="", status="failed",
+        source_used=ats_source or "apply_url",
+        error="All fetch methods failed (ATS API, apply_url, hiring.cafe detail)",
+    )
