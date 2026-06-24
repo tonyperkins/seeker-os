@@ -84,6 +84,7 @@ def _row_to_detail(row) -> JobDetail:
 def list_jobs(
     status: str | None = Query(None, description="Filter by status"),
     min_score: float | None = Query(None, description="Minimum score"),
+    min_tier: int | None = Query(None, description="Minimum tier_passed (e.g. 4 for scored)"),
     company: str | None = Query(None, description="Filter by company (substring)"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -97,6 +98,9 @@ def list_jobs(
         if status:
             query += " AND status = ?"
             params.append(status)
+        if min_tier is not None:
+            query += " AND tier_passed >= ?"
+            params.append(min_tier)
         if min_score is not None:
             query += " AND score >= ?"
             params.append(min_score)

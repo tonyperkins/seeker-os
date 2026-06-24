@@ -80,6 +80,7 @@ function JobsPageInner() {
 
   const [status, setStatus] = useState<string>(searchParams.get("status") ?? "");
   const [minScore, setMinScore] = useState<string>(searchParams.get("min_score") ?? "");
+  const [minTier, setMinTier] = useState<string>(searchParams.get("min_tier") ?? "");
   const [company, setCompany] = useState<string>(searchParams.get("company") ?? "");
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,10 +90,12 @@ function JobsPageInner() {
     setLoading(true);
     setError(null);
     try {
-      const params: { status?: string; min_score?: number; company?: string; limit?: number } = {
+      const params: { status?: string; min_score?: number; min_tier?: number; company?: string; limit?: number } = {
         limit: 200,
       };
       if (status) params.status = status;
+      const mt = parseInt(minTier, 10);
+      if (!isNaN(mt)) params.min_tier = mt;
       const ms = parseInt(minScore, 10);
       if (!isNaN(ms)) params.min_score = ms;
       if (company.trim()) params.company = company.trim();
@@ -103,7 +106,7 @@ function JobsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [status, minScore, company]);
+  }, [status, minScore, minTier, company]);
 
   useEffect(() => {
     // Fetch on mount and when filters change — legitimate data-fetching effect.
@@ -115,11 +118,12 @@ function JobsPageInner() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
+    if (minTier) params.set("min_tier", minTier);
     if (minScore) params.set("min_score", minScore);
     if (company) params.set("company", company);
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
-  }, [status, minScore, company, router]);
+  }, [status, minTier, minScore, company, router]);
 
   const sortedJobs = useMemo(() => {
     if (!jobs) return [];
@@ -155,6 +159,19 @@ function JobsPageInner() {
                     {opt.label}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Min tier</label>
+              <select
+                value={minTier}
+                onChange={(e) => setMinTier(e.target.value)}
+                className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              >
+                <option value="" className="bg-background text-foreground">Any tier</option>
+                <option value="2" className="bg-background text-foreground">Passed filters</option>
+                <option value="4" className="bg-background text-foreground">Passed scoring</option>
               </select>
             </div>
 

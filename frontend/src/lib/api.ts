@@ -350,9 +350,10 @@ export interface MasterResumeInfo {
 export const api = {
   // Jobs
   jobs: {
-    list: (params?: { status?: string; min_score?: number; company?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; limit?: number; offset?: number }) => {
       const search = new URLSearchParams();
       if (params?.status) search.set("status", params.status);
+      if (params?.min_tier) search.set("min_tier", String(params.min_tier));
       if (params?.min_score) search.set("min_score", String(params.min_score));
       if (params?.company) search.set("company", params.company);
       if (params?.limit) search.set("limit", String(params.limit));

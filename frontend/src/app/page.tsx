@@ -81,12 +81,16 @@ function FunnelChart({ stages }: { stages: FunnelStage[] }) {
           const color = STAGE_COLORS[stage.tier] || "bg-primary/60";
           const pctOfTotal = Math.round((stage.count / max) * 100);
           return (
-            <div key={stage.label} className="flex items-center gap-2 text-sm">
+            <Link
+              key={stage.label}
+              href={`/jobs?min_tier=${stage.tier}`}
+              className="flex items-center gap-2 text-sm transition-opacity hover:opacity-70"
+            >
               <span className={`size-3 shrink-0 rounded-sm ${color}`} />
               <span className="text-muted-foreground">{stage.label}</span>
               <span className="font-mono font-semibold">{stage.count}</span>
               <span className="font-mono text-xs text-muted-foreground">({pctOfTotal}%)</span>
-            </div>
+            </Link>
           );
         })}
       </div>
