@@ -165,7 +165,14 @@ export default async function DashboardPage() {
   const hasProvider = (providers?.providers ?? []).some(
     (p) => p.enabled && p.api_key_set && p.models.length > 0,
   );
-  const tiersConfigured = !!(providers?.tiers?.heavy?.model && providers?.tiers?.moderate?.model && providers?.tiers?.light?.model);
+  const tiers = providers?.tiers ?? {};
+  const providerList = providers?.providers ?? [];
+  const tierIsValid = (tier: typeof tiers[keyof typeof tiers]) => {
+    if (!tier?.model || !tier?.provider) return false;
+    const prov = providerList.find((p) => p.id === tier.provider);
+    return !!prov && prov.api_key_set && prov.models.some((m) => m.id === tier.model);
+  };
+  const tiersConfigured = tierIsValid(tiers.heavy) && tierIsValid(tiers.moderate) && tierIsValid(tiers.light);
   const isProfileConfigured = settings?.profile_configured ?? false;
   const hasResume = resumeInfo?.exists ?? false;
   const setupComplete = hasProvider && tiersConfigured && isProfileConfigured && hasResume;

@@ -76,7 +76,14 @@ export default function OnboardingPage() {
       const hasProvider = (p?.providers ?? []).some(
         (prov) => prov.enabled && prov.api_key_set && prov.models.length > 0,
       );
-      const tiersConfigured = !!(p?.tiers?.heavy?.model && p?.tiers?.moderate?.model && p?.tiers?.light?.model);
+      const pTiers = p?.tiers ?? {};
+      const pList = p?.providers ?? [];
+      const tierOk = (t: typeof pTiers[keyof typeof pTiers]) => {
+        if (!t?.model || !t?.provider) return false;
+        const prov = pList.find((pv) => pv.id === t.provider);
+        return !!prov && prov.api_key_set && prov.models.some((m) => m.id === t.model);
+      };
+      const tiersConfigured = tierOk(pTiers.heavy) && tierOk(pTiers.moderate) && tierOk(pTiers.light);
       const providerDone = hasProvider && tiersConfigured;
       const hasResume = r?.exists ?? false;
       const isProfileConfigured = prof?.user && prof.user.name !== "Your Name" && prof.user.email !== "you@example.com";
@@ -120,7 +127,18 @@ export default function OnboardingPage() {
   );
   const hasResume = resumeInfo?.exists ?? false;
   const isProfileConfigured = profile?.user && profile.user.name !== "Your Name" && profile.user.email !== "you@example.com";
-  const tiersConfigured = !!(providers?.tiers?.heavy?.model && providers?.tiers?.moderate?.model && providers?.tiers?.light?.model);
+
+  // Tiers are only "configured" if each tier's assigned provider is connected
+  // AND the assigned model is in that provider's available models list.
+  // This prevents the pre-filled example template from counting as configured.
+  const tiers = providers?.tiers ?? {};
+  const providerList = providers?.providers ?? [];
+  const tierIsValid = (tier: typeof tiers[keyof typeof tiers]) => {
+    if (!tier?.model || !tier?.provider) return false;
+    const prov = providerList.find((p) => p.id === tier.provider);
+    return !!prov && prov.api_key_set && prov.models.some((m) => m.id === tier.model);
+  };
+  const tiersConfigured = tierIsValid(tiers.heavy) && tierIsValid(tiers.moderate) && tierIsValid(tiers.light);
   const providerStepComplete = hasProvider && tiersConfigured;
 
   const canAdvance = [
@@ -352,7 +370,15 @@ function ProviderStep({
     }
   }, [enabledProviders, onRefresh]);
 
-  const needsTiers = hasProvider && enabledProviders.length > 0 && (!tiers.heavy?.model || !tiers.moderate?.model || !tiers.light?.model);
+  // Tiers need attention if any connected provider has models but the tier
+  // mappings don't point to valid, available models on connected providers.
+  const checkTier = (tier: typeof tiers[keyof typeof tiers]) => {
+    if (!tier?.model || !tier?.provider) return false;
+    const prov = enabledProviders.find((p) => p.id === tier.provider);
+    return !!prov && prov.models.some((m) => m.id === tier.model);
+  };
+  const needsTiers = hasProvider && enabledProviders.length > 0 &&
+    !(checkTier(tiers.heavy) && checkTier(tiers.moderate) && checkTier(tiers.light));
 
   return (
     <div className="flex flex-col gap-6">
