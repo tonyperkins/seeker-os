@@ -163,7 +163,7 @@ export default async function DashboardPage() {
 
   // Check if setup is complete — redirect to onboarding if not
   const hasProvider = (providers?.providers ?? []).some(
-    (p) => p.enabled && (p.api_key_set || p.healthy === true) && p.models.length > 0,
+    (p) => p.enabled && p.api_key_set && p.models.length > 0,
   );
   const isProfileConfigured = settings?.profile_configured ?? false;
   const hasResume = resumeInfo?.exists ?? false;

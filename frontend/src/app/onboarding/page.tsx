@@ -74,7 +74,7 @@ export default function OnboardingPage() {
 
       // Auto-advance to the first incomplete step
       const hasProvider = (p?.providers ?? []).some(
-        (prov) => prov.enabled && (prov.api_key_set || prov.healthy === true) && prov.models.length > 0,
+        (prov) => prov.enabled && prov.api_key_set && prov.models.length > 0,
       );
       const hasResume = r?.exists ?? false;
       const isProfileConfigured = prof?.user && prof.user.name !== "Your Name" && prof.user.email !== "you@example.com";
@@ -114,7 +114,7 @@ export default function OnboardingPage() {
   }, []);
 
   const hasProvider = (providers?.providers ?? []).some(
-    (p) => p.enabled && (p.api_key_set || p.healthy === true) && p.models.length > 0,
+    (p) => p.enabled && p.api_key_set && p.models.length > 0,
   );
   const hasResume = resumeInfo?.exists ?? false;
   const isProfileConfigured = profile?.user && profile.user.name !== "Your Name" && profile.user.email !== "you@example.com";
