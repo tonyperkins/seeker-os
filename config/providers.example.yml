@@ -18,19 +18,20 @@ providers:
     auth_method: oauth
     oauth_token_path: "data/.anthropic_oauth.json"
     enabled: true
+    auto_fetch_models: true
     models:
-      - id: claude-opus-4
-        label: "Claude Opus 4"
+      - id: claude-opus-4-8
+        label: "Claude Opus 4.8"
         context_window: 200000
         max_output: 32000
         tags: [heavy]
-      - id: claude-sonnet-4
-        label: "Claude Sonnet 4"
+      - id: claude-sonnet-4-6
+        label: "Claude Sonnet 4.6"
         context_window: 200000
         max_output: 16000
         tags: [heavy, moderate]
-      - id: claude-haiku-4
-        label: "Claude Haiku 4"
+      - id: claude-haiku-4-5-20251001
+        label: "Claude Haiku 4.5"
         context_window: 200000
         max_output: 8192
         tags: [light]
@@ -38,10 +39,10 @@ providers:
   - id: kilo
     type: openai_compatible
     label: "Kilo Gateway"
-    base_url: "https://kilo.gateway/v1"
+    base_url: "https://api.kilo.ai/api/gateway"
     api_key: ${KILO_API_KEY}
     auto_fetch_models: true
-    enabled: true
+    enabled: false
     models: []
 
   - id: ollama_local
@@ -53,12 +54,13 @@ providers:
     models: []
 
 tiers:
-  heavy:    { provider: anthropic_direct, model: claude-opus-4 }
-  moderate: { provider: anthropic_direct, model: claude-sonnet-4 }
-  light:    { provider: anthropic_direct, model: claude-haiku-4 }
+  heavy:    { provider: anthropic_direct, model: claude-opus-4-8 }
+  moderate: { provider: anthropic_direct, model: claude-sonnet-4-6 }
+  light:    { provider: anthropic_direct, model: claude-haiku-4-5-20251001 }
 
 tasks:
-  resume_generation_high_value: { tier: heavy, provider: anthropic_direct, model: claude-opus-4 }
-  resume_generation_standard:   { tier: heavy, provider: anthropic_direct, model: claude-sonnet-4 }
+  resume_generation_high_value: { tier: heavy, provider: anthropic_direct, model: claude-opus-4-8 }
+  resume_generation_standard:   { tier: heavy, provider: anthropic_direct, model: claude-sonnet-4-6 }
   accuracy_validation:          { tier: light }
   onboarding_interview:         { tier: moderate }
+  resume_parsing:               { tier: moderate }

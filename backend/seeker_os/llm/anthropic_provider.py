@@ -21,9 +21,18 @@ _OAUTH_TOKEN_ENDPOINTS = [
 ]
 
 
+def _resolve_token_path(token_path: str) -> Path:
+    """Resolve an OAuth token path — expanduser and resolve relative to project root."""
+    from seeker_os.config import PROJECT_ROOT
+    p = Path(token_path).expanduser()
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return p
+
+
 def _load_oauth_data(token_path: str) -> dict:
     """Load the full OAuth data from a JSON file."""
-    path = Path(token_path).expanduser()
+    path = _resolve_token_path(token_path)
     if not path.exists():
         raise FileNotFoundError(f"OAuth token file not found: {path}")
     return json.loads(path.read_text())
@@ -99,7 +108,7 @@ def _refresh_oauth_token(token_path: str) -> str:
                 if k not in new_data:
                     new_data[k] = v
 
-            Path(token_path).expanduser().write_text(json.dumps(new_data, indent=2))
+            _resolve_token_path(token_path).write_text(json.dumps(new_data, indent=2))
             return result["access_token"]
         except Exception as e:
             last_error = e

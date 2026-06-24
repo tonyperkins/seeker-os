@@ -113,6 +113,16 @@ def get_providers_config():
                 healthy = False
                 health_message = str(e)
 
+        # Check if auth is available — either API key or OAuth token file
+        auth_available = bool(pc.api_key)
+        if not auth_available and pc.auth_method == "oauth" and pc.oauth_token_path:
+            from pathlib import Path
+            from seeker_os.config import PROJECT_ROOT
+            tp = Path(pc.oauth_token_path)
+            if not tp.is_absolute():
+                tp = PROJECT_ROOT / tp
+            auth_available = tp.expanduser().exists()
+
         providers_response.append(ProviderInfoResponse(
             id=pc.id,
             type=pc.type,
@@ -122,7 +132,7 @@ def get_providers_config():
             auth_method=pc.auth_method,
             oauth_token_path=pc.oauth_token_path,
             base_url=pc.base_url,
-            api_key_set=bool(pc.api_key),
+            api_key_set=auth_available,
             models=models,
             healthy=healthy,
             health_message=health_message,
@@ -340,6 +350,15 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
             healthy = False
             health_message = str(e)
 
+    auth_available = bool(pc.api_key)
+    if not auth_available and pc.auth_method == "oauth" and pc.oauth_token_path:
+        from pathlib import Path
+        from seeker_os.config import PROJECT_ROOT
+        tp = Path(pc.oauth_token_path)
+        if not tp.is_absolute():
+            tp = PROJECT_ROOT / tp
+        auth_available = tp.expanduser().exists()
+
     return ProviderInfoResponse(
         id=pc.id,
         type=pc.type,
@@ -349,7 +368,7 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
         auth_method=pc.auth_method,
         oauth_token_path=pc.oauth_token_path,
         base_url=pc.base_url,
-        api_key_set=bool(pc.api_key),
+        api_key_set=auth_available,
         models=models,
         healthy=healthy,
         health_message=health_message,
