@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Play,
   Loader2,
@@ -26,6 +27,7 @@ const STEPS = [
 type StepStatus = "pending" | "started" | "in_progress" | "completed";
 
 export function RunPipelineButton({ setupComplete = true }: { setupComplete?: boolean }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PipelineRunSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +96,9 @@ export function RunPipelineButton({ setupComplete = true }: { setupComplete?: bo
         setError(streamError);
       } else if (finalResult) {
         setResult(finalResult);
+        // Refresh server-component data (jobs, funnel, pipeline runs) so
+        // the dashboard reflects the new results without a manual reload.
+        router.refresh();
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
@@ -101,7 +106,7 @@ export function RunPipelineButton({ setupComplete = true }: { setupComplete?: bo
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   // Build step statuses from events
   const stepStatuses: Record<string, StepStatus> = {};
