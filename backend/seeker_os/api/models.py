@@ -113,8 +113,10 @@ def get_providers_config():
                 healthy = False
                 health_message = str(e)
 
-        # Check if auth is available — either API key or OAuth token file
-        auth_available = bool(pc.api_key)
+        # Check if auth is available — either API key or OAuth token file.
+        # An unresolved ${VAR_NAME} placeholder means the env var is not set,
+        # so we must not treat it as a real key.
+        auth_available = bool(pc.api_key) and not pc.api_key.startswith("${")
         if not auth_available and pc.auth_method == "oauth" and pc.oauth_token_path:
             from pathlib import Path
             from seeker_os.config import PROJECT_ROOT
@@ -350,7 +352,7 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
             healthy = False
             health_message = str(e)
 
-    auth_available = bool(pc.api_key)
+    auth_available = bool(pc.api_key) and not pc.api_key.startswith("${")
     if not auth_available and pc.auth_method == "oauth" and pc.oauth_token_path:
         from pathlib import Path
         from seeker_os.config import PROJECT_ROOT
