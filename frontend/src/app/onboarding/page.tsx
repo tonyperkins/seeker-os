@@ -261,63 +261,80 @@ function ProviderStep({
   onNext: () => void;
 }) {
   const [authOpen, setAuthOpen] = useState(false);
-  const [fetching, setFetching] = useState(false);
+  const [fetchingProvider, setFetchingProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savingTiers, setSavingTiers] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<string | null>(null);
 
-  const anthropicProvider = providers?.providers.find((p) => p.type === "anthropic");
-  const enabledProviders = (providers?.providers ?? []).filter((p) => p.enabled);
+  const allProviders = providers?.providers ?? [];
+  const enabledProviders = allProviders.filter((p) => p.enabled);
   const tiers = providers?.tiers ?? {};
 
   const handleAuthSuccess = useCallback(async () => {
     setAuthOpen(false);
     setError(null);
-    // Refresh providers, then fetch models
     const p = await onRefresh();
     const anthropic = p?.providers.find((prov) => prov.type === "anthropic");
     if (anthropic) {
-      setFetching(true);
+      setFetchingProvider(anthropic.id);
       try {
         await api.models.fetch(anthropic.id);
         await onRefresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to fetch models");
       } finally {
-        setFetching(false);
+        setFetchingProvider(null);
       }
     }
   }, [onRefresh]);
 
-  const handleFetchModels = useCallback(async () => {
-    if (!anthropicProvider) return;
-    setFetching(true);
+  const handleFetchModels = useCallback(async (providerId: string) => {
+    setFetchingProvider(providerId);
     setError(null);
     try {
-      await api.models.fetch(anthropicProvider.id);
+      await api.models.fetch(providerId);
       await onRefresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch models");
     } finally {
-      setFetching(false);
+      setFetchingProvider(null);
     }
-  }, [anthropicProvider, onRefresh]);
+  }, [onRefresh]);
+
+  const handleEnableProvider = useCallback(async (providerId: string, enabled: boolean) => {
+    setError(null);
+    try {
+      await api.models.updateProvider(providerId, { enabled });
+      await onRefresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update provider");
+    }
+  }, [onRefresh]);
 
   const handleSaveTiers = useCallback(async () => {
     setSavingTiers(true);
     setError(null);
     try {
-      // Tiers are already saved via the API on change, but we need to ensure
-      // the default tier mappings point to the fetched models
-      const models = anthropicProvider?.models ?? [];
-      if (models.length > 0) {
-        // Find good defaults: heavy=opus, moderate=sonnet, light=haiku
-        const heavy = models.find((m) => m.id.includes("opus")) ?? models[0];
-        const moderate = models.find((m) => m.id.includes("sonnet")) ?? models[0];
-        const light = models.find((m) => m.id.includes("haiku")) ?? models[0];
+      // Find the first provider with models and auto-assign tiers
+      const providerWithModels = enabledProviders.find((p) => p.models.length > 0);
+      if (providerWithModels) {
+        const models = providerWithModels.models;
+        const heavy = models.find((m) => m.id.includes("opus")) ??
+                      models.find((m) => m.id.includes("gpt-4")) ??
+                      models.find((m) => m.id.includes("llama")) ??
+                      models[0];
+        const moderate = models.find((m) => m.id.includes("sonnet")) ??
+                         models.find((m) => m.id.includes("gpt-4o-mini")) ??
+                         models.find((m) => m.id.includes("llama")) ??
+                         models[0];
+        const light = models.find((m) => m.id.includes("haiku")) ??
+                      models.find((m) => m.id.includes("mini")) ??
+                      models.find((m) => m.id.includes("llama")) ??
+                      models[0];
         await Promise.all([
-          api.models.updateTier("heavy", anthropicProvider!.id, heavy.id),
-          api.models.updateTier("moderate", anthropicProvider!.id, moderate.id),
-          api.models.updateTier("light", anthropicProvider!.id, light.id),
+          api.models.updateTier("heavy", providerWithModels.id, heavy.id),
+          api.models.updateTier("moderate", providerWithModels.id, moderate.id),
+          api.models.updateTier("light", providerWithModels.id, light.id),
         ]);
         await onRefresh();
       }
@@ -326,7 +343,7 @@ function ProviderStep({
     } finally {
       setSavingTiers(false);
     }
-  }, [anthropicProvider, onRefresh]);
+  }, [enabledProviders, onRefresh]);
 
   const needsTiers = hasProvider && enabledProviders.length > 0 && (!tiers.heavy?.model || !tiers.moderate?.model || !tiers.light?.model);
 
@@ -336,7 +353,7 @@ function ProviderStep({
         <h2 className="text-2xl font-bold tracking-tight">Configure an LLM Provider</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Seeker OS needs an LLM to parse resumes, score jobs, and generate tailored resumes.
-          Connect your Anthropic account to get started.
+          Connect at least one provider below.
         </p>
       </div>
 
@@ -347,111 +364,62 @@ function ProviderStep({
         </div>
       )}
 
-      {/* Anthropic connection card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Server className="size-4" />
-            Anthropic Direct
-          </CardTitle>
-          <CardDescription>
-            Use your Claude Pro/Max subscription via OAuth, or set an API key in providers.yml.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Connection status */}
-          <div className="flex items-center justify-between rounded-md border border-border p-3">
-            <div className="flex items-center gap-3">
-              {anthropicProvider?.api_key_set ? (
-                <CheckCircle2 className="size-5 text-emerald-500" />
-              ) : (
-                <KeyRound className="size-5 text-muted-foreground" />
-              )}
-              <div>
-                <p className="text-sm font-medium">
-                  {anthropicProvider?.api_key_set ? "Connected" : "Not connected"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {anthropicProvider?.auth_method === "oauth" ? "OAuth token" : "API key"}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant={anthropicProvider?.api_key_set ? "outline" : "default"}
-              size="sm"
-              onClick={() => setAuthOpen(true)}
-            >
-              <KeyRound className="size-3.5" />
-              {anthropicProvider?.api_key_set ? "Re-authorize" : "Connect Account"}
-            </Button>
-          </div>
+      {/* Provider cards */}
+      {allProviders.map((provider) => (
+        <ProviderCard
+          key={provider.id}
+          provider={provider}
+          fetching={fetchingProvider === provider.id}
+          onFetchModels={() => handleFetchModels(provider.id)}
+          onToggleEnabled={(enabled) => handleEnableProvider(provider.id, enabled)}
+          onConnectAnthropic={() => setAuthOpen(true)}
+          onEdit={() => setEditingProvider(provider.id)}
+          editingOpen={editingProvider === provider.id}
+          onEditClose={() => setEditingProvider(null)}
+          onSaved={onRefresh}
+        />
+      ))}
 
-          {/* Models status */}
-          {anthropicProvider?.api_key_set && (
-            <div className="flex items-center justify-between rounded-md border border-border p-3">
-              <div className="flex items-center gap-3">
-                {anthropicProvider.models.length > 0 ? (
-                  <CheckCircle2 className="size-5 text-emerald-500" />
-                ) : (
-                  <Loader2 className="size-5 text-muted-foreground" />
-                )}
-                <div>
-                  <p className="text-sm font-medium">
-                    {anthropicProvider.models.length > 0
-                      ? `${anthropicProvider.models.length} models available`
-                      : "No models fetched yet"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {anthropicProvider.models.slice(0, 3).map((m) => m.id).join(", ")}
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleFetchModels}
-                disabled={fetching}
-              >
-                {fetching ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-                Fetch Models
+      {/* Tier mappings — show when any provider has models */}
+      {hasProvider && enabledProviders.some((p) => p.models.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Server className="size-4" />
+              Tier Mappings
+            </CardTitle>
+            <CardDescription>
+              Assign models to each tier: heavy (resume generation), moderate (analysis), light (validation).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {needsTiers && (
+              <Button size="sm" variant="outline" onClick={handleSaveTiers} disabled={savingTiers}>
+                {savingTiers ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                Auto-assign tiers
               </Button>
+            )}
+            <div className="grid gap-2">
+              {(["heavy", "moderate", "light"] as const).map((tier) => (
+                <TierSelect
+                  key={tier}
+                  tier={tier}
+                  providers={providers!}
+                  currentModel={tiers[tier]?.model ?? ""}
+                  onSaved={onRefresh}
+                />
+              ))}
             </div>
-          )}
+          </CardContent>
+        </Card>
+      )}
 
-          {/* Tier mappings */}
-          {anthropicProvider && anthropicProvider.models.length > 0 && (
-            <div className="rounded-md border border-border p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Tier Mappings</p>
-                {needsTiers && (
-                  <Button size="sm" variant="outline" onClick={handleSaveTiers} disabled={savingTiers}>
-                    {savingTiers ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                    Auto-assign
-                  </Button>
-                )}
-              </div>
-              <div className="grid gap-2">
-                {(["heavy", "moderate", "light"] as const).map((tier) => (
-                  <TierSelect
-                    key={tier}
-                    tier={tier}
-                    providers={providers!}
-                    currentModel={tiers[tier]?.model ?? ""}
-                    onSaved={onRefresh}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          <AnthropicAuthDialog
-            key={authOpen ? "open" : "closed"}
-            open={authOpen}
-            onOpenChange={setAuthOpen}
-            onSuccess={handleAuthSuccess}
-          />
-        </CardContent>
-      </Card>
+      <AnthropicAuthDialog
+        key={authOpen ? "open" : "closed"}
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        onSuccess={handleAuthSuccess}
+      />
 
       {/* Continue button */}
       <div className="flex justify-end">
@@ -460,6 +428,228 @@ function ProviderStep({
           <ArrowRight />
         </Button>
       </div>
+    </div>
+  );
+}
+
+function ProviderCard({
+  provider,
+  fetching,
+  onFetchModels,
+  onToggleEnabled,
+  onConnectAnthropic,
+  onEdit,
+  editingOpen,
+  onEditClose,
+  onSaved,
+}: {
+  provider: ProvidersConfigResponse["providers"][number];
+  fetching: boolean;
+  onFetchModels: () => void;
+  onToggleEnabled: (enabled: boolean) => void;
+  onConnectAnthropic: () => void;
+  onEdit: () => void;
+  editingOpen: boolean;
+  onEditClose: () => void;
+  onSaved: () => Promise<ProvidersConfigResponse | null>;
+}) {
+  const isAnthropic = provider.type === "anthropic";
+  const connected = provider.api_key_set;
+  const hasModels = provider.models.length > 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Server className="size-4" />
+              {provider.label}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {isAnthropic
+                ? "Claude Pro/Max subscription via OAuth, or API key"
+                : `OpenAI-compatible gateway at ${provider.base_url ?? "—"}`}
+            </CardDescription>
+          </div>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={provider.enabled}
+              onChange={(e) => onToggleEnabled(e.target.checked)}
+              className="size-4 rounded border-border"
+            />
+            Enabled
+          </label>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Connection status */}
+        <div className="flex items-center justify-between rounded-md border border-border p-3">
+          <div className="flex items-center gap-3">
+            {connected ? (
+              <CheckCircle2 className="size-5 text-emerald-500" />
+            ) : (
+              <KeyRound className="size-5 text-muted-foreground" />
+            )}
+            <div>
+              <p className="text-sm font-medium">
+                {connected ? "Connected" : "Not connected"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {provider.auth_method === "oauth" ? "OAuth token" : "API key"}
+                {provider.base_url && ` · ${provider.base_url}`}
+              </p>
+            </div>
+          </div>
+          {isAnthropic ? (
+            <Button
+              variant={connected ? "outline" : "default"}
+              size="sm"
+              onClick={onConnectAnthropic}
+            >
+              <KeyRound className="size-3.5" />
+              {connected ? "Re-authorize" : "Connect Account"}
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={onEdit}>
+              <KeyRound className="size-3.5" />
+              Configure
+            </Button>
+          )}
+        </div>
+
+        {/* Models status */}
+        {provider.enabled && (
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <div className="flex items-center gap-3">
+              {hasModels ? (
+                <CheckCircle2 className="size-5 text-emerald-500" />
+              ) : (
+                <Loader2 className="size-5 text-muted-foreground" />
+              )}
+              <div>
+                <p className="text-sm font-medium">
+                  {hasModels
+                    ? `${provider.models.length} models available`
+                    : "No models fetched yet"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {provider.models.slice(0, 3).map((m) => m.id).join(", ")}
+                </p>
+              </div>
+            </div>
+            {provider.auto_fetch_models && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onFetchModels}
+                disabled={fetching || !connected}
+              >
+                {fetching ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                Fetch Models
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Edit dialog for non-Anthropic providers */}
+        {!isAnthropic && editingOpen && (
+          <EditProviderInline
+            provider={provider}
+            onClose={onEditClose}
+            onSaved={onSaved}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EditProviderInline({
+  provider,
+  onClose,
+  onSaved,
+}: {
+  provider: ProvidersConfigResponse["providers"][number];
+  onClose: () => void;
+  onSaved: () => Promise<ProvidersConfigResponse | null>;
+}) {
+  const [label, setLabel] = useState(provider.label);
+  const [baseUrl, setBaseUrl] = useState(provider.base_url ?? "");
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = {
+        label,
+        enabled: true,
+        auto_fetch_models: true,
+        auth_method: "api_key",
+        base_url: baseUrl,
+      };
+      if (apiKey.trim()) {
+        body.api_key = apiKey.trim();
+      }
+      await api.models.updateProvider(provider.id, body);
+      await onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }, [label, baseUrl, apiKey, provider.id, onSaved, onClose]);
+
+  return (
+    <div className="rounded-md border border-border p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">Configure {provider.label}</p>
+        <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+      </div>
+      {error && (
+        <p className="text-xs text-destructive">{error}</p>
+      )}
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">Label</label>
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">Base URL</label>
+        <input
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm font-mono"
+          placeholder="https://gateway.example.com/v1"
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">
+          API Key {provider.api_key_set && "(currently set — leave blank to keep)"}
+        </label>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
+          placeholder={provider.api_key_set ? "••••••••" : "Enter API key"}
+        />
+        <p className="text-xs text-muted-foreground">
+          Stored in .env as ${provider.id.toUpperCase()}_API_KEY
+        </p>
+      </div>
+      <Button onClick={handleSave} disabled={saving} size="sm" className="w-full">
+        {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+        Save
+      </Button>
     </div>
   );
 }
