@@ -126,6 +126,37 @@ MIGRATIONS: list[str] = [
     CREATE INDEX IF NOT EXISTS idx_dedup_key_value ON dedup_registry(key_value);
     CREATE INDEX IF NOT EXISTS idx_dedup_key_type ON dedup_registry(key_type);
     """,
+    # v2: resumes table (Phase 3)
+    """
+    CREATE TABLE IF NOT EXISTS resumes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id),
+        -- Generation
+        task TEXT,                         -- 'resume_generation_high_value' or 'resume_generation_standard'
+        provider TEXT,
+        model TEXT,
+        -- Content
+        resume_text TEXT,                  -- generated markdown
+        master_resume_path TEXT,
+        -- Accuracy validation
+        validation_passed BOOLEAN DEFAULT FALSE,
+        validation_violations TEXT,        -- JSON array
+        validation_checked_at TEXT,
+        -- Metadata
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER DEFAULT 0,
+        generated_at TEXT,
+        updated_at TEXT,
+        -- File paths (for exported versions)
+        markdown_path TEXT,
+        pdf_path TEXT,
+        docx_path TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_resumes_job_id ON resumes(job_id);
+    CREATE INDEX IF NOT EXISTS idx_resumes_generated_at ON resumes(generated_at);
+    """,
 ]
 
 
