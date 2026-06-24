@@ -1,0 +1,143 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2, AlertCircle, FileText, RefreshCw } from "lucide-react";
+import {
+  Card,
+  CardContent,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { api, type ResumeSummary } from "@/lib/api";
+
+function formatDate(iso: string): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export default function ResumesPage() {
+  const router = useRouter();
+  const [resumes, setResumes] = useState<ResumeSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchResumes = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.resumes.list();
+      setResumes(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load resumes");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch on mount — legitimate data-fetching effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchResumes();
+  }, [fetchResumes]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Resumes</h1>
+          <p className="text-sm text-muted-foreground">
+            AI-generated tailored resumes with accuracy validation.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchResumes} disabled={loading}>
+          {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          Refresh
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          {error ? (
+            <div className="flex items-center gap-2 p-6 text-sm text-destructive">
+              <AlertCircle className="size-4 shrink-0" />
+              {error}
+            </div>
+          ) : loading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+              <Loader2 className="animate-spin" />
+              Loading resumes…
+            </div>
+          ) : !resumes || resumes.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-16 text-center">
+              <FileText className="size-10 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">
+                No resumes generated yet. Generate one from a job detail page.
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">ID</TableHead>
+                  <TableHead className="w-20">Job ID</TableHead>
+                  <TableHead className="min-w-[180px]">Model</TableHead>
+                  <TableHead className="w-28">Validation</TableHead>
+                  <TableHead className="w-28">Tokens</TableHead>
+                  <TableHead className="w-32">Generated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {resumes.map((resume) => (
+                  <TableRow
+                    key={resume.id}
+                    className="cursor-pointer"
+                    onClick={() => router.push(`/resumes/${resume.id}`)}
+                  >
+                    <TableCell className="font-mono font-medium">
+                      {resume.id}
+                    </TableCell>
+                    <TableCell className="font-mono">{resume.job_id}</TableCell>
+                    <TableCell className="text-sm">
+                      <span className="font-medium">{resume.provider}</span>
+                      <span className="text-muted-foreground"> / {resume.model}</span>
+                    </TableCell>
+                    <TableCell>
+                      {resume.validation_passed ? (
+                        <Badge variant="default" className="bg-emerald-600 text-white">
+                          ✓ Passed
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive">
+                          ✗ Failed
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {(resume.input_tokens + resume.output_tokens).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDate(resume.generated_at)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
