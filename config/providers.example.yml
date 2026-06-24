@@ -17,7 +17,7 @@ providers:
     # Option B: OAuth — use the "Connect Account" button on the Models page
     auth_method: oauth
     oauth_token_path: "data/.anthropic_oauth.json"
-    enabled: true
+    enabled: false
     auto_fetch_models: true
     models:
       - id: claude-opus-4-8
