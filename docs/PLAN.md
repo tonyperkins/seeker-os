@@ -1017,11 +1017,99 @@ a ranked report. CLI-only.
 4. PDF/DOCX export
 5. Resume viewer in dashboard
 
-### Phase 4: Polish & Automation
+### Phase 4: Manual Job Entry & Capture
+**Goal:** Let users add jobs from anywhere — not just hiring.cafe search. Capture
+jobs found via LinkedIn, direct company sites, referrals, recruiter emails, or any
+URL. Make it frictionless to get a job into the pipeline for scoring and resume gen.
+
+**Core feature: Add Job by URL**
+
+1. User pastes a job posting URL into the dashboard
+2. Backend attempts to auto-fetch the JD:
+   - Detect ATS from URL pattern (greenhouse.io, ashbyhq.com, lever.co, workday, etc.)
+   - Try ATS API first (reuse existing `ats_fetch.py` logic)
+   - Fall back to generic HTML fetch + text extraction (reuse `_strip_html`)
+   - Extract structured fields where possible (title, company, comp, location) using
+     per-ATS parsers + generic meta-tag/OpenGraph extraction
+3. If auto-fetch fails (JS-rendered page, paywall, anti-bot):
+   - Prompt user to paste the JD text into a textarea
+   - Optionally paste the page's HTML (richer extraction)
+4. User reviews/edits extracted fields (title, company, comp, location, etc.)
+5. Job is inserted into the DB with `source_id='manual'`, dedup-checked against
+   existing jobs by URL hash + content hash
+6. Job enters the pipeline at Tier 4 (scoring) — skips discovery/filtering since
+   the user explicitly chose it
+
+**Additional capture methods:**
+
+7. **Bookmarklet** — a JavaScript bookmark that runs on any job posting page.
+   When clicked, it extracts the page URL + selected text (or full body) and
+   POSTs to a local Seeker OS endpoint (`/api/jobs/capture`). One-click capture
+   from any browser without leaving the job page. The bookmarklet is generated
+   from the settings page with the user's local API URL embedded.
+
+8. **Browser extension (lightweight)** — a minimal Chrome/Firefox extension that:
+   - Adds a "Send to Seeker OS" button to the browser toolbar
+   - On click, captures the current tab's URL + page content
+   - Sends to the same `/api/jobs/capture` endpoint
+   - Shows a toast notification with success/failure
+   - Optionally auto-detects job posting pages and offers to capture
+   This is a thin wrapper around the bookmarklet — same backend endpoint,
+   better UX (toolbar button vs bookmark, notifications, auto-detect).
+   The heavy Chrome extension with ATS autofill moves to Phase 5.
+
+9. **Email forwarding address** — a local SMTP receiver (optional, opt-in) that
+   accepts forwarded recruiter emails. Parses the email body for job details
+   and URLs, creates jobs with `source_id='email'`. Lower priority than the
+   bookmarklet/extension but useful for recruiter outreach.
+
+**Backend additions:**
+
+10. `POST /api/jobs/capture` — unified capture endpoint. Accepts:
+    - `url` (required if no `jd_text`)
+    - `jd_text` (paste fallback)
+    - `jd_html` (optional, richer)
+    - `title`, `company`, etc. (optional, user-provided overrides)
+    Returns the created job or dedup match.
+
+11. `POST /api/jobs/manual` — explicit manual entry form endpoint (same logic,
+    different UX — full form vs one-click capture).
+
+12. URL → ATS detection utility (`discovery/url_detector.py`):
+    - Pattern matching: `boards.greenhouse.io`, `api.ashbyhq.com`, `jobs.lever.co`,
+      `workday`, `icims`, `greenhouse.io/#/jobs`, etc.
+    - Extract `ats_board_token` and `ats_job_id` from URL
+    - Returns detected ATS + tokens, or `None` for generic URLs
+
+13. Generic structured-field extraction (`discovery/extract_fields.py`):
+    - OpenGraph meta tags (`og:title`, `og:site_name`)
+    - JSON-LD `JobPosting` schema (schema.org) — many ATS pages include this
+    - HTML `<title>`, `<meta description>`
+    - Per-ATS field extraction where APIs return structured data
+
+**Frontend additions:**
+
+14. "Add Job" button on dashboard + jobs page
+15. Add Job dialog: URL input → auto-fetch with loading state → review/edit
+    fields → paste fallback if fetch fails → save
+16. Capture success page (for bookmarklet/extension redirects): shows what was
+    captured, lets user edit before final save
+
+**Dedup & pipeline integration:**
+
+17. Manual jobs are dedup-checked on insert (URL hash + content hash) — if a
+    match exists, surface it instead of creating a duplicate
+18. Manual jobs skip Tiers 1-3 (discovery, card filters, JD fetch) and enter
+    at Tier 4 (scoring) directly, since the user already has the JD
+19. Manual jobs are tagged `source_id='manual'` (or `'bookmarklet'`, `'extension'`,
+    `'email'`) for analytics and filtering
+
+### Phase 5: Polish & Automation
 **Goal:** Production-ready, optionally automated.
 
 1. Cron scheduling (opt-in, configurable)
-2. Chrome extension for autofill (inspired by Jobs Optima)
+2. Chrome extension for ATS autofill (inspired by Jobs Optima) — the full
+   extension with form autofill, not just the capture button from Phase 4
 3. Analytics dashboard (charts, trends, source analysis)
 4. Import historical data from job-search repo
 5. AI search integration (optional, browser-based)

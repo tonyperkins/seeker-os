@@ -9,6 +9,7 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Button } from "@/components/ui/button";
 import { MasterResumeUpload } from "@/components/master-resume-upload";
 import { ProfileForm } from "@/components/profile-form";
@@ -94,18 +95,11 @@ export function SettingsClient({
   return (
     <div className="flex flex-col gap-6">
       {/* Resume Upload + Parse */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="size-5" />
-            Master Resume
-          </CardTitle>
-          <CardDescription>
-            Upload your master resume. Click &quot;Parse&quot; to auto-extract contact info,
-            experience, and suggested filter parameters.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        icon={FileText}
+        title="Master Resume"
+        description="Upload your master resume. Click &quot;Parse&quot; to auto-extract contact info, experience, and suggested filter parameters."
+      >
           <div className="flex flex-col gap-4">
             <MasterResumeUpload onUploaded={() => setResumeUploaded(true)} bare />
             <div className="flex items-center gap-3">
@@ -141,50 +135,33 @@ export function SettingsClient({
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       {/* Profile Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="size-5" />
-            Profile
-          </CardTitle>
-          <CardDescription>
-            Contact info, compensation, experience, and free-form instructions for scoring
-            and resume generation.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        icon={FileText}
+        title="Profile"
+        description="Contact info, compensation, experience, and free-form instructions for scoring and resume generation."
+      >
           <ProfileForm
             key={parseResult ? `parsed-${parseResult.contact.name}` : "initial"}
             profile={initialProfile}
             parseResult={parseResult}
           />
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       {/* Filter Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <SlidersHorizontal className="size-5" />
-            Filter Parameters
-          </CardTitle>
-          <CardDescription>
-            Tier-2 hard filters applied before JD fetch. Title patterns, seniority, comp,
-            freshness, and more.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        icon={SlidersHorizontal}
+        title="Filter Parameters"
+        description="Tier-2 hard filters applied before JD fetch. Title patterns, seniority, comp, freshness, and more."
+      >
           <FilterForm
             key={parseResult ? `parsed-${parseResult.suggested_comp_floor}` : "initial"}
             filters={initialFilters}
             parseResult={parseResult}
           />
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
     </div>
   );
 }

@@ -3,7 +3,6 @@ import {
   XCircle,
   FileText,
   SlidersHorizontal,
-  Server,
   ListChecks,
 } from "lucide-react";
 import {
@@ -14,25 +13,10 @@ import {
   CardContent,
   CardAction,
 } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { SettingsClient } from "@/components/settings-client";
+import { SettingsConfigCard } from "@/components/settings-config-card";
 import { api, type SettingsResponse, type ProfileData, type FiltersData } from "@/lib/api";
-
-function ConfigViewer({ data }: { data: Record<string, unknown> | null }) {
-  if (!data) {
-    return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        No configuration loaded.
-      </p>
-    );
-  }
-  return (
-    <pre className="overflow-x-auto rounded-md bg-muted/50 p-4 text-xs leading-relaxed font-mono">
-      {JSON.stringify(data, null, 2)}
-    </pre>
-  );
-}
 
 export default async function SettingsPage() {
   let settings: SettingsResponse | null = null;
@@ -131,49 +115,11 @@ export default async function SettingsPage() {
 
       <Separator />
 
-      {/* Advanced config tabs */}
-      <Tabs defaultValue="scoring">
-        <TabsList>
-          <TabsTrigger value="scoring">
-            <FileText className="size-4" />
-            Scoring
-          </TabsTrigger>
-          <TabsTrigger value="sources">
-            <Server className="size-4" />
-            Sources
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="scoring">
-          <Card>
-            <CardHeader>
-              <CardTitle>Scoring Configuration</CardTitle>
-              <CardDescription>
-                Scoring rubric weights, patterns, and thresholds. From{" "}
-                <code className="text-xs">config/scoring_rubric.yml</code>.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ConfigViewer data={settings?.scoring ?? null} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="sources">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sources Configuration</CardTitle>
-              <CardDescription>
-                Source adapters and ATS source mapping. From{" "}
-                <code className="text-xs">config/sources.yml</code>.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ConfigViewer data={settings?.sources ?? null} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Advanced config — Scoring/Sources toggle lives inside the card */}
+      <SettingsConfigCard
+        scoring={settings?.scoring ?? null}
+        sources={settings?.sources ?? null}
+      />
     </div>
   );
 }

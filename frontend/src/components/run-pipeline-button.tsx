@@ -187,7 +187,7 @@ export function RunPipelineButton({ setupComplete = true }: { setupComplete?: bo
               return (
                 <div
                   key={step.key}
-                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                  className={`flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
                     status === "in_progress" || status === "started"
                       ? "bg-primary/10"
                       : ""
@@ -203,23 +203,23 @@ export function RunPipelineButton({ setupComplete = true }: { setupComplete?: bo
                     )}
                   </div>
                   <span
-                    className={`flex-1 ${
+                    className={`min-w-0 flex-1 leading-5 ${
                       status === "pending" ? "text-muted-foreground" : "font-medium"
                     }`}
                   >
                     {step.label}
                   </span>
-                  {/* Step-specific progress */}
-                  {inProgressEvent && inProgressEvent.total > 0 && (
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {inProgressEvent.current}/{inProgressEvent.total}
-                    </span>
-                  )}
-                  {completedEvent && (
-                    <span className="font-mono text-xs text-muted-foreground">
+                  {/* Step-specific progress — show completion detail once done,
+                      otherwise the live in-progress count (never both). */}
+                  {status === "completed" && completedEvent ? (
+                    <span className="max-w-[55%] shrink-0 text-right font-mono text-xs leading-5 text-muted-foreground">
                       {completedEvent.detail}
                     </span>
-                  )}
+                  ) : inProgressEvent && inProgressEvent.total > 0 ? (
+                    <span className="shrink-0 font-mono text-xs leading-5 text-muted-foreground">
+                      {inProgressEvent.current}/{inProgressEvent.total}
+                    </span>
+                  ) : null}
                 </div>
               );
             })}

@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  CheckCircle2,
   XCircle,
-  Layers,
   Clock,
   ArrowRight,
   Trophy,
@@ -22,37 +20,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { RunPipelineButton } from "@/components/run-pipeline-button";
 import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
 
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  tone = "default",
-}: {
-  label: string;
-  value: number | string;
-  icon: React.ComponentType<{ className?: string }>;
-  tone?: "default" | "good" | "bad";
-}) {
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
-        <CardAction>
-          <Icon
-            className={
-              tone === "good"
-                ? "size-5 text-emerald-500"
-                : tone === "bad"
-                  ? "size-5 text-destructive"
-                  : "size-5 text-muted-foreground"
-            }
-          />
-        </CardAction>
-      </CardHeader>
-    </Card>
-  );
-}
 
 function formatRunDate(iso: string): string {
   const d = new Date(iso);
@@ -83,43 +50,55 @@ const STAGE_COLORS: Record<number, string> = {
 };
 
 function FunnelChart({ stages }: { stages: FunnelStage[] }) {
-  const maxCount = Math.max(...stages.map((s) => s.count), 1);
+  // Nested funnel: each stage is a subset of the previous one. The full bar is
+  // the largest stage (discovered); smaller stages are left-aligned overlays
+  // sized relative to the largest, layered so the smallest sits on top.
+  const ordered = [...stages].sort((a, b) => b.count - a.count);
+  const max = ordered[0]?.count || 1;
+
+  const n = ordered.length;
 
   return (
-    <div className="flex flex-col gap-2">
-      {stages.map((stage, i) => {
-        const pct = (stage.count / maxCount) * 100;
-        const prevCount = i > 0 ? stages[i - 1].count : null;
-        const dropoff = prevCount != null ? prevCount - stage.count : 0;
-        const dropoffPct = prevCount != null && prevCount > 0
-          ? Math.round((dropoff / prevCount) * 100)
-          : 0;
-        const color = STAGE_COLORS[stage.tier] || "bg-primary/60";
+    <div className="flex flex-col gap-4">
+      {/* Nested bar — each stage is narrower AND shorter than its parent,
+          aligned to the bottom so containment reads naturally. */}
+      <div className="relative h-16 w-full">
+        {ordered.map((stage, i) => {
+          const widthPct = (stage.count / max) * 100;
+          const heightPct = n > 1 ? 100 - (i * 60) / (n - 1) : 100;
+          const color = STAGE_COLORS[stage.tier] || "bg-primary/60";
+          return (
+            <div
+              key={stage.label}
+              className={`absolute bottom-0 left-0 flex items-center justify-end rounded-t-md border-x border-t border-background/60 px-2.5 text-sm font-semibold text-white shadow-sm transition-all ${color}`}
+              style={{
+                width: `${widthPct}%`,
+                height: `${heightPct}%`,
+                zIndex: i + 1,
+              }}
+              title={`${stage.label}: ${stage.count}`}
+            >
+              {widthPct > 6 && stage.count}
+            </div>
+          );
+        })}
+      </div>
 
-        return (
-          <div key={stage.label} className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">{stage.label}</span>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-semibold">{stage.count}</span>
-                {dropoff > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    −{dropoff} ({dropoffPct}%)
-                  </span>
-                )}
-              </div>
+      {/* Legend — smallest to largest (scoring → filters → discovered) */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {[...ordered].reverse().map((stage) => {
+          const color = STAGE_COLORS[stage.tier] || "bg-primary/60";
+          const pctOfTotal = Math.round((stage.count / max) * 100);
+          return (
+            <div key={stage.label} className="flex items-center gap-2 text-sm">
+              <span className={`size-3 shrink-0 rounded-sm ${color}`} />
+              <span className="text-muted-foreground">{stage.label}</span>
+              <span className="font-mono font-semibold">{stage.count}</span>
+              <span className="font-mono text-xs text-muted-foreground">({pctOfTotal}%)</span>
             </div>
-            <div className="h-7 w-full overflow-hidden rounded-md bg-muted/40">
-              <div
-                className={`flex h-full items-center justify-end rounded-md px-2 text-xs font-medium text-white transition-all ${color}`}
-                style={{ width: `${Math.max(pct, 5)}%` }}
-              >
-                {stage.count > 0 && pct > 15 && stage.count}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -197,18 +176,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Funnel stats */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total Jobs" value={funnel?.total_jobs ?? 0} icon={Layers} />
-        <StatCard label="Ready" value={funnel?.ready ?? 0} icon={CheckCircle2} tone="good" />
-        <StatCard label="Rejected" value={funnel?.rejected ?? 0} icon={XCircle} tone="bad" />
-        <StatCard
-          label="JD Fetch Rate"
-          value={jdFetchTotal > 0 ? `${jdFetchSuccess}/${jdFetchTotal} (${jdFetchPct}%)` : "—"}
-          icon={FileSearch}
-        />
-      </div>
-
       {/* Pipeline funnel */}
       {funnelStages.length > 0 && (
         <Card>
@@ -218,8 +185,25 @@ export default async function DashboardPage() {
               Cumulative jobs surviving each stage — narrowing toward scored
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-4">
             <FunnelChart stages={funnelStages} />
+            <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3 text-sm">
+              <div className="flex items-center gap-2">
+                <XCircle className="size-4 text-destructive" />
+                <span className="text-muted-foreground">Rejected</span>
+                <span className="font-mono font-semibold">{funnel?.rejected ?? 0}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <FileSearch className="size-4 text-muted-foreground" />
+                <span className="text-muted-foreground">JD Fetch</span>
+                <span className="font-mono font-semibold">
+                  {jdFetchTotal > 0 ? `${jdFetchSuccess}/${jdFetchTotal}` : "—"}
+                </span>
+                {jdFetchTotal > 0 && (
+                  <span className="font-mono text-xs text-muted-foreground">({jdFetchPct}%)</span>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
