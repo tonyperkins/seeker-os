@@ -397,6 +397,32 @@ def update_resume_text(resume_id: int, body: ResumeTextUpdate):
     return MessageResponse(message=f"Resume {resume_id} updated")
 
 
+@router.delete("/{resume_id}", response_model=MessageResponse)
+def delete_resume(resume_id: int):
+    """Delete a resume from the DB and remove associated files from disk."""
+    db = get_connection()
+    row = db.execute("SELECT * FROM resumes WHERE id = ?", (resume_id,)).fetchone()
+    if not row:
+        db.close()
+        raise HTTPException(status_code=404, detail=f"Resume {resume_id} not found")
+
+    # Remove files from disk
+    for col in ("markdown_path", "pdf_path", "docx_path"):
+        p = row[col]
+        if p:
+            path = Path(p)
+            if path.exists():
+                try:
+                    path.unlink()
+                except OSError:
+                    pass  # File may be locked or already gone
+
+    db.execute("DELETE FROM resumes WHERE id = ?", (resume_id,))
+    db.commit()
+    db.close()
+    return MessageResponse(message=f"Resume {resume_id} deleted")
+
+
 @router.post("/generate", response_model=dict)
 def generate_resume(body: ResumeGenerateRequest):
     """Generate a tailored resume for a job."""

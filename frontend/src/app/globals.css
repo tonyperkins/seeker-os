@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -131,4 +132,29 @@
   html.dark {
     color-scheme: dark;
   }
+}
+
+/* Table styling for markdown preview */
+.prose table {
+  @apply w-full border-collapse my-4;
+}
+
+.prose thead {
+  @apply border-b border-border;
+}
+
+.prose th {
+  @apply px-4 py-2 text-left font-semibold border-b border-border bg-muted/50;
+}
+
+.prose td {
+  @apply px-4 py-2 border-b border-border;
+}
+
+.prose tr:last-child td {
+  @apply border-b-0;
+}
+
+.prose tbody tr:hover {
+  @apply bg-muted/30;
 }

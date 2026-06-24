@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import yaml
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from seeker_os.api.schemas import (
     ProfileResponse, ProfileUpdate,
     FiltersResponse, FiltersUpdate,
@@ -187,3 +188,118 @@ def update_accuracy_rules(body: AccuracyRulesUpdate):
 
     path = write_accuracy_rules(rules_data)
     return MessageResponse(message=f"Accuracy rules saved to {path.name}")
+
+
+# ---------------------------------------------------------------------------
+# AI Rule Generation
+# ---------------------------------------------------------------------------
+
+class AIGenerateRulesRequest(BaseModel):
+    """POST /api/accuracy-rules/ai-generate — generate rules from natural language."""
+    description: str
+
+
+class AIGenerateRulesResponse(BaseModel):
+    """Response with AI-generated rules."""
+    rules: list[AccuracyRule]
+
+
+@router.post("/accuracy-rules/ai-generate", response_model=AIGenerateRulesResponse)
+def ai_generate_rules(body: AIGenerateRulesRequest):
+    """Generate accuracy rules from a natural language description using the LLM.
+
+    The user describes what they want in plain English, and the LLM converts
+    that into structured accuracy rules.
+    """
+    settings = Settings()
+    if not settings.providers:
+        raise HTTPException(status_code=400, detail="No LLM providers configured")
+
+    system_prompt = """You are an expert at creating resume accuracy validation rules.
+
+Given a user's natural language description, generate structured accuracy rules
+for resume generation validation. Output ONLY valid JSON — no markdown, no explanation.
+
+Output format:
+{
+  "rules": [
+    {
+      "id": "snake_case_id",
+      "description": "Human-readable description",
+      "type": "disallowed_phrases" | "forbidden_technologies" | "required_phrases" | "experience_anchor" | "education_omission",
+      "severity": "high" | "medium",
+      "phrases": ["phrase1", "phrase2"],        // for disallowed_phrases or required_phrases
+      "technologies": ["Tech1", "Tech2"],        // for forbidden_technologies
+      "patterns": ["regex1"]                     // for experience_anchor or education_omission
+    }
+  ]
+}
+
+Guidelines:
+- Use "high" severity for things that MUST NEVER happen (forbidden tech, inflated experience)
+- Use "medium" severity for style preferences and warnings
+- Create concise, snake_case IDs
+- For forbidden_technologies, use the exact technology names as they'd appear in a resume
+- For experience_anchor patterns, use regex that matches non-standard year counts
+- For education_omission, use regex patterns matching degree names, university names, etc.
+- Only include the relevant field for each rule type (phrases/technologies/patterns)
+- Generate 1-10 rules depending on the complexity of the request
+- If the user mentions specific URLs that must appear, use required_phrases with those URLs
+
+Output ONLY the JSON. No markdown fences, no explanation."""
+
+    user_prompt = f"""Generate accuracy rules based on this description:
+
+{body.description}
+
+Output the JSON now:"""
+
+    try:
+        from seeker_os.llm.router import ModelRouter
+        router = ModelRouter(settings)
+        response = router.generate(
+            task="accuracy_validation",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.3,
+            max_tokens=4000,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
+
+    # Parse the JSON response
+    import json
+    text = response.text.strip()
+    # Strip markdown fences if present
+    if text.startswith("```"):
+        lines = text.split("\n")
+        # Remove first and last line (fences)
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        text = "\n".join(lines).strip()
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"LLM returned invalid JSON: {e}. Raw: {text[:500]}",
+        )
+
+    raw_rules = data.get("rules", [])
+    valid_types = {"disallowed_phrases", "forbidden_technologies", "required_phrases", "experience_anchor", "education_omission"}
+    rules = []
+    for r in raw_rules:
+        rule_type = r.get("type", "")
+        if rule_type not in valid_types:
+            continue
+        rules.append(AccuracyRule(
+            id=r.get("id", f"rule_{len(rules)}"),
+            description=r.get("description", ""),
+            type=rule_type,
+            severity=r.get("severity", "medium"),
+            phrases=r.get("phrases"),
+            technologies=r.get("technologies"),
+            patterns=r.get("patterns"),
+        ))
+
+    return AIGenerateRulesResponse(rules=rules)

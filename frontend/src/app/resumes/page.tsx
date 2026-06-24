@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DeleteButton } from "@/components/delete-button";
 import { api, type ResumeSummary } from "@/lib/api";
 
 function formatDate(iso: string): string {
@@ -45,6 +46,11 @@ export default function ResumesPage() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleDelete = useCallback(async (id: number) => {
+    await api.resumes.delete(id);
+    setResumes((prev) => prev?.filter((r) => r.id !== id) ?? null);
   }, []);
 
   useEffect(() => {
@@ -97,6 +103,7 @@ export default function ResumesPage() {
                   <TableHead className="w-28">Validation</TableHead>
                   <TableHead className="w-28">Tokens</TableHead>
                   <TableHead className="w-32">Generated</TableHead>
+                  <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -130,6 +137,16 @@ export default function ResumesPage() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(resume.generated_at)}
+                    </TableCell>
+                    <TableCell>
+                      <DeleteButton
+                        itemName={`resume #${resume.id}`}
+                        itemId={resume.id}
+                        onDelete={() => handleDelete(resume.id)}
+                        size="icon"
+                        variant="ghost"
+                        triggerClassName="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

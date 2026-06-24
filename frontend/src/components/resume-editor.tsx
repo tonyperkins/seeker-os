@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Pencil,
   Save,
@@ -124,7 +125,7 @@ export function ResumeEditor({
         {mode === "preview" ? (
           <ScrollArea className="h-[600px] rounded-md border border-border p-6">
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown>{text || "No resume text available."}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{text || "No resume text available."}</ReactMarkdown>
             </div>
           </ScrollArea>
         ) : (

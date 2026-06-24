@@ -10,6 +10,8 @@ import {
   Save,
   AlertCircle,
   CheckCircle2,
+  Sparkles,
+  Wand2,
 } from "lucide-react";
 import {
   Card,
@@ -66,6 +68,9 @@ export function AccuracyRulesCard({ initialRules }: { initialRules: AccuracyRule
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiText, setAiText] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiMode, setAiMode] = useState(false);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -81,6 +86,27 @@ export function AccuracyRulesCard({ initialRules }: { initialRules: AccuracyRule
       setSaving(false);
     }
   }, [rules]);
+
+  const handleAiGenerate = useCallback(async () => {
+    if (!aiText.trim()) return;
+    setAiGenerating(true);
+    setError(null);
+    try {
+      const result = await api.accuracyRules.aiGenerate(aiText.trim());
+      if (result.rules && result.rules.length > 0) {
+        setRules(result.rules);
+        setAiMode(false);
+        setAiText("");
+        setSaved(false);
+      } else {
+        setError("AI generated no rules. Try rephrasing your description.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI generation failed");
+    } finally {
+      setAiGenerating(false);
+    }
+  }, [aiText]);
 
   const addRule = () => {
     setRules((prev) => [
@@ -135,7 +161,7 @@ export function AccuracyRulesCard({ initialRules }: { initialRules: AccuracyRule
         <div className="flex min-w-0 flex-col gap-1">
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="size-5 shrink-0" />
-            Accuracy Rules
+            Generated Resumes Accuracy Rules
           </CardTitle>
           <CardDescription>
             Rules validated after every resume generation. High severity blocks; medium warns.
@@ -172,6 +198,52 @@ export function AccuracyRulesCard({ initialRules }: { initialRules: AccuracyRule
               <span>Accuracy rules saved.</span>
             </div>
           )}
+
+          {/* AI generation section */}
+          <div className="rounded-md border border-border p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Sparkles className="size-4 text-violet-500" />
+                AI Rule Generator
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => setAiMode((m) => !m)}
+              >
+                {aiMode ? "Cancel" : "Describe rules in plain English"}
+              </Button>
+            </div>
+            {aiMode && (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  value={aiText}
+                  onChange={(e) => setAiText(e.target.value)}
+                  placeholder="e.g. Never claim expertise in AWS, Azure, or GCP. Don't mention my education at DeVry. Always include my LinkedIn URL https://linkedin.com/in/myprofile. Don't use more than 20+ years of experience. Never mention Rust, Helm, or ArgoCD."
+                  className="min-h-[80px] w-full rounded-md border border-border bg-background p-3 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                  disabled={aiGenerating}
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    The AI will convert your description into structured rules. You can review and edit them before saving.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={handleAiGenerate}
+                    disabled={aiGenerating || !aiText.trim()}
+                  >
+                    {aiGenerating ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="size-3.5" />
+                    )}
+                    Generate Rules
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {rules.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">

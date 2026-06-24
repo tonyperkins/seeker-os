@@ -428,6 +428,8 @@ export const api = {
         method: "PUT",
         body: JSON.stringify({ resume_text: resumeText }),
       }),
+    delete: (id: number) =>
+      fetchAPI<MessageResponse>(`/api/resumes/${id}`, { method: "DELETE" }),
     generate: (jobId: number, task?: string) =>
       fetchAPI<Record<string, unknown>>("/api/resumes/generate", {
         method: "POST",
@@ -474,6 +476,11 @@ export const api = {
       fetchAPI<MessageResponse>("/api/accuracy-rules", {
         method: "PUT",
         body: JSON.stringify(data),
+      }),
+    aiGenerate: (description: string) =>
+      fetchAPI<AccuracyRulesData>("/api/accuracy-rules/ai-generate", {
+        method: "POST",
+        body: JSON.stringify({ description }),
       }),
   },
 

@@ -28,6 +28,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { RevalidateButton } from "@/components/revalidate-button";
 import { ResumeEditor } from "@/components/resume-editor";
+import { DeleteResumeButton } from "@/components/delete-resume-button";
 import { api, type ResumeDetail } from "@/lib/api";
 
 function formatDateTime(iso: string | null): string {
@@ -145,6 +146,10 @@ export default async function ResumeDetailPage(props: PageProps<"/resumes/[id]">
                 <XCircle /> Validation failed
               </Badge>
             )}
+            <DeleteResumeButton
+              resumeId={resume.id}
+              resumeLabel={resume.job_title || `Resume #${resume.id}`}
+            />
           </div>
         </div>
       </div>
