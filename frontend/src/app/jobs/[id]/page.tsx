@@ -184,7 +184,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
           </Card>
 
           {job.apply_url && (
-            <Button size="lg" render={
+            <Button size="lg" nativeButton={false} render={
               <a href={job.apply_url} target="_blank" rel="noopener noreferrer" />
             }>
               <ExternalLink />
