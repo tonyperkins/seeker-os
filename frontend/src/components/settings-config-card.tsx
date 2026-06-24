@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, FileText, Server } from "lucide-react";
+import { ChevronDown, FileText, Server, SlidersHorizontal } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -41,10 +41,23 @@ export function SettingsConfigCard({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-3">
+      <CardHeader
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+        className="flex cursor-pointer select-none flex-row items-start justify-between gap-3"
+      >
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <SlidersHorizontal className="size-5 shrink-0" />
               {isScoring ? "Scoring Configuration" : "Sources Configuration"}
             </CardTitle>
             <CardDescription>
@@ -61,39 +74,34 @@ export function SettingsConfigCard({
               )}
             </CardDescription>
           </div>
-          <Tabs
-            value={tab}
-            onValueChange={(value) => {
-              setTab(value as "scoring" | "sources");
-              setOpen(true);
-            }}
-          >
-            <TabsList>
-              <TabsTrigger value="scoring">
-                <FileText className="size-4" />
-                Scoring
-              </TabsTrigger>
-              <TabsTrigger value="sources">
-                <Server className="size-4" />
-                Sources
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {open && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <Tabs
+                value={tab}
+                onValueChange={(value) => {
+                  setTab(value as "scoring" | "sources");
+                }}
+              >
+                <TabsList>
+                  <TabsTrigger value="scoring">
+                    <FileText className="size-4" />
+                    Scoring
+                  </TabsTrigger>
+                  <TabsTrigger value="sources">
+                    <Server className="size-4" />
+                    Sources
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
         </div>
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-label={open ? "Collapse" : "Expand"}
-          onClick={() => setOpen((o) => !o)}
-          className="-m-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-        >
-          <ChevronDown
-            className={cn(
-              "size-5 transition-transform duration-200",
-              open && "rotate-180",
-            )}
-          />
-        </button>
+        <ChevronDown
+          className={cn(
+            "mt-0.5 size-5 shrink-0 text-muted-foreground transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
       </CardHeader>
       {open && (
         <CardContent className="max-h-[28rem] overflow-y-auto">

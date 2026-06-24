@@ -196,7 +196,7 @@ def generate_resume(
             job_id, task, response.provider, response.model,
             response.text, str(master_path),
             validation.passed,
-            json.dumps(validation.violations),
+            json.dumps(validation.to_dict()["violations"]),
             validation.checked_at,
             response.input_tokens, response.output_tokens, response.latency_ms,
             now, now, str(md_path),
