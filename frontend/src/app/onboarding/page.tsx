@@ -704,46 +704,70 @@ function TierSelect({
   currentModel: string;
   onSaved: () => Promise<ProvidersConfigResponse | null>;
 }) {
-  const [provider, setProvider] = useState(providers.tiers[tier as keyof typeof providers.tiers]?.provider ?? providers.providers[0]?.id ?? "");
+  // Only show providers that are connected and have fetched models available
+  const availableProviders = providers.providers.filter((p) => p.api_key_set && p.models.length > 0);
+  const savedTier = providers.tiers[tier as keyof typeof providers.tiers];
+  const [provider, setProvider] = useState(savedTier?.provider ?? availableProviders[0]?.id ?? "");
   const [model, setModel] = useState(currentModel);
   const [saving, setSaving] = useState(false);
 
   const providerInfo = providers.providers.find((p) => p.id === provider);
   const models = providerInfo?.models ?? [];
 
-  const handleSave = useCallback(async () => {
+  // Auto-save whenever provider or model changes (and we have valid values)
+  const handleSave = useCallback(async (provId: string, modelId: string) => {
+    if (!provId || !modelId) return;
     setSaving(true);
     try {
-      await api.models.updateTier(tier, provider, model);
+      await api.models.updateTier(tier, provId, modelId);
       await onSaved();
     } finally {
       setSaving(false);
     }
-  }, [tier, provider, model, onSaved]);
+  }, [tier, onSaved]);
 
-  const dirty = provider !== (providers.tiers[tier as keyof typeof providers.tiers]?.provider ?? "") || model !== currentModel;
+  const handleProviderChange = (newProviderId: string) => {
+    setProvider(newProviderId);
+    const newModels = providers.providers.find((p) => p.id === newProviderId)?.models ?? [];
+    // Auto-select first model if current model isn't available for this provider
+    const newModel = newModels.length > 0 && !newModels.some((m) => m.id === model)
+      ? newModels[0].id
+      : model;
+    if (newModel !== model) setModel(newModel);
+    handleSave(newProviderId, newModel);
+  };
+
+  const handleModelChange = (newModelId: string) => {
+    setModel(newModelId);
+    handleSave(provider, newModelId);
+  };
+
+  if (availableProviders.length === 0) {
+    return (
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className="text-xs w-16 justify-center">{tier}</Badge>
+        <p className="text-xs text-muted-foreground">No providers with models available yet.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">
       <Badge variant="outline" className="text-xs w-16 justify-center">{tier}</Badge>
       <select
         value={provider}
-        onChange={(e) => {
-          setProvider(e.target.value);
-          const newModels = providers.providers.find((p) => p.id === e.target.value)?.models ?? [];
-          if (newModels.length > 0 && !newModels.some((m) => m.id === model)) {
-            setModel(newModels[0].id);
-          }
-        }}
+        onChange={(e) => handleProviderChange(e.target.value)}
+        disabled={saving}
         className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono flex-1"
       >
-        {providers.providers.filter((p) => p.enabled).map((p) => (
+        {availableProviders.map((p) => (
           <option key={p.id} value={p.id}>{p.id}</option>
         ))}
       </select>
       <select
         value={model}
-        onChange={(e) => setModel(e.target.value)}
+        onChange={(e) => handleModelChange(e.target.value)}
+        disabled={saving || models.length === 0}
         className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono flex-1"
       >
         {models.length === 0 ? (
@@ -754,11 +778,7 @@ function TierSelect({
           ))
         )}
       </select>
-      {dirty && (
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="size-3 animate-spin" /> : "Save"}
-        </Button>
-      )}
+      {saving && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
     </div>
   );
 }
