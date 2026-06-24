@@ -1,0 +1,57 @@
+# Seeker OS — Filter Configuration (EXAMPLE TEMPLATE)
+# Copy to filters.yml and adjust. This file contains no personal data
+# and can be committed. Personal values are in profile.yml.
+
+filters:
+  remote_only: true
+  us_only: true
+
+  # See docs/HIRINGCAFE_FIELDS.md § Seniority Enum for why this is so coarse.
+  seniority_floor: ["Senior Level"]
+  seniority_reject: ["Mid Level", "Entry Level", "Junior", "Associate"]
+  seniority_unknown_passes: true
+
+  # Comp floor: rejects if comp_max (ceiling) < this. Must match profile.comp.floor.
+  comp_floor: 150000
+
+  freshness_days: 30
+  commitment_required: "Full Time"
+
+title_filters:
+  positive:
+    - devops
+    - sre
+    - site reliability
+    - platform engineer
+    - infrastructure engineer
+    - cloud engineer
+    - staff engineer
+    - principal engineer
+    - release engineer
+  negative:
+    - manager
+    - director
+    - head of
+    - vp
+    - vice president
+    - frontend
+    - front-end
+    - backend
+    - back-end
+    - full stack
+    - full-stack
+    - mobile
+    - ios
+    - android
+    - data scientist
+    - data analyst
+    - product manager
+    - project manager
+    - sales
+    - marketing
+    - recruiter
+    - talent
+    - people ops
+    - hr
+    - security engineer
+    - compliance

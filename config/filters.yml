@@ -1,0 +1,68 @@
+# Seeker OS — Filter Configuration
+# This file contains NO personal data and can be committed to the repo.
+# Personal values (comp floor, blacklist, location) are in profile.yml.
+
+filters:
+  remote_only: true
+  us_only: true
+
+  # Seniority floor — reject jobs below this level.
+  # NOTE: hiring.cafe's seniority_level enum is very coarse:
+  # "Senior Level" covers Senior, Staff, and Principal (no distinct values).
+  # "Mid Level" and "Entry Level" are rejected. None/unknown passes through.
+  # See docs/HIRINGCAFE_FIELDS.md § Seniority Enum.
+  seniority_floor: ["Senior Level"]
+  seniority_reject: ["Mid Level", "Entry Level", "Junior", "Associate"]
+  seniority_unknown_passes: true   # unrecognized/None seniority passes to scoring
+
+  # Comp floor applies to comp_max (ceiling), not comp_min.
+  # If comp_max < floor, the job can't pay enough → hard reject.
+  # If comp_max >= floor but comp_min < floor, job passes and scoring
+  # applies a comp_marginal penalty.
+  # If comp is null (not listed), job passes (unknown comp isn't a hard reject).
+  # NOTE: comp_floor here should match profile.comp.floor. On startup, config.py
+  # validates they're equal and warns if they diverge. profile.comp.floor is the
+  # canonical source — this field is kept in filters.yml for explicitness.
+  comp_floor: 150000          # USD ceiling floor, must match profile.comp.floor
+
+  freshness_days: 30          # reject if older than N days
+  commitment_required: "Full Time"  # must contain this
+
+title_filters:
+  positive:
+    - devops
+    - sre
+    - site reliability
+    - platform engineer
+    - infrastructure engineer
+    - cloud engineer
+    - staff engineer
+    - principal engineer
+    - release engineer
+  negative:
+    - manager
+    - director
+    - head of
+    - vp
+    - vice president
+    - frontend
+    - front-end
+    - backend
+    - back-end
+    - full stack
+    - full-stack
+    - mobile
+    - ios
+    - android
+    - data scientist
+    - data analyst
+    - product manager
+    - project manager
+    - sales
+    - marketing
+    - recruiter
+    - talent
+    - people ops
+    - hr
+    - security engineer
+    - compliance
