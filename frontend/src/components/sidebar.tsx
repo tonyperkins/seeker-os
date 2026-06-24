@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Briefcase, Kanban, Search, FileText, Settings } from "lucide-react";
+import { LayoutDashboard, Briefcase, Kanban, Search, FileText, Cpu, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -12,6 +12,7 @@ const navItems = [
   { href: "/kanban", label: "Kanban", icon: Kanban },
   { href: "/queries", label: "Queries", icon: Search },
   { href: "/resumes", label: "Resumes", icon: FileText },
+  { href: "/models", label: "Models", icon: Cpu },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
