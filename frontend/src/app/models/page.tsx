@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Loader2,
   AlertCircle,
@@ -10,6 +10,7 @@ import {
   ListChecks,
   Cpu,
   Zap,
+  Search,
 } from "lucide-react";
 import {
   Card,
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -97,6 +99,18 @@ function ProviderCard({
   fetching: boolean;
   testResult: HealthResult | null;
 }) {
+  const [search, setSearch] = useState("");
+
+  const filteredModels = useMemo(() => {
+    if (!search.trim()) return provider.models;
+    const q = search.toLowerCase();
+    return provider.models.filter(
+      (m) => m.id.toLowerCase().includes(q) || m.label.toLowerCase().includes(q),
+    );
+  }, [provider.models, search]);
+
+  const showSearch = provider.models.length > 12;
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -108,6 +122,11 @@ function ProviderCard({
             </CardTitle>
             <CardDescription className="font-mono text-xs">
               {provider.id} · {provider.type}
+              {provider.models.length > 0 && (
+                <span className="ml-1">
+                  · {provider.models.length} model{provider.models.length !== 1 ? "s" : ""}
+                </span>
+              )}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -171,63 +190,92 @@ function ProviderCard({
             No models configured.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Label</TableHead>
-                <TableHead>Tags</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead className="text-right">Available</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {provider.models.map((m: ModelInfoResponse) => (
-                <TableRow key={m.id}>
-                  <TableCell className="font-mono text-xs">{m.id}</TableCell>
-                  <TableCell className="text-sm">{m.label}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {m.tags.length === 0 ? (
-                        <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                          untagged
-                        </Badge>
-                      ) : (
-                        m.tags.map((t) => (
+          <>
+            {showSearch && (
+              <div className="relative mb-3">
+                <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search models…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 pl-8 text-sm"
+                />
+                {search && (
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    {filteredModels.length}/{provider.models.length}
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="max-h-80 overflow-y-auto rounded-md border border-border">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead className="min-w-[120px]">ID</TableHead>
+                    <TableHead className="min-w-[100px]">Label</TableHead>
+                    <TableHead className="min-w-[80px]">Tags</TableHead>
+                    <TableHead className="w-20">Source</TableHead>
+                    <TableHead className="w-16 text-right">Avail</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredModels.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
+                        No models match &ldquo;{search}&rdquo;
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredModels.map((m: ModelInfoResponse) => (
+                      <TableRow key={m.id}>
+                        <TableCell className="font-mono text-xs">{m.id}</TableCell>
+                        <TableCell className="text-sm">{m.label}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {m.tags.length === 0 ? (
+                              <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                                untagged
+                              </Badge>
+                            ) : (
+                              m.tags.map((t) => (
+                                <Badge
+                                  key={t}
+                                  variant="outline"
+                                  className={cn("border", tierBadgeClass(t))}
+                                >
+                                  {t}
+                                </Badge>
+                              ))
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           <Badge
-                            key={t}
                             variant="outline"
-                            className={cn("border", tierBadgeClass(t))}
+                            className={cn(
+                              m.source === "auto"
+                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30"
+                                : "bg-muted text-muted-foreground border-border"
+                            )}
                           >
-                            {t}
+                            {m.source}
                           </Badge>
-                        ))
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        m.source === "auto"
-                          ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30"
-                          : "bg-muted text-muted-foreground border-border"
-                      )}
-                    >
-                      {m.source}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {m.available ? (
-                      <span className="text-green-600 dark:text-green-400 text-sm">●</span>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">○</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {m.available ? (
+                            <span className="text-green-600 dark:text-green-400 text-sm">●</span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">○</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
@@ -420,7 +468,7 @@ export default function ModelsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="flex flex-col gap-4">
             {config.providers.map((p) => (
               <ProviderCard
                 key={p.id}
