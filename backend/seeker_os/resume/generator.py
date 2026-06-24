@@ -154,11 +154,14 @@ def generate_resume(
         accuracy_rules_text=accuracy_rules_text,
     )
 
-    # 4. Call LLM
+    # 4. Call LLM (inject user instructions into system prompt if present)
+    system_prompt = SYSTEM_PROMPT
+    if settings.profile and settings.profile.instructions:
+        system_prompt += f"\n\n--- USER INSTRUCTIONS ---\n{settings.profile.instructions}\n--- END USER INSTRUCTIONS ---\n"
     router = ModelRouter(settings)
     response = router.generate(
         task=task,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         user_prompt=user_prompt,
         temperature=temperature,
         max_tokens=max_tokens,

@@ -9,6 +9,8 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from seeker_os.api.schemas import ResumeParseResult, ContactInfoSchema
+
 from seeker_os.api.schemas import MessageResponse
 from seeker_os.database import get_connection, json_decode
 
@@ -108,6 +110,107 @@ async def upload_master_resume(file: UploadFile = File(...)):
         format=fmt,
         text_preview=preview,
     )
+
+
+@router.post("/parse", response_model=ResumeParseResult)
+def parse_master_resume():
+    """Parse the master resume using LLM to extract structured profile data.
+
+    Extracts: contact info, experience years, current title, key skills,
+    suggested filter parameters (title patterns, comp floor), and a summary.
+    """
+    from seeker_os.config import Settings
+
+    settings = Settings()
+    if not settings.profile or not settings.profile.resume:
+        raise HTTPException(status_code=404, detail="No resume config in profile.yml")
+
+    master_path = Path(settings.profile.resume.master_path).expanduser()
+    if not master_path.exists():
+        raise HTTPException(status_code=404, detail=f"Master resume not found at {master_path}")
+
+    # Read resume text
+    fmt = master_path.suffix.lstrip(".").lower()
+    resume_text = ""
+    if fmt == "md":
+        resume_text = master_path.read_text(encoding="utf-8")
+    elif fmt == "docx":
+        try:
+            from seeker_os.resume.extract import extract_docx_text
+            resume_text = extract_docx_text(master_path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to extract DOCX: {e}")
+    elif fmt == "pdf":
+        try:
+            from seeker_os.resume.extract import extract_pdf_text
+            resume_text = extract_pdf_text(master_path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to extract PDF: {e}")
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported resume format: {fmt}")
+
+    if not resume_text or len(resume_text) < 100:
+        raise HTTPException(status_code=400, detail="Resume text too short or empty")
+
+    # Use LLM to extract structured data
+    try:
+        from seeker_os.llm.router import ModelRouter
+        router = ModelRouter(settings)
+        system_prompt = """You are a resume parser. Extract structured information from the resume text.
+Return ONLY valid JSON (no markdown, no code fences) with this exact schema:
+{
+  "contact": {
+    "name": "Full Name",
+    "email": "email@example.com",
+    "phone": "phone number or empty string",
+    "location": "City, ST",
+    "urls": {"github": "url or empty", "linkedin": "url or empty", "portfolio": "url or empty", "other": "url or empty"}
+  },
+  "experience_years": 25,
+  "current_title": "Most recent or current job title",
+  "key_skills": ["Go", "Kubernetes", "Terraform", ...],
+  "suggested_title_positive": ["sre", "site reliability", "platform engineer", ...],
+  "suggested_comp_floor": 150000,
+  "summary": "One paragraph summary of the candidate's profile"
+}
+
+Rules:
+- experience_years: integer, estimate from work history if not explicit
+- suggested_title_positive: lowercase substrings that would match this person's target roles in job titles
+- suggested_comp_floor: integer USD, infer from current/target comp or experience level
+- key_skills: top 10-15 technologies, tools, and methodologies
+- If a field can't be determined, use empty string, empty list, or null"""
+
+        response = router.generate(
+            task="resume_parsing",
+            system_prompt=system_prompt,
+            user_prompt=f"Parse this resume:\n\n{resume_text[:8000]}",
+            temperature=0.3,
+            max_tokens=2000,
+        )
+
+        # Parse the JSON response
+        import re
+        text = response.text.strip()
+        # Strip markdown code fences if present
+        text = re.sub(r'^```(?:json)?\s*', '', text)
+        text = re.sub(r'\s*```$', '', text)
+        data = json.loads(text)
+
+        return ResumeParseResult(
+            contact=ContactInfoSchema(**data.get("contact", {})),
+            experience_years=data.get("experience_years"),
+            current_title=data.get("current_title", ""),
+            key_skills=data.get("key_skills", []),
+            suggested_title_positive=data.get("suggested_title_positive", []),
+            suggested_comp_floor=data.get("suggested_comp_floor"),
+            summary=data.get("summary", ""),
+        )
+
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"LLM returned invalid JSON: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Resume parsing failed: {e}")
 
 
 class ResumeGenerateRequest(BaseModel):

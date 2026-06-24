@@ -208,6 +208,71 @@ class SettingUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Profile & Filter schemas (editable via settings UI)
+# ---------------------------------------------------------------------------
+
+class ContactInfoSchema(BaseModel):
+    name: str = ""
+    email: str = ""
+    phone: str = ""
+    location: str = ""
+    urls: dict[str, str] = {}
+
+
+class ProfileResponse(BaseModel):
+    """GET /api/profile — full profile config."""
+    user: dict
+    contact: ContactInfoSchema = ContactInfoSchema()
+    location: dict
+    comp: dict
+    experience: dict
+    employment: dict
+    blacklist: list[str] = []
+    resume: dict
+    cross_reference: dict
+    hard_rejects: list[dict] = []
+    instructions: str = ""
+
+
+class ProfileUpdate(BaseModel):
+    """PUT /api/profile — update profile config."""
+    user: dict | None = None
+    contact: ContactInfoSchema | None = None
+    location: dict | None = None
+    comp: dict | None = None
+    experience: dict | None = None
+    employment: dict | None = None
+    blacklist: list[str] | None = None
+    resume: dict | None = None
+    cross_reference: dict | None = None
+    hard_rejects: list[dict] | None = None
+    instructions: str | None = None
+
+
+class FiltersResponse(BaseModel):
+    """GET /api/filters — filter config + title filters."""
+    filters: dict
+    title_filters: dict
+
+
+class FiltersUpdate(BaseModel):
+    """PUT /api/filters — update filter config."""
+    filters: dict | None = None
+    title_filters: dict | None = None
+
+
+class ResumeParseResult(BaseModel):
+    """POST /api/resumes/parse — extracted data from resume."""
+    contact: ContactInfoSchema = ContactInfoSchema()
+    experience_years: int | None = None
+    current_title: str = ""
+    key_skills: list[str] = []
+    suggested_title_positive: list[str] = []
+    suggested_comp_floor: int | None = None
+    summary: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Analytics schemas
 # ---------------------------------------------------------------------------
 

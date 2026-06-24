@@ -18,6 +18,7 @@ from seeker_os.api.settings_routes import router as settings_router
 from seeker_os.api.analytics import router as analytics_router
 from seeker_os.api.resumes import router as resumes_router
 from seeker_os.api.models import router as models_router
+from seeker_os.api.profile_routes import router as profile_router
 from seeker_os.database import run_migrations
 
 
@@ -52,6 +53,7 @@ app.include_router(settings_router)
 app.include_router(analytics_router)
 app.include_router(resumes_router)
 app.include_router(models_router)
+app.include_router(profile_router)
 
 
 @app.get("/")

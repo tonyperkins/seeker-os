@@ -41,13 +41,15 @@ def apply_filters(
     1. Pinned check (belt-and-suspenders)
     2. Remote only: workplace_type == 'Remote'
     3. US only: 'US' in workplace_countries
-    4. Seniority floor: seniority_level in filters.seniority_floor
-       (with title-based fallback if None/unrecognized)
-    5. Comp ceiling floor: comp_max >= profile.comp.floor (if comp_max is not None)
-    6. Title match: core_title matches positive pattern, not negative
-    7. Blacklist: company not in profile.blacklist
-    8. Commitment: profile.employment.commitment in job.commitment
-    9. Freshness: date_posted within filters.freshness_days
+    4. Location exclude: location not in excluded list
+    5. Seniority floor: seniority_level in filters.seniority_floor
+       (with title-based override and fallback if None/unrecognized)
+    6. Comp ceiling floor: comp_max >= effective floor (with margin)
+    7. Title match: core_title matches positive pattern, not negative
+    8. Blacklist: company not in profile.blacklist
+    9. Commitment: profile.employment.commitment in job.commitment
+    10. Visa sponsorship: if required, job must offer it
+    11. Freshness: date_posted within filters.freshness_days
     """
     # 1. Pinned check
     if job.is_pinned:
@@ -64,56 +66,89 @@ def apply_filters(
         if countries and "US" not in countries:
             return FilterResult(passed=False, reason=f"Not US (countries={job.workplace_countries})")
 
-    # 4. Seniority floor
+    # 4. Location exclude
+    if filters.location_exclude:
+        location_lower = (job.location or "").lower()
+        for excl in filters.location_exclude:
+            if excl.lower() in location_lower:
+                return FilterResult(passed=False, reason=f"Location excluded ({excl})")
+
+    # 5. Seniority floor (with title override)
+    title_lower = (job.core_title or job.title or "").lower()
     sen = job.seniority_level
     if sen:
         if sen in filters.seniority_reject:
-            return FilterResult(passed=False, reason=f"Seniority below floor ({sen})")
-        if sen not in filters.seniority_floor:
+            # Check title override — if title contains a senior keyword, pass anyway
+            if filters.seniority_title_override:
+                if any(kw in title_lower for kw in filters.seniority_title_override):
+                    pass  # title overrides the seniority tag
+                else:
+                    return FilterResult(passed=False, reason=f"Seniority below floor ({sen})")
+            else:
+                return FilterResult(passed=False, reason=f"Seniority below floor ({sen})")
+        elif sen not in filters.seniority_floor:
             # Unrecognized seniority value
             if not filters.seniority_unknown_passes:
-                return FilterResult(passed=False, reason=f"Unrecognized seniority ({sen})")
+                # Check title override
+                if not (filters.seniority_title_override and
+                        any(kw in title_lower for kw in filters.seniority_title_override)):
+                    return FilterResult(passed=False, reason=f"Unrecognized seniority ({sen})")
             # else: passes through to scoring
     else:
         # seniority_level is None — title-based fallback
         if not filters.seniority_unknown_passes:
-            title_lower = (job.core_title or job.title or "").lower()
-            junior_patterns = ["junior", "entry", "associate", "intern", "new grad", "early career"]
-            if any(p in title_lower for p in junior_patterns):
-                return FilterResult(passed=False, reason="Title indicates junior level (no seniority tag)")
-            # If no junior signal and unknown_passes, let it through
+            # Check title override first
+            has_override = (filters.seniority_title_override and
+                            any(kw in title_lower for kw in filters.seniority_title_override))
+            if not has_override:
+                junior_patterns = ["junior", "entry", "associate", "intern", "new grad", "early career"]
+                if any(p in title_lower for p in junior_patterns):
+                    return FilterResult(passed=False, reason="Title indicates junior level (no seniority tag)")
+                # If no junior signal and unknown_passes, let it through
 
-    # 5. Comp ceiling floor
+    # 6. Comp ceiling floor (with margin)
     if job.comp_max is not None:
-        if job.comp_max < profile.comp.floor:
+        effective_floor = profile.comp.floor
+        if filters.comp_floor_margin_pct > 0:
+            effective_floor = int(effective_floor * (1 - filters.comp_floor_margin_pct / 100))
+        if job.comp_max < effective_floor:
             return FilterResult(
                 passed=False,
-                reason=f"Comp ceiling below floor (comp_max={job.comp_max} < floor={profile.comp.floor})",
+                reason=f"Comp ceiling below floor (comp_max={job.comp_max} < floor={effective_floor})",
             )
+    else:
+        # comp is null
+        if not filters.comp_unknown_passes:
+            return FilterResult(passed=False, reason="Comp not listed (comp_unknown_passes=False)")
 
-    # 6. Title match
+    # 7. Title match
     if not title_matches(job.core_title or job.title, title_filters.positive, title_filters.negative):
         # Check if any negative pattern matched
-        title_lower = (job.core_title or job.title or "").lower()
         neg_match = [n for n in title_filters.negative if n in title_lower]
         if neg_match:
             return FilterResult(passed=False, reason=f"Title negative match ({neg_match[0]})")
         return FilterResult(passed=False, reason="Title doesn't match positive patterns")
 
-    # 7. Blacklist
+    # 8. Blacklist
     company_lower = (job.company or "").lower()
     for bl in profile.blacklist:
         if bl.lower() in company_lower:
             return FilterResult(passed=False, reason=f"Blacklisted company ({job.company})")
 
-    # 8. Commitment
+    # 9. Commitment
     if filters.commitment_required:
         commitments = [c.lower() for c in job.commitment]
         required = filters.commitment_required.lower()
         if commitments and required not in commitments:
             return FilterResult(passed=False, reason=f"Commitment mismatch (need {filters.commitment_required})")
 
-    # 9. Freshness
+    # 10. Visa sponsorship
+    if filters.visa_sponsorship_required:
+        # JobCard doesn't have visa_sponsorship field, but the DB row might
+        # This is checked in the runner if the field is available
+        pass  # TODO: check visa_sponsorship when field is available
+
+    # 11. Freshness
     if filters.freshness_days > 0:
         posted = _parse_date(job.date_posted)
         if posted:

@@ -16,8 +16,8 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { MasterResumeUpload } from "@/components/master-resume-upload";
-import { api, type SettingsResponse } from "@/lib/api";
+import { SettingsClient } from "@/components/settings-client";
+import { api, type SettingsResponse, type ProfileData, type FiltersData } from "@/lib/api";
 
 function ConfigViewer({ data }: { data: Record<string, unknown> | null }) {
   if (!data) {
@@ -36,10 +36,16 @@ function ConfigViewer({ data }: { data: Record<string, unknown> | null }) {
 
 export default async function SettingsPage() {
   let settings: SettingsResponse | null = null;
+  let profile: ProfileData | null = null;
+  let filters: FiltersData | null = null;
   let error: string | null = null;
 
   try {
-    settings = await api.settings.get();
+    [settings, profile, filters] = await Promise.all([
+      api.settings.get(),
+      api.profile.get().catch(() => null),
+      api.filters.get().catch(() => null),
+    ]);
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load settings";
   }
@@ -62,7 +68,8 @@ export default async function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          Configuration loaded from YAML files. Read-only for now — editing comes later.
+          Upload your resume to auto-extract your profile, then review and fine-tune
+          your filter parameters.
         </p>
       </div>
 
@@ -116,13 +123,17 @@ export default async function SettingsPage() {
         </Card>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="filters">
+      {/* Resume Upload + Parse — the main CTA */}
+      <SettingsClient
+        profile={profile}
+        filters={filters}
+      />
+
+      <Separator />
+
+      {/* Advanced config tabs */}
+      <Tabs defaultValue="scoring">
         <TabsList>
-          <TabsTrigger value="filters">
-            <SlidersHorizontal className="size-4" />
-            Filters
-          </TabsTrigger>
           <TabsTrigger value="scoring">
             <FileText className="size-4" />
             Scoring
@@ -132,21 +143,6 @@ export default async function SettingsPage() {
             Sources
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="filters">
-          <Card>
-            <CardHeader>
-              <CardTitle>Filters Configuration</CardTitle>
-              <CardDescription>
-                Tier-2 hard filters applied before JD fetch. From{" "}
-                <code className="text-xs">config/filters.yml</code>.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ConfigViewer data={settings?.filters ?? null} />
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="scoring">
           <Card>
@@ -178,18 +174,6 @@ export default async function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      <Separator />
-
-      {/* Master Resume */}
-      <MasterResumeUpload />
-
-      <Separator />
-
-      <p className="text-xs text-muted-foreground">
-        Configuration is the source of truth. YAML files win on startup; the database
-        is a derived cache. Editing in the UI will be available in a future phase.
-      </p>
     </div>
   );
 }

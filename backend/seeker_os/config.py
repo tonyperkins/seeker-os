@@ -69,6 +69,15 @@ class UserIdentity(BaseModel):
     location: str
 
 
+class ContactInfo(BaseModel):
+    """Structured contact info extracted from resume or entered manually."""
+    name: str = ""
+    email: str = ""
+    phone: str = ""
+    location: str = ""
+    urls: dict[str, str] = {}  # {"github": "...", "linkedin": "...", "portfolio": "...", "other": "..."}
+
+
 class LocationPrefs(BaseModel):
     remote_only: bool = True
     accepted_cities: list[str] = []
@@ -132,6 +141,10 @@ class ProfileConfig(BaseModel):
     resume: ResumePrefs
     cross_reference: CrossReferencePrefs
     hard_rejects: list[HardReject] = []
+    # NEW: structured contact info (extracted from resume or manual entry)
+    contact: ContactInfo = ContactInfo()
+    # NEW: free-form instructions that guide scoring and resume generation
+    instructions: str = ""
 
 
 class BaseScoreRule(BaseModel):
@@ -179,9 +192,19 @@ class FilterConfig(BaseModel):
     seniority_floor: list[str] = []
     seniority_reject: list[str] = []
     seniority_unknown_passes: bool = True
+    # NEW: if title contains any of these, pass regardless of seniority_level tag
+    seniority_title_override: list[str] = []
     comp_floor: int = 150000
+    # NEW: percentage margin below comp_floor that still passes (e.g. 5 = 5% below is OK)
+    comp_floor_margin_pct: int = 0
+    # NEW: if True, jobs with no comp data pass; if False, they're rejected
+    comp_unknown_passes: bool = True
     freshness_days: int = 30
     commitment_required: str = "Full Time"
+    # NEW: locations to exclude even if us_only passes (states or cities)
+    location_exclude: list[str] = []
+    # NEW: if True, only pass jobs that offer visa sponsorship
+    visa_sponsorship_required: bool = False
 
 
 class TitleFilters(BaseModel):
