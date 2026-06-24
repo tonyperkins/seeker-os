@@ -707,12 +707,30 @@ function TierSelect({
   // Only show providers that are connected and have fetched models available
   const availableProviders = providers.providers.filter((p) => p.api_key_set && p.models.length > 0);
   const savedTier = providers.tiers[tier as keyof typeof providers.tiers];
-  const [provider, setProvider] = useState(savedTier?.provider ?? availableProviders[0]?.id ?? "");
-  const [model, setModel] = useState(currentModel);
+
+  // Derive the effective provider: use the saved one if it's available
+  // (connected + has models), otherwise fall back to the first available.
+  const savedProviderAvailable = !!savedTier?.provider && availableProviders.some((p) => p.id === savedTier.provider);
+  const effectiveProvider = savedProviderAvailable
+    ? savedTier!.provider
+    : availableProviders[0]?.id ?? "";
+
+  // Track user overrides (when they change the dropdown before auto-save completes)
+  const [providerOverride, setProviderOverride] = useState<string | null>(null);
+  const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Use override if set, otherwise the derived value
+  const provider = providerOverride ?? effectiveProvider;
   const providerInfo = providers.providers.find((p) => p.id === provider);
   const models = providerInfo?.models ?? [];
+
+  // Derive effective model: use override if set, otherwise the saved model
+  // if it's valid for the current provider, otherwise the first available model.
+  const savedModelValid = currentModel && models.some((m) => m.id === currentModel);
+  const effectiveModel = modelOverride
+    ?? (savedModelValid ? currentModel : models[0]?.id ?? "");
+  const model = effectiveModel;
 
   // Auto-save whenever provider or model changes (and we have valid values)
   const handleSave = useCallback(async (provId: string, modelId: string) => {
@@ -721,24 +739,27 @@ function TierSelect({
     try {
       await api.models.updateTier(tier, provId, modelId);
       await onSaved();
+      // Clear overrides after save — the refreshed props become the source of truth
+      setProviderOverride(null);
+      setModelOverride(null);
     } finally {
       setSaving(false);
     }
   }, [tier, onSaved]);
 
   const handleProviderChange = (newProviderId: string) => {
-    setProvider(newProviderId);
+    setProviderOverride(newProviderId);
     const newModels = providers.providers.find((p) => p.id === newProviderId)?.models ?? [];
     // Auto-select first model if current model isn't available for this provider
     const newModel = newModels.length > 0 && !newModels.some((m) => m.id === model)
       ? newModels[0].id
       : model;
-    if (newModel !== model) setModel(newModel);
+    if (newModel !== model) setModelOverride(newModel);
     handleSave(newProviderId, newModel);
   };
 
   const handleModelChange = (newModelId: string) => {
-    setModel(newModelId);
+    setModelOverride(newModelId);
     handleSave(provider, newModelId);
   };
 
