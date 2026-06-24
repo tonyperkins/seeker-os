@@ -1,0 +1,417 @@
+"""Pipeline runner — orchestrates Tier 1→5.
+
+See docs/PHASE1_SPEC.md §3.10 for the full spec.
+"""
+
+from __future__ import annotations
+
+import json
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+import sqlite3
+
+from seeker_os.config import Settings
+from seeker_os.database import get_connection, json_encode, json_decode, DB_PATH
+from seeker_os.discovery.cache import DiskCache
+from seeker_os.discovery.engine import fetch_all_queries
+from seeker_os.discovery.sources.registry import build_adapters
+from seeker_os.filtering.hard_filters import apply_filters
+from seeker_os.scoring.engine import score_job
+from seeker_os.dedup.layers import (
+    check_duplicate,
+    check_content_duplicate,
+    register_keys,
+    register_content_hash,
+    url_hash,
+)
+from seeker_os.discovery.ats_fetch import fetch_jd
+from seeker_os.crossref.jobsearch_repo import sync_repo, check_cross_reference
+from seeker_os.models import JobCard, PipelineRunResult
+
+
+def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
+    """Insert a new job into the DB. Returns the job ID."""
+    now = datetime.now(timezone.utc).isoformat()
+    uh = url_hash(job.apply_url)
+
+    cursor = db.execute(
+        """
+        INSERT INTO jobs (
+            source_id, source_job_id, ats_source, ats_board_token, ats_job_id,
+            apply_url, url_hash,
+            title, core_title, company, company_homepage,
+            location, workplace_type, workplace_countries, seniority_level,
+            commitment, comp_min, comp_max, comp_currency,
+            technical_tools, requirements_summary, date_posted, role_type,
+            status, tier_passed, discovered_at, discovered_query, updated_at, is_pinned
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'discovered', 1, ?, ?, ?, ?)
+        """,
+        (
+            job.source_id, job.source_job_id, job.ats_source, job.ats_board_token, job.ats_job_id,
+            job.apply_url, uh,
+            job.title, job.core_title, job.company, job.company_homepage,
+            job.location, job.workplace_type, json_encode(job.workplace_countries), job.seniority_level,
+            json_encode(job.commitment), job.comp_min, job.comp_max, job.comp_currency,
+            json_encode(job.technical_tools), job.requirements_summary, job.date_posted, job.role_type,
+            now, job.discovered_query, now, job.is_pinned,
+        ),
+    )
+    return cursor.lastrowid
+
+
+def _get_job_row(db: sqlite3.Connection, job_id: int) -> sqlite3.Row | None:
+    return db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+
+
+def run_pipeline(
+    settings: Settings,
+    queries: list[str] | None = None,
+    tiers: list[int] | None = None,
+    dry_run: bool = False,
+) -> PipelineRunResult:
+    """Run the full pipeline (or specific tiers).
+
+    Tier 1: Fetch cards from source adapters
+    Tier 2: Card-level hard filters
+    Tier 3: Full JD fetch
+    Tier 4: Scoring
+    Tier 5: Ranking + cross-reference + report
+    """
+    run_id = str(uuid.uuid4())[:8]
+    result = PipelineRunResult(run_id=run_id)
+    tier_set = set(tiers) if tiers else {1, 2, 3, 4, 5}
+
+    db = get_connection()
+    cache = DiskCache(Path("data/cache"), ttl_hours=settings.sources.sources[0].cache_ttl_hours if settings.sources else 6)
+
+    # Get source_map from the first enabled source (hiring.cafe)
+    source_map = {}
+    if settings.sources:
+        for src in settings.sources.sources:
+            if src.enabled and src.source_map:
+                source_map = src.source_map
+                break
+
+    # -----------------------------------------------------------------------
+    # Tier 1: Discovery
+    # -----------------------------------------------------------------------
+    if 1 in tier_set:
+        print("\nTier 1: Discovery")
+        adapters = build_adapters(settings.sources, cache) if settings.sources else {}
+
+        # Filter queries
+        all_queries = settings.queries.queries if settings.queries else []
+        if queries:
+            all_queries = [q for q in all_queries if q.slug in queries]
+
+        from seeker_os.models import SourceQuery
+        source_queries = [
+            SourceQuery(
+                source_id=q.source_id,
+                slug=q.slug,
+                label=q.label,
+                commitment=q.commitment,
+                max_pages=q.max_pages,
+                enabled=q.enabled,
+            )
+            for q in all_queries
+        ]
+
+        cards = fetch_all_queries(source_queries, adapters, cache)
+        result.cards_fetched = len(cards)
+
+        if dry_run:
+            print(f"  [dry-run] {len(cards)} cards fetched, not inserting to DB")
+        else:
+            # Dedup check (layers 1-2) before insert
+            for card in cards:
+                dedup = check_duplicate(card, db, source_map)
+                if dedup.is_duplicate:
+                    result.duplicates_skipped += 1
+                    continue
+
+                job_id = _insert_job(db, card)
+                register_keys(job_id, card, db, source_map)
+                result.cards_new += 1
+
+            db.commit()
+            print(f"  Total fetched: {result.cards_fetched} cards")
+            print(f"  New (after dedup): {result.cards_new}")
+            print(f"  Duplicates skipped: {result.duplicates_skipped}")
+
+    # -----------------------------------------------------------------------
+    # Tier 2: Card-Level Hard Filters
+    # -----------------------------------------------------------------------
+    if 2 in tier_set and not dry_run:
+        print("\nTier 2: Card-Level Filters")
+        jobs = db.execute(
+            "SELECT * FROM jobs WHERE status='discovered' AND tier_passed=1"
+        ).fetchall()
+
+        for row in jobs:
+            # Reconstruct JobCard-like from DB row
+            card = JobCard(
+                source_id=row["source_id"] or "",
+                source_job_id=row["source_job_id"] or "",
+                ats_source=row["ats_source"],
+                ats_board_token=row["ats_board_token"],
+                ats_job_id=row["ats_job_id"],
+                apply_url=row["apply_url"] or "",
+                title=row["title"] or "",
+                core_title=row["core_title"] or "",
+                company=row["company"] or "",
+                company_homepage=row["company_homepage"],
+                location=row["location"] or "",
+                workplace_type=row["workplace_type"] or "",
+                workplace_countries=json_decode(row["workplace_countries"]) or [],
+                seniority_level=row["seniority_level"],
+                commitment=json_decode(row["commitment"]) or [],
+                comp_min=row["comp_min"],
+                comp_max=row["comp_max"],
+                comp_currency=row["comp_currency"],
+                technical_tools=json_decode(row["technical_tools"]) or [],
+                requirements_summary=row["requirements_summary"] or "",
+                date_posted=row["date_posted"] or "",
+                role_type=row["role_type"],
+                is_pinned=bool(row["is_pinned"]),
+                discovered_query=row["discovered_query"] or "",
+            )
+
+            filter_result = apply_filters(
+                card, settings.profile, settings.filters.filters, settings.filters.title_filters,
+            )
+
+            if filter_result.passed:
+                db.execute(
+                    "UPDATE jobs SET status='filtered', tier_passed=2, updated_at=? WHERE id=?",
+                    (datetime.now(timezone.utc).isoformat(), row["id"]),
+                )
+                result.tier2_passed += 1
+            else:
+                db.execute(
+                    "UPDATE jobs SET status='rejected', reject_reason=?, updated_at=? WHERE id=?",
+                    (filter_result.reason, datetime.now(timezone.utc).isoformat(), row["id"]),
+                )
+                result.tier2_rejected += 1
+                result.rejection_reasons[filter_result.reason] = (
+                    result.rejection_reasons.get(filter_result.reason, 0) + 1
+                )
+
+        db.commit()
+        print(f"  Passed: {result.tier2_passed}")
+        print(f"  Rejected: {result.tier2_rejected}")
+        for reason, count in sorted(result.rejection_reasons.items(), key=lambda x: -x[1]):
+            print(f"    - {reason}: {count}")
+
+    # -----------------------------------------------------------------------
+    # Tier 3: Full JD Fetch
+    # -----------------------------------------------------------------------
+    if 3 in tier_set and not dry_run:
+        print("\nTier 3: JD Fetch")
+        jobs = db.execute(
+            "SELECT * FROM jobs WHERE status='filtered' AND tier_passed=2 AND jd_fetch_status='pending'"
+        ).fetchall()
+
+        # Get user_agent and delay from sources config
+        user_agent = "Mozilla/5.0"
+        jd_delay = 2.0
+        if settings.sources:
+            for src in settings.sources.sources:
+                if src.enabled:
+                    user_agent = src.user_agent
+                    jd_delay = src.jd_fetch_delay_seconds
+                    break
+
+        checkpoint_path = Path("data/checkpoint.json")
+
+        for row in jobs:
+            jd_result = fetch_jd(
+                job_id=row["id"],
+                ats_source=row["ats_source"],
+                ats_board_token=row["ats_board_token"],
+                ats_job_id=row["ats_job_id"],
+                apply_url=row["apply_url"],
+                user_agent=user_agent,
+                delay=jd_delay,
+            )
+
+            if jd_result.status == "fetched":
+                db.execute(
+                    "UPDATE jobs SET jd_full=?, jd_fetch_status='fetched', status='jd_fetched', tier_passed=3, updated_at=? WHERE id=?",
+                    (jd_result.jd_text, datetime.now(timezone.utc).isoformat(), row["id"]),
+                )
+                result.tier3_fetched += 1
+
+                # Run dedup layers 3 (content hash) after JD is available
+                content_dedup = check_content_duplicate(row["id"], jd_result.jd_text, db)
+                if content_dedup.is_duplicate:
+                    db.execute(
+                        "UPDATE jobs SET status='duplicate_flagged', updated_at=? WHERE id=?",
+                        (datetime.now(timezone.utc).isoformat(), row["id"]),
+                    )
+                else:
+                    register_content_hash(row["id"], jd_result.jd_text, db)
+
+            else:
+                db.execute(
+                    "UPDATE jobs SET jd_fetch_status='failed', status='rejected', reject_reason=?, updated_at=? WHERE id=?",
+                    (f"JD fetch failed: {jd_result.error}", datetime.now(timezone.utc).isoformat(), row["id"]),
+                )
+                result.tier3_failed += 1
+
+            # Checkpoint after each fetch
+            checkpoint_path.write_text(json.dumps({
+                "run_id": run_id,
+                "last_job_id": row["id"],
+                "fetched_count": result.tier3_fetched,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }))
+
+        db.commit()
+
+        # Clean up checkpoint on successful completion
+        if checkpoint_path.exists():
+            checkpoint_path.unlink()
+
+        print(f"  Fetched: {result.tier3_fetched}")
+        print(f"  Failed: {result.tier3_failed}")
+
+    # -----------------------------------------------------------------------
+    # Tier 4: Scoring
+    # -----------------------------------------------------------------------
+    if 4 in tier_set and not dry_run:
+        print("\nTier 4: Scoring")
+        jobs = db.execute(
+            "SELECT * FROM jobs WHERE status='jd_fetched' AND tier_passed=3 AND score IS NULL"
+        ).fetchall()
+
+        for row in jobs:
+            score_result = score_job(
+                title=row["title"] or "",
+                jd_text=row["jd_full"] or "",
+                location=row["location"] or "",
+                company=row["company"] or "",
+                rubric=settings.scoring,
+                profile=settings.profile,
+                comp_min=row["comp_min"],
+                comp_max=row["comp_max"],
+                workplace_type=row["workplace_type"],
+                seniority_level=row["seniority_level"],
+            )
+
+            if score_result.hard_reject:
+                db.execute(
+                    "UPDATE jobs SET score=0, score_reasons=?, score_gaps=?, status='rejected', reject_reason=?, updated_at=? WHERE id=?",
+                    (
+                        json_encode(score_result.reasons),
+                        json_encode(score_result.gaps),
+                        score_result.reject_reason,
+                        datetime.now(timezone.utc).isoformat(),
+                        row["id"],
+                    ),
+                )
+                result.tier4_hard_rejected += 1
+            elif score_result.score >= settings.scoring.post_threshold:
+                db.execute(
+                    "UPDATE jobs SET score=?, score_reasons=?, score_gaps=?, status='ready', tier_passed=4, updated_at=? WHERE id=?",
+                    (
+                        score_result.score,
+                        json_encode(score_result.reasons),
+                        json_encode(score_result.gaps),
+                        datetime.now(timezone.utc).isoformat(),
+                        row["id"],
+                    ),
+                )
+                result.tier4_scored += 1
+            else:
+                db.execute(
+                    "UPDATE jobs SET score=?, score_reasons=?, score_gaps=?, status='rejected', reject_reason='score below threshold', updated_at=? WHERE id=?",
+                    (
+                        score_result.score,
+                        json_encode(score_result.reasons),
+                        json_encode(score_result.gaps),
+                        datetime.now(timezone.utc).isoformat(),
+                        row["id"],
+                    ),
+                )
+                result.tier4_rejected += 1
+
+        db.commit()
+        print(f"  Scored ≥{settings.scoring.post_threshold}: {result.tier4_scored}")
+        print(f"  Scored <{settings.scoring.post_threshold}: {result.tier4_rejected}")
+        print(f"  Hard rejected: {result.tier4_hard_rejected}")
+
+    # -----------------------------------------------------------------------
+    # Tier 5: Ranking + Cross-reference + Report
+    # -----------------------------------------------------------------------
+    if 5 in tier_set and not dry_run:
+        print("\nTier 5: Ranking & Report")
+
+        # Per-company cap
+        cap = settings.scoring.per_company_cap
+        ready_jobs = db.execute(
+            "SELECT * FROM jobs WHERE status='ready' AND tier_passed=4 ORDER BY score DESC, comp_max DESC, date_posted DESC"
+        ).fetchall()
+
+        # Group by company and apply cap
+        company_counts: dict[str, int] = {}
+        for row in ready_jobs:
+            company = row["company"] or "Unknown"
+            company_counts[company] = company_counts.get(company, 0) + 1
+            if company_counts[company] > cap:
+                db.execute(
+                    "UPDATE jobs SET status='capped', updated_at=? WHERE id=?",
+                    (datetime.now(timezone.utc).isoformat(), row["id"]),
+                )
+                result.tier5_capped += 1
+
+        db.commit()
+
+        # Cross-reference
+        if settings.profile and settings.profile.cross_reference.auto_pull:
+            sync_repo(settings.profile.cross_reference.repo_path)
+
+        final_jobs = db.execute(
+            "SELECT * FROM jobs WHERE status='ready' ORDER BY score DESC, comp_max DESC, date_posted DESC"
+        ).fetchall()
+
+        for row in final_jobs:
+            if settings.profile:
+                cross_ref = check_cross_reference(
+                    title=row["title"] or "",
+                    company=row["company"] or "",
+                    repo_path=settings.profile.cross_reference.repo_path,
+                )
+                if cross_ref.matched:
+                    db.execute(
+                        "UPDATE jobs SET cross_ref_status=?, cross_ref_date=?, cross_ref_score=? WHERE id=?",
+                        (cross_ref.prior_status, cross_ref.prior_date, cross_ref.prior_score, row["id"]),
+                    )
+                    result.cross_ref_matches += 1
+
+        db.commit()
+        result.tier5_ready = len(final_jobs)
+        print(f"  Ready for review: {result.tier5_ready}")
+        print(f"  Capped (per-company): {result.tier5_capped}")
+        print(f"  Cross-ref matches: {result.cross_ref_matches}")
+
+    # Record pipeline run
+    if not dry_run:
+        db.execute(
+            """
+            INSERT INTO pipeline_runs (run_id, started_at, completed_at, cards_fetched, cards_new, cards_survived_tier2, jds_fetched, jobs_scored, jobs_ready, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')
+            """,
+            (
+                run_id,
+                datetime.now(timezone.utc).isoformat(),
+                datetime.now(timezone.utc).isoformat(),
+                result.cards_fetched, result.cards_new, result.tier2_passed,
+                result.tier3_fetched, result.tier4_scored, result.tier5_ready,
+            ),
+        )
+        db.commit()
+
+    db.close()
+    return result

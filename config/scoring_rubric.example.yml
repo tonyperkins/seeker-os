@@ -1,0 +1,197 @@
+# Seeker OS — Scoring Rubric (EXAMPLE TEMPLATE)
+# Copy to scoring_rubric.yml and adjust. scoring_rubric.yml is .gitignore'd.
+# The scoring engine reads this file — no scoring logic is hardcoded in Python.
+
+scoring:
+  post_threshold: 6.0
+  per_company_cap: 3
+  max_score: 10
+  min_score: 0
+
+  # Base score — first matching pattern wins
+  base_scores:
+    - pattern: "(principal|staff).*(sre|site reliability|platform|infra|devops)"
+      score: 4.5
+      label: "Principal/Staff SRE/Platform/Infra"
+    - pattern: "senior.*(sre|site reliability|platform|infra)"
+      score: 4.0
+      label: "Senior SRE/Platform/Infra"
+    - pattern: "senior.*(devops|cloud.?engineer)"
+      score: 3.5
+      label: "Senior DevOps/Cloud"
+    - pattern: "senior.*(release|build)"
+      score: 3.0
+      label: "Senior Release/Build"
+    - pattern: "(sre|site reliability|platform.?engineer|infrastructure.?engineer|devops|cloud.?engineer)"
+      score: 2.0
+      label: "Infrastructure title match"
+    - pattern: "software.?engineer.*(infra|platform|cloud|sre)"
+      score: 2.0
+      label: "SE on infra/platform team"
+    - pattern: "(infra|cloud|security.*cloud).*engineer"
+      score: 2.0
+      label: "Infra/Cloud Security Engineer"
+    - check: "jd_infra_role"
+      score: 2.0
+      label: "JD matches infrastructure role (no title match)"
+    - score: 0
+      label: "No title/JD match"
+
+  # Positive modifiers — all matching patterns are summed
+  positive_modifiers:
+    - signal: "austin_area"
+      pattern: "austin|leander|cedar park|round rock|georgetown|pflugerville|taylor|texas|tx"
+      points: 1.5
+      check: "location_or_jd"
+    - signal: "aws"
+      pattern: "aws|amazon web services"
+      points: 1.0
+      check: "jd"
+    - signal: "terraform"
+      pattern: "terraform"
+      points: 1.0
+      check: "jd"
+    - signal: "remote_us"
+      pattern: "remote"
+      points: 1.0
+      check: "jd"
+      requires: "united states|us.?based|within the us"
+    - signal: "comp_target"
+      points: 1.0
+      check: "structured_comp"
+      threshold: 165000
+    - signal: "you_build_it"
+      pattern: "you build it.*you run it|build it.*run it|own.*production"
+      points: 1.0
+      check: "jd"
+    - signal: "kubernetes"
+      pattern: "kubernetes|k8s"
+      points: 0.5
+      check: "jd"
+    - signal: "cicd"
+      pattern: "ci/cd|cicd|continuous integration|pipeline"
+      points: 0.5
+      check: "jd"
+    - signal: "observability"
+      pattern: "prometheus|grafana|datadog|observability|elk|splunk"
+      points: 0.5
+      check: "jd"
+    - signal: "docker"
+      pattern: "docker"
+      points: 0.5
+      check: "jd"
+    - signal: "platform_devex"
+      pattern: "platform|developer experience|devex|golden path"
+      points: 0.5
+      check: "jd"
+    - signal: "small_company"
+      pattern: "small team|startup|series [abc]"
+      points: 0.5
+      check: "jd"
+    - signal: "ai_infra"
+      pattern: "ml platform|gpu infra|model serving|inference infra"
+      points: 0.5
+      check: "jd"
+
+  # Negative modifiers — all matching patterns are summed
+  negative_modifiers:
+    - signal: "relocation_required"
+      pattern: "on.?site only|in.?office only|must.*relocat|relocation required"
+      points: -3.0
+      check: "jd"
+    - signal: "hybrid_non_local"
+      pattern: "hybrid"
+      points: -3.0
+      check: "jd"
+      unless: "austin|leander|cedar park|remote"
+    - signal: "city_only_no_remote"
+      points: -2.0
+      check: "location_only"
+    - signal: "comp_below_floor"
+      points: -3.0
+      check: "structured_comp"
+      threshold_max: 140000
+    - signal: "comp_marginal"
+      points: -1.5
+      check: "structured_comp"
+      threshold_min: 140000
+      threshold_max: 165000
+    - signal: "people_management"
+      pattern: "performance review|headcount|hiring decision|manage.*team of"
+      points: -2.0
+      check: "jd"
+    - signal: "follow_the_sun"
+      pattern: "follow.?the.?sun|24.?7 global|offices? in \\d+ countries"
+      points: -1.5
+      check: "jd"
+    - signal: "large_enterprise"
+      pattern: "fortune\\s*(?:500|100|50)|\\b\\d{2,3},000\\+?\\s*employees"
+      points: -1.5
+      check: "jd"
+    - signal: "known_large_enterprise"
+      pattern: "cvs|walgreens|bank of america|wells fargo|jpmorgan|chase|citibank"
+      points: -1.5
+      check: "jd"
+    - signal: "staffing_agency"
+      pattern: "jobs? via dice|robert half|akkodis|jobgether|intellisoft|manpower|randstad|adecco|insight global|tek systems|staffing|consulting llc"
+      points: -1.5
+      check: "jd"
+    - signal: "extreme_oncall"
+      pattern: "(?:12.?hour|24.?hour).{0,30}(?:on.?call|shift|rotation)|7\\s*days?.{0,30}(?:on.?call|rotation)"
+      points: -2.5
+      check: "jd"
+    - signal: "oncall_low_comp"
+      pattern: "on.?call|on-call rotation"
+      points: -1.0
+      check: "jd"
+      requires_comp_below: 200000
+    - signal: "oncall_high_comp"
+      pattern: "on.?call|on-call rotation"
+      points: -0.5
+      check: "jd"
+      requires_comp_at_least: 200000
+    - signal: "k8s_5yr_primary"
+      pattern: "5\\+.*years.*kubernetes"
+      points: -1.0
+      check: "jd"
+    - signal: "first_line_support"
+      pattern: "first.?line.*support|first.?line.*response|first.*escalation point"
+      points: -1.0
+      check: "jd"
+    - signal: "gcp_primary"
+      pattern: "\\bgcp\\b|\\bgoogle cloud\\b"
+      points: -0.5
+      check: "jd"
+    - signal: "azure_primary_no_aws"
+      pattern: "\\bazure\\b"
+      points: -0.5
+      check: "jd"
+      unless: "aws"
+    - signal: "compliance_heavy"
+      pattern: "pci.?dss|sox\\b|hipaa|iso.?27001"
+      points: -0.5
+      check: "jd"
+    - signal: "high_experience_bar"
+      pattern: "10\\+.*years|15\\+.*years"
+      points: -0.5
+      check: "jd"
+    - signal: "mts_no_seniority"
+      pattern: "\\bmember of technical staff\\b"
+      points: -1.0
+      check: "title"
+      unless: "senior|staff|principal"
+    - signal: "generic_swe_title"
+      pattern: "^software engineer$"
+      points: -2.0
+      check: "title"
+      unless: "infrastructure|platform|sre|devops|cloud|release|security|data"
+    - signal: "missing_location"
+      points: -1.5
+      check: "no_location_no_remote"
+
+  # Freshness (minor ranking factor, not a score modifier)
+  freshness:
+    boost_days: 7           # ranking boost within N days
+    neutral_days: 14        # neutral between boost and penalty
+    penalty_days: 30        # slight ranking penalty after N days
+    hard_filter_days: 30    # hard reject at Tier 2 if older than N days
