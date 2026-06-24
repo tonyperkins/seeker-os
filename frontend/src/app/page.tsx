@@ -75,6 +75,90 @@ function RunStatusBadge({ status }: { status: string }) {
   return <Badge variant={variant}>{status}</Badge>;
 }
 
+const TIER_LABELS: Record<string, string> = {
+  "1": "Tier 1: Discovery",
+  "2": "Tier 2: Filtering",
+  "3": "Tier 3: JD Fetch",
+  "4": "Tier 4: Scoring",
+  "5": "Tier 5: Ranking",
+};
+
+const TIER_COLORS: Record<string, string> = {
+  "1": "bg-sky-500/80 dark:bg-sky-600/80",
+  "2": "bg-indigo-500/80 dark:bg-indigo-600/80",
+  "3": "bg-violet-500/80 dark:bg-violet-600/80",
+  "4": "bg-purple-500/80 dark:bg-purple-600/80",
+  "5": "bg-fuchsia-500/80 dark:bg-fuchsia-600/80",
+};
+
+function FunnelChart({
+  tierEntries,
+  totalJobs,
+}: {
+  tierEntries: [string, number][];
+  totalJobs: number;
+}) {
+  const maxCount = Math.max(totalJobs, ...tierEntries.map(([, c]) => c), 1);
+
+  // Build funnel stages: start with total, then each tier
+  const stages: { label: string; count: number; pct: number; color: string }[] = [];
+
+  // Add "All jobs" as the top of the funnel
+  stages.push({
+    label: "All Jobs",
+    count: totalJobs,
+    pct: 100,
+    color: "bg-slate-400/70 dark:bg-slate-600/70",
+  });
+
+  for (const [tier, count] of tierEntries) {
+    const pct = (count / maxCount) * 100;
+    stages.push({
+      label: TIER_LABELS[tier] || `Tier ${tier}`,
+      count,
+      pct: Math.max(pct, 5), // min 5% width so small bars are visible
+      color: TIER_COLORS[tier] || "bg-primary/60",
+    });
+  }
+
+  // Calculate drop-off between stages
+  return (
+    <div className="flex flex-col gap-2">
+      {stages.map((stage, i) => {
+        const prevCount = i > 0 ? stages[i - 1].count : null;
+        const dropoff = prevCount != null ? prevCount - stage.count : 0;
+        const dropoffPct = prevCount != null && prevCount > 0
+          ? Math.round((dropoff / prevCount) * 100)
+          : 0;
+
+        return (
+          <div key={stage.label} className="flex flex-col gap-1">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">{stage.label}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-semibold">{stage.count}</span>
+                {dropoff > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    −{dropoff} ({dropoffPct}%)
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="h-7 w-full overflow-hidden rounded-md bg-muted/40">
+              <div
+                className={`flex h-full items-center justify-end rounded-md px-2 text-xs font-medium text-white transition-all ${stage.color}`}
+                style={{ width: `${stage.pct}%` }}
+              >
+                {stage.count > 0 && stage.pct > 15 && stage.count}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   let funnel: FunnelStats | null = null;
   let runs: PipelineRunRecord[] = [];
@@ -128,21 +212,15 @@ export default async function DashboardPage() {
         <StatCard label="Discovered" value={funnel?.discovered ?? 0} icon={TrendingUp} />
       </div>
 
-      {/* By tier */}
+      {/* Pipeline funnel */}
       {tierEntries.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>By Tier</CardTitle>
-            <CardDescription>Jobs surviving each pipeline tier</CardDescription>
+            <CardTitle>Pipeline Funnel</CardTitle>
+            <CardDescription>Jobs surviving each tier — narrowing toward ready</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {tierEntries.map(([tier, count]) => (
-                <Badge key={tier} variant="secondary" className="text-sm">
-                  {tier}: {count}
-                </Badge>
-              ))}
-            </div>
+            <FunnelChart tierEntries={tierEntries} totalJobs={funnel?.total_jobs ?? 0} />
           </CardContent>
         </Card>
       )}
