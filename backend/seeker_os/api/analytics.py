@@ -44,7 +44,7 @@ def get_funnel_stats():
     funnel = [
         {"tier": 1, "label": "Discovered", "count": total},
         {"tier": 2, "label": "Passed Filters", "count": passed_t2},
-        {"tier": 4, "label": "Scored", "count": scored},
+        {"tier": 4, "label": "Passed Scoring", "count": scored},
     ]
 
     # JD fetch stats — for jobs that passed tier 2 (the ones that need JD fetch)
