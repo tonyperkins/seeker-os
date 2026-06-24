@@ -47,6 +47,7 @@ data/seeker.db
 data/cache/
 data/checkpoint.json
 data/resumes/
+data/master_resume.*
 **/data/seeker.db
 **/data/cache/
 **/data/checkpoint.json
