@@ -1,0 +1,26 @@
+# Company Research Configuration
+#
+# Controls how the company research module gathers data.
+# All sources are optional — the module gracefully degrades when a source
+# is unavailable or unconfigured.
+
+# Wikipedia (free, no auth)
+wikipedia:
+  enabled: true
+  language: "en"        # Wikipedia language edition
+  timeout_seconds: 10
+
+# Wikidata (free, no auth) — structured data: founded year, headcount
+wikidata:
+  enabled: true
+  timeout_seconds: 10
+
+# LLM Dossier Generation
+# Uses the configured LLM providers (see providers.yml) to generate a
+# comprehensive company dossier: funding, sentiment, fit, verdict flags.
+# Requires at least one provider to be configured.
+llm_dossier:
+  enabled: true
+  # Task name used for LLM routing (maps to tier in providers.yml)
+  task: "company_dossier_generation"
+  temperature: 0.3

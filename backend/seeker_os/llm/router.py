@@ -14,8 +14,6 @@ import os
 from seeker_os.config import Settings, ProviderConfig, ProvidersConfig
 from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth
 from seeker_os.llm.base import LLMProvider
-from seeker_os.llm.anthropic_provider import AnthropicProvider
-from seeker_os.llm.openai_compat_provider import OpenAICompatProvider
 
 
 def _resolve_env(value: str) -> str:
@@ -31,6 +29,7 @@ def create_provider(config: ProviderConfig) -> LLMProvider:
     api_key = _resolve_env(config.api_key or "")
 
     if config.type == "anthropic":
+        from seeker_os.llm.anthropic_provider import AnthropicProvider
         return AnthropicProvider(
             provider_id=config.id,
             api_key=api_key,
@@ -40,6 +39,7 @@ def create_provider(config: ProviderConfig) -> LLMProvider:
             oauth_token_path=config.oauth_token_path,
         )
     elif config.type == "openai_compatible":
+        from seeker_os.llm.openai_compat_provider import OpenAICompatProvider
         if not config.base_url:
             raise ValueError(f"Provider '{config.id}' is openai_compatible but has no base_url")
         return OpenAICompatProvider(

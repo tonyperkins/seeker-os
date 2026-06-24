@@ -334,3 +334,201 @@ class MessageResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+# ---------------------------------------------------------------------------
+# Company Research schemas
+# ---------------------------------------------------------------------------
+
+class WikipediaInfoSchema(BaseModel):
+    """Company info from Wikipedia."""
+    title: str = ""
+    description: str = ""
+    extract: str = ""
+    url: str | None = None
+    thumbnail: str | None = None
+
+
+class SourceRefSchema(BaseModel):
+    """A source URL with retrieval date."""
+    url: str = ""
+    retrieved: str = ""
+
+
+class LayoffEventSchema(BaseModel):
+    """A single layoff event."""
+    date: str | None = None
+    pct: float | None = None
+    count: int | None = None
+    source: str | None = None
+
+
+class LastRoundSchema(BaseModel):
+    """Most recent funding round."""
+    type: str | None = None
+    amount_usd: int | None = None
+    date: str | None = None
+    lead_investors: list[str] = []
+
+
+class FundingDossierSchema(BaseModel):
+    """Funding / company stage section of the dossier."""
+    founded: int | None = None
+    hq: str | None = None
+    public: bool = False
+    stage: str | None = None
+    total_raised_usd: int | None = None
+    valuation_usd: int | None = None
+    last_round: LastRoundSchema | None = None
+    headcount: int | None = None
+    headcount_trend: str | None = None
+    layoffs: list[LayoffEventSchema] = []
+    financial_health: str | None = None
+    confidence: float = 0.0
+    sources: list[SourceRefSchema] = []
+
+
+class SentimentThemeSchema(BaseModel):
+    """A recurring positive or negative theme in employee sentiment."""
+    theme: str = ""
+    frequency: str = "low"
+    paraphrase: str = ""
+    source: str = ""
+    age_months: int | None = None
+
+
+class SentimentDossierSchema(BaseModel):
+    """Employee sentiment section of the dossier."""
+    overall_rating_estimate: float | None = None
+    rating_scale: str = "out of 5"
+    ceo_approval_pct: float | None = None
+    recommend_pct: float | None = None
+    positives: list[SentimentThemeSchema] = []
+    negatives: list[SentimentThemeSchema] = []
+    staleness_warning: str | None = None
+    confidence: float = 0.0
+    sources: list[SourceRefSchema] = []
+
+
+class FitDossierSchema(BaseModel):
+    """Fit signals section of the dossier."""
+    remote_policy: str | None = None
+    remote_walkback: str | None = None
+    size_bucket: str | None = None
+    ic_vs_mgmt_culture: str | None = None
+    comp_band: str | None = None
+    clearance_required: bool = False
+    confidence: float = 0.0
+    sources: list[SourceRefSchema] = []
+
+
+class VerdictFlagsSchema(BaseModel):
+    """Green / red / watch flags for the company."""
+    green: list[str] = []
+    red: list[str] = []
+    watch: list[str] = []
+
+
+class CompanyResearchResponse(BaseModel):
+    """Company research result."""
+    id: int | None = None
+    job_id: int
+    company_name: str
+    company_homepage: str | None = None
+    wikipedia: WikipediaInfoSchema | None = None
+    overall_confidence: float = 0.0
+    summary: str = ""
+    verdict_flags: VerdictFlagsSchema = VerdictFlagsSchema()
+    funding: FundingDossierSchema | None = None
+    sentiment: SentimentDossierSchema | None = None
+    fit: FitDossierSchema | None = None
+    gaps: list[str] = []
+    sources_used: list[str] = []
+    errors: list[str] = []
+    researched_at: str = ""
+
+
+# ---------------------------------------------------------------------------
+# JD Analysis schemas
+# ---------------------------------------------------------------------------
+
+class NamedGapSchema(BaseModel):
+    """A single named gap between JD requirements and candidate profile."""
+    area: str = ""
+    jd_requires: str = ""
+    candidate_actual: str = ""
+    severity: str = "low"
+
+
+class HardBlockerSchema(BaseModel):
+    """A hard blocker that prevents applying regardless of score."""
+    type: str = ""
+    detail: str = ""
+
+
+class RubricDimensionSchema(BaseModel):
+    """A single rubric dimension score breakdown."""
+    dimension: str = ""
+    weight: float = 0.0
+    raw: float = 0.0
+    weighted: float = 0.0
+    note: str = ""
+
+
+class CompAssessmentSchema(BaseModel):
+    """Compensation assessment against floor."""
+    posted: str | float | None = None
+    meets_floor: bool | None = None
+    note: str = ""
+
+
+class PositioningSchema(BaseModel):
+    """Positioning alignment assessment."""
+    aligned: bool = True
+    note: str = ""
+
+
+class CompanyFitSchema(BaseModel):
+    """Company fit assessment."""
+    size_bucket: str | None = None
+    stage: str | None = None
+    remote_policy: str | None = None
+    note: str = ""
+
+
+class TailoringSchema(BaseModel):
+    """Tailoring guidance for resume generation."""
+    lead_with: list[str] = []
+    reframe_summary: str = ""
+    do_not_claim: list[str] = []
+
+
+class JobAnalysisResponse(BaseModel):
+    """Full JD analysis result — returned by the analysis agent."""
+    id: int | None = None
+    job_id: int
+    # LLM metadata
+    provider: str = ""
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+    # Analysis fields (from LLM output schema)
+    company: str = ""
+    title: str = ""
+    url: str = ""
+    analyzed_at: str = ""
+    verdict: str = ""
+    weighted_score: float = 0.0
+    one_line: str = ""
+    named_gaps: list[NamedGapSchema] = []
+    hard_blockers: list[HardBlockerSchema] = []
+    rubric_breakdown: list[RubricDimensionSchema] = []
+    bonuses_applied: list[str] = []
+    penalties_applied: list[str] = []
+    comp: CompAssessmentSchema = CompAssessmentSchema()
+    positioning: PositioningSchema = PositioningSchema()
+    company_fit: CompanyFitSchema = CompanyFitSchema()
+    tailoring: TailoringSchema = TailoringSchema()
+    red_flags: list[str] = []
+    confidence: float = 0.0

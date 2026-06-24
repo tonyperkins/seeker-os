@@ -372,6 +372,14 @@ export const api = {
     skip: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/skip`, { method: "POST" }),
     crossRef: (id: number) => fetchAPI<Record<string, unknown>>(`/api/jobs/${id}/cross-ref`),
+    companyResearch: {
+      get: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`),
+      run: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`, { method: "POST" }),
+    },
+    analysis: {
+      get: (id: number) => fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`),
+      run: (id: number) => fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`, { method: "POST" }),
+    },
   },
 
   // Pipeline
@@ -526,3 +534,181 @@ export const api = {
   // Health
   health: () => fetchAPI<{ status: string }>("/api/health"),
 };
+
+// ---------------------------------------------------------------------------
+// Company Research types
+// ---------------------------------------------------------------------------
+
+export interface WikipediaInfo {
+  title: string;
+  description: string;
+  extract: string;
+  url: string | null;
+  thumbnail: string | null;
+}
+
+export interface SourceRef {
+  url: string;
+  retrieved: string;
+}
+
+export interface LayoffEvent {
+  date: string | null;
+  pct: number | null;
+  count: number | null;
+  source: string | null;
+}
+
+export interface LastRound {
+  type: string | null;
+  amount_usd: number | null;
+  date: string | null;
+  lead_investors: string[];
+}
+
+export interface FundingDossier {
+  founded: number | null;
+  hq: string | null;
+  public: boolean;
+  stage: string | null;
+  total_raised_usd: number | null;
+  valuation_usd: number | null;
+  last_round: LastRound | null;
+  headcount: number | null;
+  headcount_trend: string | null;
+  layoffs: LayoffEvent[];
+  financial_health: string | null;
+  confidence: number;
+  sources: SourceRef[];
+}
+
+export interface SentimentTheme {
+  theme: string;
+  frequency: string;
+  paraphrase: string;
+  source: string;
+  age_months: number | null;
+}
+
+export interface SentimentDossier {
+  overall_rating_estimate: number | null;
+  rating_scale: string;
+  ceo_approval_pct: number | null;
+  recommend_pct: number | null;
+  positives: SentimentTheme[];
+  negatives: SentimentTheme[];
+  staleness_warning: string | null;
+  confidence: number;
+  sources: SourceRef[];
+}
+
+export interface FitDossier {
+  remote_policy: string | null;
+  remote_walkback: string | null;
+  size_bucket: string | null;
+  ic_vs_mgmt_culture: string | null;
+  comp_band: string | null;
+  clearance_required: boolean;
+  confidence: number;
+  sources: SourceRef[];
+}
+
+export interface VerdictFlags {
+  green: string[];
+  red: string[];
+  watch: string[];
+}
+
+export interface CompanyResearchResult {
+  id: number | null;
+  job_id: number;
+  company_name: string;
+  company_homepage: string | null;
+  wikipedia: WikipediaInfo | null;
+  overall_confidence: number;
+  summary: string;
+  verdict_flags: VerdictFlags;
+  funding: FundingDossier | null;
+  sentiment: SentimentDossier | null;
+  fit: FitDossier | null;
+  gaps: string[];
+  sources_used: string[];
+  errors: string[];
+  researched_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// JD Analysis types
+// ---------------------------------------------------------------------------
+
+export interface NamedGap {
+  area: string;
+  jd_requires: string;
+  candidate_actual: string;
+  severity: "low" | "med" | "high" | "blocker";
+}
+
+export interface HardBlocker {
+  type: string;
+  detail: string;
+}
+
+export interface RubricDimension {
+  dimension: string;
+  weight: number;
+  raw: number;
+  weighted: number;
+  note: string;
+}
+
+export interface CompAssessment {
+  posted: string | number | null;
+  meets_floor: boolean | null;
+  note: string;
+}
+
+export interface PositioningAssessment {
+  aligned: boolean;
+  note: string;
+}
+
+export interface CompanyFitAssessment {
+  size_bucket: string | null;
+  stage: string | null;
+  remote_policy: string | null;
+  note: string;
+}
+
+export interface TailoringGuidance {
+  lead_with: string[];
+  reframe_summary: string;
+  do_not_claim: string[];
+}
+
+export interface JobAnalysisResult {
+  id: number | null;
+  job_id: number;
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  latency_ms: number;
+  company: string;
+  title: string;
+  url: string;
+  analyzed_at: string;
+  verdict: "APPLY" | "CONDITIONAL" | "MONITOR" | "SKIP";
+  weighted_score: number;
+  one_line: string;
+  named_gaps: NamedGap[];
+  hard_blockers: HardBlocker[];
+  rubric_breakdown: RubricDimension[];
+  bonuses_applied: string[];
+  penalties_applied: string[];
+  comp: CompAssessment;
+  positioning: PositioningAssessment;
+  company_fit: CompanyFitAssessment;
+  tailoring: TailoringGuidance;
+  red_flags: string[];
+  confidence: number;
+}

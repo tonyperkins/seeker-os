@@ -9,6 +9,7 @@ export function CollapsibleCard({
   title,
   description,
   icon: Icon,
+  action,
   defaultOpen = false,
   scroll = false,
   contentClassName,
@@ -17,6 +18,7 @@ export function CollapsibleCard({
   title: React.ReactNode;
   description?: React.ReactNode;
   icon?: React.ComponentType<{ className?: string }>;
+  action?: React.ReactNode;
   defaultOpen?: boolean;
   scroll?: boolean;
   contentClassName?: string;
@@ -48,12 +50,19 @@ export function CollapsibleCard({
           </CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
-        <ChevronDown
-          className={cn(
-            "size-5 shrink-0 text-muted-foreground transition-transform duration-200",
-            open && "rotate-180",
+        <div className="flex items-center gap-2 shrink-0">
+          {action && (
+            <div onClick={(e) => e.stopPropagation()}>
+              {action}
+            </div>
           )}
-        />
+          <ChevronDown
+            className={cn(
+              "size-5 shrink-0 text-muted-foreground transition-transform duration-200",
+              open && "rotate-180",
+            )}
+          />
+        </div>
       </CardHeader>
       {open && (
         <CardContent

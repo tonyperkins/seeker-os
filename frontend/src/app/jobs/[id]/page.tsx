@@ -21,15 +21,17 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  CardAction,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { JobActions } from "@/components/job-actions";
 import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { JDRenderer } from "@/components/jd-renderer";
+import { CompanyResearch } from "@/components/company-research";
+import { JobAnalysis } from "@/components/job-analysis";
 import { api, type JobDetail } from "@/lib/api";
 import { formatDate } from "@/lib/date";
 
@@ -203,17 +205,15 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
         {/* Right: score breakdown + JD */}
         <div className="flex flex-col gap-4 lg:col-span-2">
           {/* Score breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Score Breakdown</CardTitle>
-              <CardDescription>
-                {job.score != null ? `Score: ${job.score}` : "Not scored"}
-              </CardDescription>
-              <CardAction>
+          <CollapsibleCard
+            title="Score Breakdown"
+            description={job.score != null ? `Score: ${job.score}` : "Not scored"}
+            defaultOpen
+          >
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
                 <Badge variant="secondary">Tier {job.tier_passed} passed</Badge>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+              </div>
               {job.score_reasons.length > 0 && (
                 <div className="flex flex-col gap-1.5">
                   <p className="text-xs font-medium text-muted-foreground">Reasons</p>
@@ -245,22 +245,21 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
                   No score reasons or gaps recorded.
                 </p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </CollapsibleCard>
 
           {/* Cross-reference */}
           {job.cross_ref_status && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Cross-Reference</CardTitle>
-                <CardDescription>Matched against application history</CardDescription>
-                <CardAction>
+            <CollapsibleCard
+              title="Cross-Reference"
+              description="Matched against application history"
+            >
+              <div className="flex flex-col gap-2 text-sm">
+                <div className="flex items-center gap-2">
                   <Badge variant={job.cross_ref_status === "match" ? "default" : "outline"}>
                     {job.cross_ref_status}
                   </Badge>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm">
+                </div>
                 <InfoRow
                   icon={GitCompare}
                   label="Status"
@@ -274,20 +273,23 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
                 {job.cross_ref_score != null && (
                   <InfoRow icon={GitCompare} label="Score" value={job.cross_ref_score} />
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </CollapsibleCard>
           )}
+
+          {/* AI Analysis */}
+          <JobAnalysis jobId={job.id} />
+
+          {/* Company Research */}
+          <CompanyResearch jobId={job.id} />
 
           {/* Requirements summary */}
           {job.requirements_summary && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Requirements Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <CollapsibleCard title="Requirements Summary">
+              <div className="flex flex-col gap-3">
                 <p className="text-sm text-muted-foreground">{job.requirements_summary}</p>
                 {job.technical_tools.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     {job.technical_tools.map((tool) => (
                       <Badge key={tool} variant="outline" className="text-xs">
                         {tool}
@@ -295,24 +297,20 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </CollapsibleCard>
           )}
 
           {/* Full JD */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Job Description</CardTitle>
-              <CardDescription>
-                {job.jd_fetch_status ? `Fetch: ${job.jd_fetch_status}` : "Full JD text"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[480px] rounded-md border border-border p-4">
-                <JDRenderer content={job.jd_full || ""} />
-              </ScrollArea>
-            </CardContent>
-          </Card>
+          <CollapsibleCard
+            title="Job Description"
+            description={job.jd_fetch_status ? `Fetch: ${job.jd_fetch_status}` : "Full JD text"}
+            contentClassName="p-0"
+          >
+            <ScrollArea className="h-[480px] rounded-md border border-border p-4">
+              <JDRenderer content={job.jd_full || ""} />
+            </ScrollArea>
+          </CollapsibleCard>
         </div>
       </div>
     </div>

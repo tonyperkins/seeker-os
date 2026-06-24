@@ -167,6 +167,61 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE jobs ADD COLUMN detail_url TEXT;
     """,
+    # Migration 5: Company research table
+    """
+    CREATE TABLE IF NOT EXISTS company_research (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id),
+        company_name TEXT,
+        company_homepage TEXT,
+        -- Aggregated research data (JSON)
+        wikipedia_data TEXT,          -- JSON: {title, description, extract, url, thumbnail}
+        funding_data TEXT,            -- JSON: {total_funding, funding_stage, founded_year, rounds, source, source_url}
+        sentiment_data TEXT,          -- JSON: {overall_sentiment, summary, key_themes, confidence, source}
+        sources_used TEXT,            -- JSON array of source names
+        errors TEXT,                  -- JSON array of error messages
+        researched_at TEXT,
+        created_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_company_research_job_id ON company_research(job_id);
+    CREATE INDEX IF NOT EXISTS idx_company_research_company_name ON company_research(company_name);
+    """,
+    # Migration 6: Add dossier columns to company_research table
+    """
+    ALTER TABLE company_research ADD COLUMN fit_data TEXT;
+    ALTER TABLE company_research ADD COLUMN overall_confidence REAL DEFAULT 0.0;
+    ALTER TABLE company_research ADD COLUMN summary TEXT DEFAULT '';
+    ALTER TABLE company_research ADD COLUMN verdict_flags TEXT;
+    ALTER TABLE company_research ADD COLUMN gaps TEXT;
+    """,
+    # Migration 7: Job analyses table (JD analysis agent)
+    """
+    CREATE TABLE IF NOT EXISTS job_analyses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id),
+        -- LLM metadata
+        provider TEXT,
+        model TEXT,
+        task TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER DEFAULT 0,
+        -- Full analysis JSON (matches the output schema)
+        analysis_json TEXT,
+        -- Denormalized fields for quick access
+        verdict TEXT,
+        weighted_score REAL,
+        one_line TEXT,
+        confidence REAL,
+        -- Timestamps
+        analyzed_at TEXT,
+        created_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_job_analyses_job_id ON job_analyses(job_id);
+    CREATE INDEX IF NOT EXISTS idx_job_analyses_verdict ON job_analyses(verdict);
+    """,
 ]
 
 
