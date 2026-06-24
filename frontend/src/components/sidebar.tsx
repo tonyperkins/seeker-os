@@ -18,7 +18,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 border-r border-border bg-sidebar flex flex-col">
+    <aside className="w-56 border-r border-border bg-sidebar flex flex-col h-screen sticky top-0 shrink-0">
       <div className="p-4 border-b border-border">
         <h1 className="text-lg font-bold tracking-tight">Seeker OS</h1>
         <p className="text-xs text-muted-foreground mt-1">Job Search Pipeline</p>
