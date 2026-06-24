@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   CheckCircle2,
   XCircle,
@@ -19,7 +20,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { RunPipelineButton } from "@/components/run-pipeline-button";
-import { SetupGuide } from "@/components/setup-guide";
 import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
 
 function StatCard({
@@ -161,19 +161,22 @@ export default async function DashboardPage() {
     );
   }
 
+  // Check if setup is complete — redirect to onboarding if not
+  const hasProvider = (providers?.providers ?? []).some(
+    (p) => p.enabled && (p.api_key_set || p.healthy === true) && p.models.length > 0,
+  );
+  const isProfileConfigured = settings?.profile_configured ?? false;
+  const hasResume = resumeInfo?.exists ?? false;
+  const setupComplete = hasProvider && isProfileConfigured && hasResume;
+
+  if (!setupComplete) {
+    redirect("/onboarding");
+  }
+
   const funnelStages = funnel?.funnel ?? [];
   const jdFetchTotal = funnel?.jd_fetch_total ?? 0;
   const jdFetchSuccess = funnel?.jd_fetch_success ?? 0;
   const jdFetchPct = jdFetchTotal > 0 ? Math.round((jdFetchSuccess / jdFetchTotal) * 100) : 0;
-
-  // Detect new-install state: no provider, placeholder profile, no resume, or no jobs
-  const isProfilePlaceholder = !settings?.profile_configured;
-  const totalJobs = funnel?.total_jobs ?? 0;
-  const hasProvider = (providers?.providers ?? []).some(
-    (p) => p.enabled && (p.api_key_set || p.healthy === true) && p.models.length > 0,
-  );
-  const isNewInstall = !hasProvider || isProfilePlaceholder || !resumeInfo?.exists || totalJobs === 0;
-  const setupComplete = hasProvider && !isProfilePlaceholder && resumeInfo?.exists;
 
   return (
     <div className="flex flex-col gap-6">
@@ -185,16 +188,6 @@ export default async function DashboardPage() {
           </p>
         </div>
       </div>
-
-      {/* Setup guide for new installs */}
-      {isNewInstall && (
-        <SetupGuide
-          resumeInfo={resumeInfo}
-          isProfilePlaceholder={isProfilePlaceholder}
-          totalJobs={totalJobs}
-          hasProvider={hasProvider}
-        />
-      )}
 
       {/* Funnel stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -233,7 +226,7 @@ export default async function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <RunPipelineButton setupComplete={setupComplete} />
+            <RunPipelineButton />
           </CardContent>
         </Card>
 

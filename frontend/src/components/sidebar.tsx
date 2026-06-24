@@ -19,6 +19,9 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
 
+  // Hide sidebar on onboarding route
+  if (pathname === "/onboarding") return null;
+
   return (
     <aside className="w-56 border-r border-border bg-sidebar flex flex-col h-screen sticky top-0 shrink-0">
       <div className="p-4 border-b border-border">

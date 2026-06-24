@@ -1,0 +1,816 @@
+"use client";
+
+import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Server,
+  Upload,
+  Sparkles,
+  SlidersHorizontal,
+  CheckCircle2,
+  Loader2,
+  ArrowRight,
+  ArrowLeft,
+  RefreshCw,
+  AlertCircle,
+  KeyRound,
+} from "lucide-react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { MasterResumeUpload } from "@/components/master-resume-upload";
+import { AnthropicAuthDialog } from "@/components/anthropic-auth-dialog";
+import { ProfileForm } from "@/components/profile-form";
+import { FilterForm } from "@/components/filter-form";
+import {
+  api,
+  type ProvidersConfigResponse,
+  type MasterResumeInfo,
+  type ProfileData,
+  type FiltersData,
+  type ResumeParseResult,
+} from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+const STEPS = [
+  { key: "provider", label: "LLM Provider", icon: Server },
+  { key: "resume", label: "Upload Resume", icon: Upload },
+  { key: "parse", label: "Parse Resume", icon: Sparkles },
+  { key: "review", label: "Review Config", icon: SlidersHorizontal },
+  { key: "done", label: "Complete", icon: CheckCircle2 },
+] as const;
+
+export default function OnboardingPage() {
+  const router = useRouter();
+  const [currentStep, setCurrentStep] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // State for each step
+  const [providers, setProviders] = useState<ProvidersConfigResponse | null>(null);
+  const [resumeInfo, setResumeInfo] = useState<MasterResumeInfo | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [filters, setFilters] = useState<FiltersData | null>(null);
+  const [parseResult, setParseResult] = useState<ResumeParseResult | null>(null);
+
+  // Load initial state
+  useEffect(() => {
+    Promise.all([
+      api.models.getConfig().catch(() => null),
+      api.resumes.getMaster().catch(() => null),
+      api.profile.get().catch(() => null),
+      api.filters.get().catch(() => null),
+    ]).then(([p, r, prof, filt]) => {
+      setProviders(p);
+      setResumeInfo(r);
+      setProfile(prof);
+      setFilters(filt);
+      setLoading(false);
+
+      // Auto-advance to the first incomplete step
+      const hasProvider = (p?.providers ?? []).some(
+        (prov) => prov.enabled && (prov.api_key_set || prov.healthy === true) && prov.models.length > 0,
+      );
+      const hasResume = r?.exists ?? false;
+      const isProfileConfigured = prof?.user && prof.user.name !== "Your Name" && prof.user.email !== "you@example.com";
+
+      if (hasProvider && hasResume && isProfileConfigured) {
+        setCurrentStep(4); // Done
+      } else if (hasProvider && hasResume) {
+        setCurrentStep(2); // Parse
+      } else if (hasProvider) {
+        setCurrentStep(1); // Upload
+      } else {
+        setCurrentStep(0); // Provider
+      }
+    });
+  }, []);
+
+  const refreshProviders = useCallback(async () => {
+    const p = await api.models.getConfig().catch(() => null);
+    setProviders(p);
+    return p;
+  }, []);
+
+  const refreshResume = useCallback(async () => {
+    const r = await api.resumes.getMaster().catch(() => null);
+    setResumeInfo(r);
+    return r;
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    const [prof, filt] = await Promise.all([
+      api.profile.get().catch(() => null),
+      api.filters.get().catch(() => null),
+    ]);
+    setProfile(prof);
+    setFilters(filt);
+    return { prof, filt };
+  }, []);
+
+  const hasProvider = (providers?.providers ?? []).some(
+    (p) => p.enabled && (p.api_key_set || p.healthy === true) && p.models.length > 0,
+  );
+  const hasResume = resumeInfo?.exists ?? false;
+  const isProfileConfigured = profile?.user && profile.user.name !== "Your Name" && profile.user.email !== "you@example.com";
+
+  const canAdvance = [
+    hasProvider,           // step 0
+    hasResume,             // step 1
+    isProfileConfigured,   // step 2 (parse saves to config)
+    isProfileConfigured,   // step 3 (review)
+    true,                  // step 4 (done)
+  ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Top bar with logo */}
+      <div className="border-b border-border bg-card">
+        <div className="mx-auto max-w-3xl px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Seeker OS</h1>
+            <p className="text-xs text-muted-foreground">Setup Wizard</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+            Skip for now
+          </Button>
+        </div>
+      </div>
+
+      {/* Step indicator — anchored at top */}
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
+        <div className="mx-auto max-w-3xl px-6 py-4">
+          <div className="flex items-center justify-between">
+            {STEPS.map((step, i) => {
+              const Icon = step.icon;
+              const isComplete = i < currentStep || (i === currentStep && canAdvance[i]);
+              const isCurrent = i === currentStep;
+              const isLocked = i > currentStep;
+
+              return (
+                <div key={step.key} className="flex items-center flex-1 last:flex-none">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div
+                      className={cn(
+                        "flex size-10 items-center justify-center rounded-full border-2 transition-all",
+                        isComplete && "border-emerald-500 bg-emerald-500/10",
+                        isCurrent && !isComplete && "border-primary bg-primary/10",
+                        isLocked && "border-muted bg-muted/30 opacity-50",
+                      )}
+                    >
+                      {isComplete ? (
+                        <CheckCircle2 className="size-5 text-emerald-500" />
+                      ) : (
+                        <Icon className={cn("size-5", isCurrent ? "text-primary" : "text-muted-foreground")} />
+                      )}
+                    </div>
+                    <span className={cn(
+                      "text-xs font-medium whitespace-nowrap",
+                      isCurrent ? "text-foreground" : "text-muted-foreground",
+                    )}>
+                      {step.label}
+                    </span>
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <div className={cn(
+                      "h-0.5 flex-1 mx-2 transition-colors",
+                      i < currentStep ? "bg-emerald-500" : "bg-border",
+                    )} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Step content */}
+      <div className="mx-auto max-w-3xl px-6 py-8">
+        {currentStep === 0 && (
+          <ProviderStep
+            providers={providers}
+            hasProvider={hasProvider}
+            onRefresh={refreshProviders}
+            onNext={() => setCurrentStep(1)}
+          />
+        )}
+        {currentStep === 1 && (
+          <ResumeStep
+            hasResume={hasResume}
+            onRefresh={refreshResume}
+            onBack={() => setCurrentStep(0)}
+            onNext={() => setCurrentStep(2)}
+          />
+        )}
+        {currentStep === 2 && (
+          <ParseStep
+            hasResume={hasResume}
+            parseResult={parseResult}
+            onParsed={(result) => {
+              setParseResult(result);
+              refreshProfile();
+            }}
+            onBack={() => setCurrentStep(1)}
+            onNext={() => setCurrentStep(3)}
+          />
+        )}
+        {currentStep === 3 && (
+          <ReviewStep
+            profile={profile}
+            filters={filters}
+            parseResult={parseResult}
+            isProfileConfigured={!!isProfileConfigured}
+            onBack={() => setCurrentStep(2)}
+            onNext={() => setCurrentStep(4)}
+          />
+        )}
+        {currentStep === 4 && (
+          <DoneStep onGoToDashboard={() => router.push("/")} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: Provider configuration
+// ---------------------------------------------------------------------------
+
+function ProviderStep({
+  providers,
+  hasProvider,
+  onRefresh,
+  onNext,
+}: {
+  providers: ProvidersConfigResponse | null;
+  hasProvider: boolean;
+  onRefresh: () => Promise<ProvidersConfigResponse | null>;
+  onNext: () => void;
+}) {
+  const [authOpen, setAuthOpen] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savingTiers, setSavingTiers] = useState(false);
+
+  const anthropicProvider = providers?.providers.find((p) => p.type === "anthropic");
+  const enabledProviders = (providers?.providers ?? []).filter((p) => p.enabled);
+  const tiers = providers?.tiers ?? {};
+
+  const handleAuthSuccess = useCallback(async () => {
+    setAuthOpen(false);
+    setError(null);
+    // Refresh providers, then fetch models
+    const p = await onRefresh();
+    const anthropic = p?.providers.find((prov) => prov.type === "anthropic");
+    if (anthropic) {
+      setFetching(true);
+      try {
+        await api.models.fetch(anthropic.id);
+        await onRefresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to fetch models");
+      } finally {
+        setFetching(false);
+      }
+    }
+  }, [onRefresh]);
+
+  const handleFetchModels = useCallback(async () => {
+    if (!anthropicProvider) return;
+    setFetching(true);
+    setError(null);
+    try {
+      await api.models.fetch(anthropicProvider.id);
+      await onRefresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to fetch models");
+    } finally {
+      setFetching(false);
+    }
+  }, [anthropicProvider, onRefresh]);
+
+  const handleSaveTiers = useCallback(async () => {
+    setSavingTiers(true);
+    setError(null);
+    try {
+      // Tiers are already saved via the API on change, but we need to ensure
+      // the default tier mappings point to the fetched models
+      const models = anthropicProvider?.models ?? [];
+      if (models.length > 0) {
+        // Find good defaults: heavy=opus, moderate=sonnet, light=haiku
+        const heavy = models.find((m) => m.id.includes("opus")) ?? models[0];
+        const moderate = models.find((m) => m.id.includes("sonnet")) ?? models[0];
+        const light = models.find((m) => m.id.includes("haiku")) ?? models[0];
+        await Promise.all([
+          api.models.updateTier("heavy", anthropicProvider!.id, heavy.id),
+          api.models.updateTier("moderate", anthropicProvider!.id, moderate.id),
+          api.models.updateTier("light", anthropicProvider!.id, light.id),
+        ]);
+        await onRefresh();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save tier mappings");
+    } finally {
+      setSavingTiers(false);
+    }
+  }, [anthropicProvider, onRefresh]);
+
+  const needsTiers = hasProvider && enabledProviders.length > 0 && (!tiers.heavy?.model || !tiers.moderate?.model || !tiers.light?.model);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Configure an LLM Provider</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Seeker OS needs an LLM to parse resumes, score jobs, and generate tailored resumes.
+          Connect your Anthropic account to get started.
+        </p>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Anthropic connection card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Server className="size-4" />
+            Anthropic Direct
+          </CardTitle>
+          <CardDescription>
+            Use your Claude Pro/Max subscription via OAuth, or set an API key in providers.yml.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Connection status */}
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <div className="flex items-center gap-3">
+              {anthropicProvider?.api_key_set ? (
+                <CheckCircle2 className="size-5 text-emerald-500" />
+              ) : (
+                <KeyRound className="size-5 text-muted-foreground" />
+              )}
+              <div>
+                <p className="text-sm font-medium">
+                  {anthropicProvider?.api_key_set ? "Connected" : "Not connected"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {anthropicProvider?.auth_method === "oauth" ? "OAuth token" : "API key"}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant={anthropicProvider?.api_key_set ? "outline" : "default"}
+              size="sm"
+              onClick={() => setAuthOpen(true)}
+            >
+              <KeyRound className="size-3.5" />
+              {anthropicProvider?.api_key_set ? "Re-authorize" : "Connect Account"}
+            </Button>
+          </div>
+
+          {/* Models status */}
+          {anthropicProvider?.api_key_set && (
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
+              <div className="flex items-center gap-3">
+                {anthropicProvider.models.length > 0 ? (
+                  <CheckCircle2 className="size-5 text-emerald-500" />
+                ) : (
+                  <Loader2 className="size-5 text-muted-foreground" />
+                )}
+                <div>
+                  <p className="text-sm font-medium">
+                    {anthropicProvider.models.length > 0
+                      ? `${anthropicProvider.models.length} models available`
+                      : "No models fetched yet"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {anthropicProvider.models.slice(0, 3).map((m) => m.id).join(", ")}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleFetchModels}
+                disabled={fetching}
+              >
+                {fetching ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                Fetch Models
+              </Button>
+            </div>
+          )}
+
+          {/* Tier mappings */}
+          {anthropicProvider && anthropicProvider.models.length > 0 && (
+            <div className="rounded-md border border-border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Tier Mappings</p>
+                {needsTiers && (
+                  <Button size="sm" variant="outline" onClick={handleSaveTiers} disabled={savingTiers}>
+                    {savingTiers ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    Auto-assign
+                  </Button>
+                )}
+              </div>
+              <div className="grid gap-2">
+                {(["heavy", "moderate", "light"] as const).map((tier) => (
+                  <TierSelect
+                    key={tier}
+                    tier={tier}
+                    providers={providers!}
+                    currentModel={tiers[tier]?.model ?? ""}
+                    onSaved={onRefresh}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <AnthropicAuthDialog
+            key={authOpen ? "open" : "closed"}
+            open={authOpen}
+            onOpenChange={setAuthOpen}
+            onSuccess={handleAuthSuccess}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Continue button */}
+      <div className="flex justify-end">
+        <Button onClick={onNext} disabled={!hasProvider} size="lg">
+          Continue
+          <ArrowRight />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TierSelect({
+  tier,
+  providers,
+  currentModel,
+  onSaved,
+}: {
+  tier: string;
+  providers: ProvidersConfigResponse;
+  currentModel: string;
+  onSaved: () => Promise<ProvidersConfigResponse | null>;
+}) {
+  const [provider, setProvider] = useState(providers.tiers[tier as keyof typeof providers.tiers]?.provider ?? providers.providers[0]?.id ?? "");
+  const [model, setModel] = useState(currentModel);
+  const [saving, setSaving] = useState(false);
+
+  const providerInfo = providers.providers.find((p) => p.id === provider);
+  const models = providerInfo?.models ?? [];
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      await api.models.updateTier(tier, provider, model);
+      await onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }, [tier, provider, model, onSaved]);
+
+  const dirty = provider !== (providers.tiers[tier as keyof typeof providers.tiers]?.provider ?? "") || model !== currentModel;
+
+  return (
+    <div className="flex items-center gap-2">
+      <Badge variant="outline" className="text-xs w-16 justify-center">{tier}</Badge>
+      <select
+        value={provider}
+        onChange={(e) => {
+          setProvider(e.target.value);
+          const newModels = providers.providers.find((p) => p.id === e.target.value)?.models ?? [];
+          if (newModels.length > 0 && !newModels.some((m) => m.id === model)) {
+            setModel(newModels[0].id);
+          }
+        }}
+        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono flex-1"
+      >
+        {providers.providers.filter((p) => p.enabled).map((p) => (
+          <option key={p.id} value={p.id}>{p.id}</option>
+        ))}
+      </select>
+      <select
+        value={model}
+        onChange={(e) => setModel(e.target.value)}
+        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono flex-1"
+      >
+        {models.length === 0 ? (
+          <option value="">(no models)</option>
+        ) : (
+          models.map((m) => (
+            <option key={m.id} value={m.id}>{m.id}</option>
+          ))
+        )}
+      </select>
+      {dirty && (
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 className="size-3 animate-spin" /> : "Save"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Upload resume
+// ---------------------------------------------------------------------------
+
+function ResumeStep({
+  hasResume,
+  onRefresh,
+  onBack,
+  onNext,
+}: {
+  hasResume: boolean;
+  onRefresh: () => Promise<MasterResumeInfo | null>;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Upload Your Master Resume</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          This resume is the source for all tailored resume generation. Upload your most
+          comprehensive resume — we&apos;ll extract your profile data from it next.
+        </p>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <MasterResumeUpload
+            onUploaded={onRefresh}
+            bare
+          />
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-between">
+        <Button variant="ghost" onClick={onBack}>
+          <ArrowLeft />
+          Back
+        </Button>
+        <Button onClick={onNext} disabled={!hasResume} size="lg">
+          Continue
+          <ArrowRight />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Parse resume
+// ---------------------------------------------------------------------------
+
+function ParseStep({
+  hasResume,
+  parseResult,
+  onParsed,
+  onBack,
+  onNext,
+}: {
+  hasResume: boolean;
+  parseResult: ResumeParseResult | null;
+  onParsed: (result: ResumeParseResult) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  const [parsing, setParsing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleParse = useCallback(async () => {
+    setParsing(true);
+    setError(null);
+    try {
+      const result = await api.resumes.parse();
+      onParsed(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to parse resume");
+    } finally {
+      setParsing(false);
+    }
+  }, [onParsed]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Parse Your Resume</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          We&apos;ll use your configured LLM to extract contact info, experience, skills, and
+          suggested filter parameters. This data is saved to your profile and filter config
+          automatically — you&apos;ll review and edit it in the next step.
+        </p>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <Card>
+        <CardContent className="pt-6">
+          {parseResult ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="size-5" />
+                <span className="font-medium">Resume parsed successfully!</span>
+              </div>
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-muted-foreground">Name:</span> {parseResult.contact.name}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Email:</span> {parseResult.contact.email}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Location:</span> {parseResult.contact.location}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Experience:</span> {parseResult.experience_years} years
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Current title:</span> {parseResult.current_title}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Comp floor:</span> ${parseResult.suggested_comp_floor?.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Key skills:</span>{" "}
+                  {parseResult.key_skills.join(", ")}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Suggested title patterns:</span>{" "}
+                  {parseResult.suggested_title_positive.join(", ")}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This data has been saved to your config. Review and edit it in the next step.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <Sparkles className="size-12 text-primary" />
+              <p className="text-sm text-muted-foreground text-center max-w-md">
+                Click the button below to extract your profile data from your master resume
+                using your configured LLM.
+              </p>
+              <Button onClick={handleParse} disabled={parsing || !hasResume} size="lg">
+                {parsing ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                {parsing ? "Parsing Resume..." : "Parse Resume"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-between">
+        <Button variant="ghost" onClick={onBack}>
+          <ArrowLeft />
+          Back
+        </Button>
+        <Button onClick={onNext} disabled={!parseResult} size="lg">
+          Review Config
+          <ArrowRight />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 4: Review profile & filters
+// ---------------------------------------------------------------------------
+
+function ReviewStep({
+  profile,
+  filters,
+  parseResult,
+  isProfileConfigured,
+  onBack,
+  onNext,
+}: {
+  profile: ProfileData | null;
+  filters: FiltersData | null;
+  parseResult: ResumeParseResult | null;
+  isProfileConfigured: boolean;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Review Your Profile & Filters</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          The parsed data has been saved to your config. Review and adjust anything below,
+          then save your changes to continue.
+        </p>
+      </div>
+
+      {profile && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <SlidersHorizontal className="size-4" />
+              Profile
+            </CardTitle>
+            <CardDescription>
+              Contact info, compensation, experience, and instructions for resume generation.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ProfileForm
+              key={parseResult ? `parsed-${parseResult.contact.name}` : "review"}
+              profile={profile}
+              parseResult={parseResult}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {filters && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <SlidersHorizontal className="size-4" />
+              Filter Parameters
+            </CardTitle>
+            <CardDescription>
+              Hard filters applied before JD fetch — title patterns, seniority, comp, and more.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FilterForm
+              key={parseResult ? `parsed-${parseResult.suggested_comp_floor}` : "review"}
+              filters={filters}
+              parseResult={parseResult}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex justify-between">
+        <Button variant="ghost" onClick={onBack}>
+          <ArrowLeft />
+          Back
+        </Button>
+        <Button onClick={onNext} size="lg">
+          {isProfileConfigured ? "Complete Setup" : "Save & Continue"}
+          <ArrowRight />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Step 5: Done
+// ---------------------------------------------------------------------------
+
+function DoneStep({ onGoToDashboard }: { onGoToDashboard: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-6 py-12">
+      <div className="flex size-16 items-center justify-center rounded-full bg-emerald-500/10">
+        <CheckCircle2 className="size-10 text-emerald-500" />
+      </div>
+      <div className="text-center space-y-2">
+        <h2 className="text-2xl font-bold tracking-tight">Setup Complete!</h2>
+        <p className="text-sm text-muted-foreground max-w-md">
+          You&apos;re all set. Head to the dashboard to run the pipeline and start
+          discovering jobs that match your profile.
+        </p>
+      </div>
+      <Button onClick={onGoToDashboard} size="lg">
+        Go to Dashboard
+        <ArrowRight />
+      </Button>
+    </div>
+  );
+}
