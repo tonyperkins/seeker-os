@@ -37,6 +37,8 @@ def create_provider(config: ProviderConfig) -> LLMProvider:
             api_key=api_key,
             base_url=config.base_url,
             label=config.label,
+            auth_method=config.auth_method,
+            oauth_token_path=config.oauth_token_path,
         )
     elif config.type == "openai_compatible":
         if not config.base_url:
