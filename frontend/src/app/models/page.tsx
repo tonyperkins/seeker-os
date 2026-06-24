@@ -319,30 +319,74 @@ function TierTaskEditor({
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Tier mappings — local state with single save
+  const [tierEdits, setTierEdits] = useState<Record<string, { provider: string; model: string }>>({});
+  const [savingTiers, setSavingTiers] = useState(false);
+
+  // Task overrides — still per-row save (separate card)
+
   // Build a map of provider → models for dropdowns
   const providerModels: Record<string, ModelInfoResponse[]> = {};
   for (const p of providers) {
     providerModels[p.id] = p.models;
   }
 
-  // All available models across all providers, flattened
-  const allModels: { id: string; label: string; provider: string }[] = [];
-  for (const p of providers) {
-    for (const m of p.models) {
-      allModels.push({ id: m.id, label: m.label, provider: p.id });
-    }
+  // Check if any tier has unsaved changes
+  const tierDirty = tiers.some((t) => {
+    const edit = tierEdits[t.tier];
+    if (!edit) return false;
+    return edit.provider !== t.provider || edit.model !== t.model;
+  });
+
+  function getTierValue(tier: string, currentProvider: string, currentModel: string) {
+    const edit = tierEdits[tier];
+    return {
+      provider: edit?.provider ?? currentProvider,
+      model: edit?.model ?? currentModel,
+    };
   }
 
-  async function handleTierSave(tier: string, provider: string, model: string) {
-    setSaving(`tier-${tier}`);
+  function setTierValue(tier: string, field: "provider" | "model", value: string) {
+    setTierEdits((prev) => {
+      const current = tiers.find((t) => t.tier === tier);
+      const existing = prev[tier] ?? {
+        provider: current?.provider ?? "",
+        model: current?.model ?? "",
+      };
+      const next = { ...existing, [field]: value };
+      // If provider changed, reset model to first available
+      if (field === "provider") {
+        const newModels = providerModels[value] ?? [];
+        if (newModels.length > 0 && !newModels.some((m) => m.id === existing.model)) {
+          next.model = newModels[0].id;
+        }
+      }
+      return { ...prev, [tier]: next };
+    });
+  }
+
+  async function handleSaveAllTiers() {
+    setSavingTiers(true);
     setError(null);
     try {
-      await api.models.updateTier(tier, provider, model);
+      // Save all dirty tiers in parallel
+      const dirty = tiers.filter((t) => {
+        const edit = tierEdits[t.tier];
+        if (!edit) return false;
+        return edit.provider !== t.provider || edit.model !== t.model;
+      });
+      await Promise.all(
+        dirty.map((t) => {
+          const edit = tierEdits[t.tier];
+          return api.models.updateTier(t.tier, edit.provider, edit.model);
+        }),
+      );
+      setTierEdits({});
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save tier mapping");
+      setError(e instanceof Error ? e.message : "Failed to save tier mappings");
     } finally {
-      setSaving(null);
+      setSavingTiers(false);
     }
   }
 
@@ -385,18 +429,51 @@ function TierTaskEditor({
               No tier mappings configured.
             </p>
           ) : (
-            tiers.map((t) => (
-              <TierRow
-                key={`${t.tier}-${t.provider}-${t.model}`}
-                tier={t.tier}
-                currentProvider={t.provider}
-                currentModel={t.model}
-                providers={providers}
-                providerModels={providerModels}
-                saving={saving === `tier-${t.tier}`}
-                onSave={handleTierSave}
-              />
-            ))
+            <>
+              {tiers.map((t) => {
+                const val = getTierValue(t.tier, t.provider, t.model);
+                const models = providerModels[val.provider] ?? [];
+                return (
+                  <div key={t.tier} className="rounded-md border border-border p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={cn("border", tierBadgeClass(t.tier))}>
+                        {t.tier}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={val.provider}
+                        onChange={(e) => setTierValue(t.tier, "provider", e.target.value)}
+                        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+                      >
+                        {providers.map((p) => (
+                          <option key={p.id} value={p.id}>{p.id}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={val.model}
+                        onChange={(e) => setTierValue(t.tier, "model", e.target.value)}
+                        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+                      >
+                        {models.length === 0 ? (
+                          <option value="">(no models)</option>
+                        ) : (
+                          models.map((m) => (
+                            <option key={m.id} value={m.id}>{m.id}</option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
+              {tierDirty && (
+                <Button onClick={handleSaveAllTiers} disabled={savingTiers} size="sm" className="w-full">
+                  {savingTiers ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  {savingTiers ? "Saving..." : "Save All Tiers"}
+                </Button>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -433,81 +510,6 @@ function TierTaskEditor({
           )}
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function TierRow({
-  tier,
-  currentProvider,
-  currentModel,
-  providers,
-  providerModels,
-  saving,
-  onSave,
-}: {
-  tier: string;
-  currentProvider: string;
-  currentModel: string;
-  providers: ProviderInfoResponse[];
-  providerModels: Record<string, ModelInfoResponse[]>;
-  saving: boolean;
-  onSave: (tier: string, provider: string, model: string) => void;
-}) {
-  const [provider, setProvider] = useState(currentProvider);
-  const [model, setModel] = useState(currentModel);
-  const dirty = provider !== currentProvider || model !== currentModel;
-
-  const models = providerModels[provider] ?? [];
-
-  return (
-    <div className="rounded-md border border-border p-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className={cn("border", tierBadgeClass(tier))}>
-          {tier}
-        </Badge>
-        {dirty && (
-          <Button
-            size="sm"
-            className="h-6 text-xs"
-            disabled={saving}
-            onClick={() => onSave(tier, provider, model)}
-          >
-            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-          </Button>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <select
-          value={provider}
-          onChange={(e) => {
-            setProvider(e.target.value);
-            // Reset model to first available from new provider
-            const newModels = providerModels[e.target.value] ?? [];
-            if (newModels.length > 0 && !newModels.some((m) => m.id === model)) {
-              setModel(newModels[0].id);
-            }
-          }}
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
-        >
-          {providers.map((p) => (
-            <option key={p.id} value={p.id}>{p.id}</option>
-          ))}
-        </select>
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
-        >
-          {models.length === 0 ? (
-            <option value="">(no models)</option>
-          ) : (
-            models.map((m) => (
-              <option key={m.id} value={m.id}>{m.id}</option>
-            ))
-          )}
-        </select>
-      </div>
     </div>
   );
 }
