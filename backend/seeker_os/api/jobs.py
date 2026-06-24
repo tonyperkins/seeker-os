@@ -62,6 +62,7 @@ def _row_to_detail(row) -> JobDetail:
         score_reasons=json_decode(row["score_reasons"]) or [],
         score_gaps=json_decode(row["score_gaps"]) or [],
         reject_reason=row["reject_reason"],
+        reject_details=row["reject_details"] if "reject_details" in row.keys() else None,
         jd_full=row["jd_full"] or "",
         jd_fetch_status=row["jd_fetch_status"] or "pending",
         source_id=row["source_id"] or "",
@@ -155,8 +156,8 @@ def reject_job(job_id: int, body: JobReject):
 
     now = datetime.now(timezone.utc).isoformat()
     db.execute(
-        "UPDATE jobs SET status='rejected', reject_reason=?, updated_at=? WHERE id=?",
-        (body.reason, now, job_id),
+        "UPDATE jobs SET status='rejected', reject_reason=?, reject_details=?, updated_at=? WHERE id=?",
+        (body.reason, body.details, now, job_id),
     )
     db.commit()
     db.close()
