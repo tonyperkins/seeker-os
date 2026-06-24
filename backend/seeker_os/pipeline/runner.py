@@ -9,6 +9,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 import sqlite3
 
 from seeker_os.config import Settings
@@ -27,7 +28,7 @@ from seeker_os.dedup.layers import (
 )
 from seeker_os.discovery.ats_fetch import fetch_jd
 from seeker_os.crossref.jobsearch_repo import sync_repo, check_cross_reference
-from seeker_os.models import JobCard, PipelineRunResult
+from seeker_os.models import JobCard, PipelineProgressEvent, PipelineRunResult
 
 
 def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
@@ -71,6 +72,7 @@ def run_pipeline(
     queries: list[str] | None = None,
     tiers: list[int] | None = None,
     dry_run: bool = False,
+    progress_cb: Callable[[PipelineProgressEvent], None] | None = None,
 ) -> PipelineRunResult:
     """Run the full pipeline (or specific tiers).
 
@@ -79,7 +81,24 @@ def run_pipeline(
     Tier 3: Full JD fetch
     Tier 4: Scoring
     Tier 5: Ranking + cross-reference + report
+
+    If progress_cb is provided, it's called with PipelineProgressEvent objects
+    at each step of the pipeline for real-time progress tracking.
     """
+
+    def _emit(step: str, label: str, status: str, current: int = 0, total: int = 0, detail: str = ""):
+        if progress_cb:
+            progress_cb(PipelineProgressEvent(
+                step=step, step_label=label, status=status,
+                current=current, total=total, detail=detail,
+                cards_fetched=result.cards_fetched, cards_new=result.cards_new,
+                duplicates_skipped=result.duplicates_skipped,
+                tier2_passed=result.tier2_passed, tier2_rejected=result.tier2_rejected,
+                tier3_fetched=result.tier3_fetched, tier3_failed=result.tier3_failed,
+                tier4_scored=result.tier4_scored, tier4_rejected=result.tier4_rejected,
+                tier4_hard_rejected=result.tier4_hard_rejected,
+                tier5_ready=result.tier5_ready,
+            ))
     run_id = str(uuid.uuid4())[:8]
     result = PipelineRunResult(run_id=run_id)
     tier_set = set(tiers) if tiers else {1, 2, 3, 4, 5}
@@ -120,14 +139,16 @@ def run_pipeline(
             for q in all_queries
         ]
 
+        _emit("discovery", "Discovery", "started", detail=f"Fetching from {len(source_queries)} queries…")
         cards = fetch_all_queries(source_queries, adapters, cache)
         result.cards_fetched = len(cards)
+        _emit("discovery", "Discovery", "in_progress", total=len(cards), detail=f"Fetched {len(cards)} cards")
 
         if dry_run:
             print(f"  [dry-run] {len(cards)} cards fetched, not inserting to DB")
         else:
             # Dedup check (layers 1-2) before insert
-            for card in cards:
+            for i, card in enumerate(cards):
                 dedup = check_duplicate(card, db, source_map)
                 if dedup.is_duplicate:
                     result.duplicates_skipped += 1
@@ -149,10 +170,18 @@ def run_pipeline(
                 register_keys(job_id, card, db, source_map)
                 result.cards_new += 1
 
+                if (i + 1) % 10 == 0 or i == len(cards) - 1:
+                    _emit("discovery", "Discovery", "in_progress",
+                          current=i + 1, total=len(cards),
+                          detail=f"Inserted {result.cards_new} new, skipped {result.duplicates_skipped} duplicates")
+
             db.commit()
             print(f"  Total fetched: {result.cards_fetched} cards")
             print(f"  New (after dedup): {result.cards_new}")
             print(f"  Duplicates skipped: {result.duplicates_skipped}")
+            _emit("discovery", "Discovery", "completed",
+                  total=len(cards),
+                  detail=f"{result.cards_new} new, {result.duplicates_skipped} duplicates")
 
     # -----------------------------------------------------------------------
     # Tier 2: Card-Level Hard Filters
@@ -162,8 +191,10 @@ def run_pipeline(
         jobs = db.execute(
             "SELECT * FROM jobs WHERE status='discovered' AND tier_passed=1"
         ).fetchall()
+        _emit("filtering", "Filtering", "started", total=len(jobs),
+              detail=f"Filtering {len(jobs)} jobs…")
 
-        for row in jobs:
+        for i, row in enumerate(jobs):
             # Reconstruct JobCard-like from DB row
             card = JobCard(
                 source_id=row["source_id"] or "",
@@ -212,11 +243,19 @@ def run_pipeline(
                     result.rejection_reasons.get(filter_result.reason, 0) + 1
                 )
 
+            if (i + 1) % 10 == 0 or i == len(jobs) - 1:
+                _emit("filtering", "Filtering", "in_progress",
+                      current=i + 1, total=len(jobs),
+                      detail=f"{result.tier2_passed} passed, {result.tier2_rejected} rejected")
+
         db.commit()
         print(f"  Passed: {result.tier2_passed}")
         print(f"  Rejected: {result.tier2_rejected}")
         for reason, count in sorted(result.rejection_reasons.items(), key=lambda x: -x[1]):
             print(f"    - {reason}: {count}")
+        _emit("filtering", "Filtering", "completed",
+              total=len(jobs),
+              detail=f"{result.tier2_passed} passed, {result.tier2_rejected} rejected")
 
     # -----------------------------------------------------------------------
     # Tier 3: Full JD Fetch
@@ -241,6 +280,8 @@ def run_pipeline(
         jobs = db.execute(
             "SELECT * FROM jobs WHERE status='filtered' AND tier_passed=2 AND jd_fetch_status='pending'"
         ).fetchall()
+        _emit("jd_fetch", "JD Fetch", "started", total=len(jobs),
+              detail=f"Fetching JDs for {len(jobs)} jobs…")
 
         # Get user_agent and delay from sources config
         user_agent = "Mozilla/5.0"
@@ -254,7 +295,7 @@ def run_pipeline(
 
         checkpoint_path = Path("data/checkpoint.json")
 
-        for row in jobs:
+        for i, row in enumerate(jobs):
             jd_result = fetch_jd(
                 job_id=row["id"],
                 ats_source=row["ats_source"],
@@ -298,6 +339,10 @@ def run_pipeline(
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }))
 
+            _emit("jd_fetch", "JD Fetch", "in_progress",
+                  current=i + 1, total=len(jobs),
+                  detail=f"{result.tier3_fetched} fetched, {result.tier3_failed} failed — {row['title'][:40]}")
+
         db.commit()
 
         # Clean up checkpoint on successful completion
@@ -306,6 +351,9 @@ def run_pipeline(
 
         print(f"  Fetched: {result.tier3_fetched}")
         print(f"  Failed: {result.tier3_failed}")
+        _emit("jd_fetch", "JD Fetch", "completed",
+              total=len(jobs),
+              detail=f"{result.tier3_fetched} fetched, {result.tier3_failed} failed")
 
     # -----------------------------------------------------------------------
     # Tier 4: Scoring
@@ -315,8 +363,10 @@ def run_pipeline(
         jobs = db.execute(
             "SELECT * FROM jobs WHERE status='jd_fetched' AND tier_passed=3 AND score IS NULL"
         ).fetchall()
+        _emit("scoring", "Scoring", "started", total=len(jobs),
+              detail=f"Scoring {len(jobs)} jobs…")
 
-        for row in jobs:
+        for i, row in enumerate(jobs):
             score_result = score_job(
                 title=row["title"] or "",
                 jd_text=row["jd_full"] or "",
@@ -367,16 +417,24 @@ def run_pipeline(
                 )
                 result.tier4_rejected += 1
 
+            _emit("scoring", "Scoring", "in_progress",
+                  current=i + 1, total=len(jobs),
+                  detail=f"{result.tier4_scored} passed, {result.tier4_rejected + result.tier4_hard_rejected} rejected — {row['title'][:40]}")
+
         db.commit()
         print(f"  Scored ≥{settings.scoring.post_threshold}: {result.tier4_scored}")
         print(f"  Scored <{settings.scoring.post_threshold}: {result.tier4_rejected}")
         print(f"  Hard rejected: {result.tier4_hard_rejected}")
+        _emit("scoring", "Scoring", "completed",
+              total=len(jobs),
+              detail=f"{result.tier4_scored} passed, {result.tier4_rejected + result.tier4_hard_rejected} rejected")
 
     # -----------------------------------------------------------------------
     # Tier 5: Ranking + Cross-reference + Report
     # -----------------------------------------------------------------------
     if 5 in tier_set and not dry_run:
         print("\nTier 5: Ranking & Report")
+        _emit("ranking", "Ranking", "started", detail="Applying per-company cap and cross-referencing…")
 
         # Per-company cap
         cap = settings.scoring.per_company_cap
@@ -425,6 +483,8 @@ def run_pipeline(
         print(f"  Ready for review: {result.tier5_ready}")
         print(f"  Capped (per-company): {result.tier5_capped}")
         print(f"  Cross-ref matches: {result.cross_ref_matches}")
+        _emit("ranking", "Ranking", "completed",
+              detail=f"{result.tier5_ready} ready, {result.tier5_capped} capped, {result.cross_ref_matches} cross-ref matches")
 
     # Record pipeline run
     if not dry_run:

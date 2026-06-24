@@ -125,3 +125,25 @@ class PipelineRunResult(BaseModel):
     tier5_capped: int = 0
     cross_ref_matches: int = 0
     rejection_reasons: dict[str, int] = {}
+
+
+class PipelineProgressEvent(BaseModel):
+    """Progress event emitted during pipeline execution."""
+    step: str  # "discovery", "filtering", "jd_fetch", "scoring", "ranking"
+    step_label: str  # Human-readable label
+    status: str  # "started", "in_progress", "completed"
+    current: int = 0  # Current item being processed
+    total: int = 0  # Total items to process
+    detail: str = ""  # Extra info (e.g. "Fetching from hiring.cafe/jobs/sre...")
+    # Running counts
+    cards_fetched: int = 0
+    cards_new: int = 0
+    duplicates_skipped: int = 0
+    tier2_passed: int = 0
+    tier2_rejected: int = 0
+    tier3_fetched: int = 0
+    tier3_failed: int = 0
+    tier4_scored: int = 0
+    tier4_rejected: int = 0
+    tier4_hard_rejected: int = 0
+    tier5_ready: int = 0

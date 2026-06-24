@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import queue
+import threading
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from seeker_os.api.schemas import (
     PipelineRunRequest, PipelineRunSummary, PipelineRunRecord, MessageResponse,
 )
@@ -25,6 +29,54 @@ def run_pipeline(body: PipelineRunRequest):
         dry_run=body.dry_run,
     )
     return result.model_dump()
+
+
+@router.post("/run/stream")
+def run_pipeline_stream(body: PipelineRunRequest):
+    """Trigger a pipeline run with SSE progress streaming.
+
+    Returns a text/event-stream with PipelineProgressEvent objects as they occur,
+    followed by a final 'done' event with the PipelineRunSummary.
+    """
+    from seeker_os.config import Settings
+    from seeker_os.pipeline.runner import run_pipeline as _run
+
+    settings = Settings()
+    event_queue: queue.Queue = queue.Queue()
+
+    def progress_cb(event):
+        event_queue.put(event)
+
+    def run_in_thread():
+        try:
+            result = _run(
+                settings,
+                queries=body.queries,
+                tiers=body.tiers,
+                dry_run=body.dry_run,
+                progress_cb=progress_cb,
+            )
+            event_queue.put(("done", result))
+        except Exception as e:
+            event_queue.put(("error", str(e)))
+
+    thread = threading.Thread(target=run_in_thread, daemon=True)
+    thread.start()
+
+    def event_stream():
+        while True:
+            item = event_queue.get(timeout=300)
+            if isinstance(item, tuple):
+                if item[0] == "done":
+                    yield f"event: done\ndata: {json.dumps(item[1].model_dump())}\n\n"
+                    break
+                elif item[0] == "error":
+                    yield f"event: error\ndata: {json.dumps({'error': item[1]})}\n\n"
+                    break
+            else:
+                yield f"data: {item.model_dump_json()}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/run/tier/{tier}", response_model=PipelineRunSummary)
