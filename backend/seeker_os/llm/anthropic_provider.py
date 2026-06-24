@@ -186,10 +186,21 @@ class AnthropicProvider:
             "max_tokens": request.max_tokens or 4096,
             "system": request.system_prompt,
             "messages": [{"role": "user", "content": request.user_prompt}],
-            "temperature": request.temperature,
         }
 
-        response = self._client.messages.create(**kwargs)
+        # Only include temperature if explicitly set (some models reject it)
+        if request.temperature is not None:
+            kwargs["temperature"] = request.temperature
+
+        try:
+            response = self._client.messages.create(**kwargs)
+        except Exception as e:
+            # If temperature is rejected, retry without it
+            if "temperature" in str(e).lower() and "deprecated" in str(e).lower():
+                kwargs.pop("temperature", None)
+                response = self._client.messages.create(**kwargs)
+            else:
+                raise
         latency = int((time.monotonic() - start) * 1000)
 
         text = ""
