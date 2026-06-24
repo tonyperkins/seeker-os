@@ -165,9 +165,10 @@ export default async function DashboardPage() {
   const hasProvider = (providers?.providers ?? []).some(
     (p) => p.enabled && p.api_key_set && p.models.length > 0,
   );
+  const tiersConfigured = !!(providers?.tiers?.heavy?.model && providers?.tiers?.moderate?.model && providers?.tiers?.light?.model);
   const isProfileConfigured = settings?.profile_configured ?? false;
   const hasResume = resumeInfo?.exists ?? false;
-  const setupComplete = hasProvider && isProfileConfigured && hasResume;
+  const setupComplete = hasProvider && tiersConfigured && isProfileConfigured && hasResume;
 
   if (!setupComplete) {
     redirect("/onboarding");

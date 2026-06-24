@@ -76,14 +76,16 @@ export default function OnboardingPage() {
       const hasProvider = (p?.providers ?? []).some(
         (prov) => prov.enabled && prov.api_key_set && prov.models.length > 0,
       );
+      const tiersConfigured = !!(p?.tiers?.heavy?.model && p?.tiers?.moderate?.model && p?.tiers?.light?.model);
+      const providerDone = hasProvider && tiersConfigured;
       const hasResume = r?.exists ?? false;
       const isProfileConfigured = prof?.user && prof.user.name !== "Your Name" && prof.user.email !== "you@example.com";
 
-      if (hasProvider && hasResume && isProfileConfigured) {
+      if (providerDone && hasResume && isProfileConfigured) {
         setCurrentStep(4); // Done
-      } else if (hasProvider && hasResume) {
+      } else if (providerDone && hasResume) {
         setCurrentStep(2); // Parse
-      } else if (hasProvider) {
+      } else if (providerDone) {
         setCurrentStep(1); // Upload
       } else {
         setCurrentStep(0); // Provider
@@ -118,9 +120,11 @@ export default function OnboardingPage() {
   );
   const hasResume = resumeInfo?.exists ?? false;
   const isProfileConfigured = profile?.user && profile.user.name !== "Your Name" && profile.user.email !== "you@example.com";
+  const tiersConfigured = !!(providers?.tiers?.heavy?.model && providers?.tiers?.moderate?.model && providers?.tiers?.light?.model);
+  const providerStepComplete = hasProvider && tiersConfigured;
 
   const canAdvance = [
-    hasProvider,           // step 0
+    providerStepComplete,  // step 0
     hasResume,             // step 1
     isProfileConfigured,   // step 2 (parse saves to config)
     isProfileConfigured,   // step 3 (review)
@@ -203,6 +207,7 @@ export default function OnboardingPage() {
           <ProviderStep
             providers={providers}
             hasProvider={hasProvider}
+            tiersConfigured={tiersConfigured}
             onRefresh={refreshProviders}
             onNext={() => setCurrentStep(1)}
           />
@@ -252,11 +257,13 @@ export default function OnboardingPage() {
 function ProviderStep({
   providers,
   hasProvider,
+  tiersConfigured,
   onRefresh,
   onNext,
 }: {
   providers: ProvidersConfigResponse | null;
   hasProvider: boolean;
+  tiersConfigured: boolean;
   onRefresh: () => Promise<ProvidersConfigResponse | null>;
   onNext: () => void;
 }) {
@@ -422,8 +429,14 @@ function ProviderStep({
       />
 
       {/* Continue button */}
-      <div className="flex justify-end">
-        <Button onClick={onNext} disabled={!hasProvider} size="lg">
+      <div className="flex flex-col items-end gap-2">
+        {!hasProvider && (
+          <p className="text-xs text-muted-foreground">Connect and enable at least one provider with models.</p>
+        )}
+        {hasProvider && !tiersConfigured && (
+          <p className="text-xs text-muted-foreground">Assign models to all three tiers (heavy, moderate, light) to continue.</p>
+        )}
+        <Button onClick={onNext} disabled={!hasProvider || !tiersConfigured} size="lg">
           Continue
           <ArrowRight />
         </Button>
