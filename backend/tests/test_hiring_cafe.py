@@ -129,8 +129,8 @@ class TestHiringCafeAdapter:
         cache = DiskCache(tmp_path / "cache", ttl_hours=1)
         adapter = HiringCafeAdapter(_make_config(), cache)
 
-        # Pre-populate cache
-        cache.set("https://hiring.cafe/jobs/test?page=0", _make_mock_html())
+        # Pre-populate cache (page 0 uses bare URL, no ?page=0)
+        cache.set("https://hiring.cafe/jobs/test", _make_mock_html())
 
         query = SourceQuery(source_id="hiring_cafe", slug="test", label="Test")
         page = adapter.fetch_jobs(query, page=0)
