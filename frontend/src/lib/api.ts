@@ -423,6 +423,11 @@ export const api = {
       return fetchAPI<ResumeSummary[]>(`/api/resumes${qs}`);
     },
     get: (id: number) => fetchAPI<ResumeDetail>(`/api/resumes/${id}`),
+    update: (id: number, resumeText: string) =>
+      fetchAPI<MessageResponse>(`/api/resumes/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ resume_text: resumeText }),
+      }),
     generate: (jobId: number, task?: string) =>
       fetchAPI<Record<string, unknown>>("/api/resumes/generate", {
         method: "POST",

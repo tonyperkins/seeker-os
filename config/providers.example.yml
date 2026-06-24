@@ -59,8 +59,8 @@ tiers:
   light:    { provider: anthropic_direct, model: claude-haiku-4-5-20251001 }
 
 tasks:
-  resume_generation_high_value: { tier: heavy, provider: anthropic_direct, model: claude-opus-4-8 }
-  resume_generation_standard:   { tier: heavy, provider: anthropic_direct, model: claude-sonnet-4-6 }
+  resume_generation_high_value: { tier: heavy }
+  resume_generation_standard:   { tier: heavy }
   accuracy_validation:          { tier: light }
   onboarding_interview:         { tier: moderate }
   resume_parsing:               { tier: moderate }

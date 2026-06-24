@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
@@ -363,6 +364,37 @@ def get_resume(resume_id: int):
     if not r:
         raise HTTPException(status_code=404, detail=f"Resume {resume_id} not found")
     return ResumeDetail(**r)
+
+
+class ResumeTextUpdate(BaseModel):
+    """PUT /api/resumes/{id} — update resume text."""
+    resume_text: str
+
+
+@router.put("/{resume_id}", response_model=MessageResponse)
+def update_resume_text(resume_id: int, body: ResumeTextUpdate):
+    """Update the text of a stored resume (inline edit). Also updates the markdown file."""
+    db = get_connection()
+    row = db.execute("SELECT * FROM resumes WHERE id = ?", (resume_id,)).fetchone()
+    if not row:
+        db.close()
+        raise HTTPException(status_code=404, detail=f"Resume {resume_id} not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Update the markdown file on disk if it exists
+    md_path = row["markdown_path"]
+    if md_path and Path(md_path).exists():
+        Path(md_path).write_text(body.resume_text, encoding="utf-8")
+
+    # Update the DB row
+    db.execute(
+        "UPDATE resumes SET resume_text = ?, updated_at = ? WHERE id = ?",
+        (body.resume_text, now, resume_id),
+    )
+    db.commit()
+    db.close()
+    return MessageResponse(message=f"Resume {resume_id} updated")
 
 
 @router.post("/generate", response_model=dict)

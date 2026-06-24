@@ -26,8 +26,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { RevalidateButton } from "@/components/revalidate-button";
+import { ResumeEditor } from "@/components/resume-editor";
 import { api, type ResumeDetail } from "@/lib/api";
 
 function formatDateTime(iso: string | null): string {
@@ -281,20 +281,11 @@ export default async function ResumeDetailPage(props: PageProps<"/resumes/[id]">
             </CardContent>
           </Card>
 
-          {/* Full resume text */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Resume Text</CardTitle>
-              <CardDescription>Generated markdown content</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[600px] rounded-md border border-border p-4">
-                <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">
-                  {resume.resume_text || "No resume text available."}
-                </pre>
-              </ScrollArea>
-            </CardContent>
-          </Card>
+          {/* Full resume text — preview + inline edit */}
+          <ResumeEditor
+            resumeId={resume.id}
+            initialText={resume.resume_text || ""}
+          />
         </div>
       </div>
     </div>

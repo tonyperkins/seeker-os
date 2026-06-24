@@ -90,13 +90,16 @@ def _load_accuracy_rules_text(settings: Settings) -> str:
 
     lines: list[str] = []
     for rule in data.get("rules", []):
+        rule_type = rule.get("type", "")
         lines.append(f"- [{rule.get('severity', 'high').upper()}] {rule['description']}")
-        if rule.get("phrases"):
-            lines.append(f"  Disallowed phrases: {', '.join(rule['phrases'])}")
-        if rule.get("technologies"):
-            lines.append(f"  Forbidden technologies: {', '.join(rule['technologies'])}")
-        if rule.get("required"):
-            lines.append(f"  Required phrases: {', '.join(rule['required'])}")
+        if rule_type == "disallowed_phrases" and rule.get("phrases"):
+            lines.append(f"  Disallowed phrases (DO NOT use): {', '.join(rule['phrases'])}")
+        if rule_type == "forbidden_technologies" and rule.get("technologies"):
+            lines.append(f"  FORBIDDEN TECHNOLOGIES (must NEVER appear): {', '.join(rule['technologies'])}")
+        if rule_type == "required_phrases" and rule.get("phrases"):
+            lines.append(f"  Required phrases (MUST include): {', '.join(rule['phrases'])}")
+        if rule_type in ("experience_anchor", "education_omission") and rule.get("patterns"):
+            lines.append(f"  Patterns to avoid: {', '.join(rule['patterns'])}")
 
     return "\n".join(lines) if lines else "(no rules defined)"
 

@@ -123,6 +123,16 @@ class ModelRouter:
                 provider = self._providers.get(task_config.provider)
                 if provider:
                     return provider, task_config.model
+                # Override provider unavailable — try the override's model
+                # on the tier's provider (the model may be available there too)
+                tier_config = config.tiers.get(tier)
+                if tier_config:
+                    tier_provider = self._providers.get(tier_config.provider)
+                    if tier_provider:
+                        # Check if the override model exists on the tier provider
+                        tier_models = tier_provider.list_models() if hasattr(tier_provider, "list_models") else []
+                        if task_config.model in tier_models:
+                            return tier_provider, task_config.model
             # Fall through to tier default if override provider unavailable
 
         # Step 2: Use tier default
