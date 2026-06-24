@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { EditProviderDialog } from "@/components/edit-provider-dialog";
 import {
   api,
   type ProvidersConfigResponse,
@@ -83,6 +84,7 @@ function ProviderCard({
   provider,
   onTest,
   onFetch,
+  onSaved,
   testing,
   fetching,
   testResult,
@@ -90,6 +92,7 @@ function ProviderCard({
   provider: ProviderInfoResponse;
   onTest: () => void;
   onFetch: () => void;
+  onSaved: () => void;
   testing: boolean;
   fetching: boolean;
   testResult: HealthResult | null;
@@ -138,6 +141,7 @@ function ProviderCard({
               Fetch Models
             </Button>
           )}
+          <EditProviderDialog provider={provider} onSaved={onSaved} />
         </div>
         {testResult && (
           <div
@@ -426,6 +430,7 @@ export default function ModelsPage() {
                 testResult={testResults[p.id] ?? null}
                 onTest={() => handleTest(p.id)}
                 onFetch={() => handleFetch(p.id)}
+                onSaved={loadConfig}
               />
             ))}
           </div>

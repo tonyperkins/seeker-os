@@ -247,6 +247,8 @@ class ProviderConfig(BaseModel):
     base_url: str | None = None
     enabled: bool = True
     auto_fetch_models: bool = False
+    auth_method: str = "api_key"  # 'api_key' or 'oauth'
+    oauth_token_path: str | None = None  # path to OAuth token JSON file
     models: list[ProviderModel] = []
 
 
