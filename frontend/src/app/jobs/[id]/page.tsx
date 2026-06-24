@@ -187,6 +187,8 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             </Button>
           )}
 
+          <GenerateResumeButton jobId={job.id} />
+
           <Button
             size="lg"
             variant="outline"
@@ -196,8 +198,6 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             <FileText />
             View Resumes
           </Button>
-
-          <GenerateResumeButton jobId={job.id} />
         </div>
 
         {/* Right: score breakdown + JD */}
