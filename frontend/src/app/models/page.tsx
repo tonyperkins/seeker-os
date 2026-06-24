@@ -282,6 +282,318 @@ function ProviderCard({
   );
 }
 
+function TierTaskEditor({
+  tiers,
+  taskEntries,
+  providers,
+  onSaved,
+}: {
+  tiers: { tier: string; provider: string; model: string }[];
+  taskEntries: [string, { tier: string; provider: string | null; model: string | null }][];
+  providers: ProviderInfoResponse[];
+  onSaved: () => void;
+}) {
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Build a map of provider → models for dropdowns
+  const providerModels: Record<string, ModelInfoResponse[]> = {};
+  for (const p of providers) {
+    providerModels[p.id] = p.models;
+  }
+
+  // All available models across all providers, flattened
+  const allModels: { id: string; label: string; provider: string }[] = [];
+  for (const p of providers) {
+    for (const m of p.models) {
+      allModels.push({ id: m.id, label: m.label, provider: p.id });
+    }
+  }
+
+  async function handleTierSave(tier: string, provider: string, model: string) {
+    setSaving(`tier-${tier}`);
+    setError(null);
+    try {
+      await api.models.updateTier(tier, provider, model);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save tier mapping");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function handleTaskSave(
+    task: string,
+    tier: string,
+    provider: string | null,
+    model: string | null,
+  ) {
+    setSaving(`task-${task}`);
+    setError(null);
+    try {
+      await api.models.updateTask(task, { tier, provider: provider ?? undefined, model: model ?? undefined });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save task override");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Layers className="h-4 w-4 text-muted-foreground" />
+            Tier Mappings
+          </CardTitle>
+          <CardDescription>
+            Default provider + model for each routing tier. Changes save to providers.yml.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {error && (
+            <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">{error}</div>
+          )}
+          {tiers.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No tier mappings configured.
+            </p>
+          ) : (
+            tiers.map((t) => (
+              <TierRow
+                key={`${t.tier}-${t.provider}-${t.model}`}
+                tier={t.tier}
+                currentProvider={t.provider}
+                currentModel={t.model}
+                providers={providers}
+                providerModels={providerModels}
+                saving={saving === `tier-${t.tier}`}
+                onSave={handleTierSave}
+              />
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ListChecks className="h-4 w-4 text-muted-foreground" />
+            Task Overrides
+          </CardTitle>
+          <CardDescription>
+            Per-task model selection overrides. Changes save to providers.yml.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {taskEntries.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No task overrides configured.
+            </p>
+          ) : (
+            taskEntries.map(([task, ov]) => (
+              <TaskRow
+                key={`${task}-${ov.tier}-${ov.provider ?? ""}-${ov.model ?? ""}`}
+                task={task}
+                currentTier={ov.tier}
+                currentProvider={ov.provider}
+                currentModel={ov.model}
+                providers={providers}
+                providerModels={providerModels}
+                saving={saving === `task-${task}`}
+                onSave={handleTaskSave}
+              />
+            ))
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function TierRow({
+  tier,
+  currentProvider,
+  currentModel,
+  providers,
+  providerModels,
+  saving,
+  onSave,
+}: {
+  tier: string;
+  currentProvider: string;
+  currentModel: string;
+  providers: ProviderInfoResponse[];
+  providerModels: Record<string, ModelInfoResponse[]>;
+  saving: boolean;
+  onSave: (tier: string, provider: string, model: string) => void;
+}) {
+  const [provider, setProvider] = useState(currentProvider);
+  const [model, setModel] = useState(currentModel);
+  const dirty = provider !== currentProvider || model !== currentModel;
+
+  const models = providerModels[provider] ?? [];
+
+  return (
+    <div className="rounded-md border border-border p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className={cn("border", tierBadgeClass(tier))}>
+          {tier}
+        </Badge>
+        {dirty && (
+          <Button
+            size="sm"
+            className="h-6 text-xs"
+            disabled={saving}
+            onClick={() => onSave(tier, provider, model)}
+          >
+            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={provider}
+          onChange={(e) => {
+            setProvider(e.target.value);
+            // Reset model to first available from new provider
+            const newModels = providerModels[e.target.value] ?? [];
+            if (newModels.length > 0 && !newModels.some((m) => m.id === model)) {
+              setModel(newModels[0].id);
+            }
+          }}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+        >
+          {providers.map((p) => (
+            <option key={p.id} value={p.id}>{p.id}</option>
+          ))}
+        </select>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+        >
+          {models.length === 0 ? (
+            <option value="">(no models)</option>
+          ) : (
+            models.map((m) => (
+              <option key={m.id} value={m.id}>{m.id}</option>
+            ))
+          )}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function TaskRow({
+  task,
+  currentTier,
+  currentProvider,
+  currentModel,
+  providers,
+  providerModels,
+  saving,
+  onSave,
+}: {
+  task: string;
+  currentTier: string;
+  currentProvider: string | null;
+  currentModel: string | null;
+  providers: ProviderInfoResponse[];
+  providerModels: Record<string, ModelInfoResponse[]>;
+  saving: boolean;
+  onSave: (task: string, tier: string, provider: string | null, model: string | null) => void;
+}) {
+  const [tier, setTier] = useState(currentTier);
+  const [useOverride, setUseOverride] = useState(currentProvider !== null || currentModel !== null);
+  const [provider, setProvider] = useState(currentProvider ?? providers[0]?.id ?? "");
+  const [model, setModel] = useState(currentModel ?? "");
+
+  const dirty =
+    tier !== currentTier ||
+    useOverride !== (currentProvider !== null || currentModel !== null) ||
+    (useOverride && (provider !== currentProvider || model !== currentModel));
+
+  const models = providerModels[provider] ?? [];
+
+  return (
+    <div className="rounded-md border border-border p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-xs font-medium">{task}</span>
+        {dirty && (
+          <Button
+            size="sm"
+            className="h-6 text-xs"
+            disabled={saving}
+            onClick={() => onSave(task, tier, useOverride ? provider : null, useOverride ? model : null)}
+          >
+            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+          </Button>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <select
+          value={tier}
+          onChange={(e) => setTier(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+        >
+          <option value="heavy">heavy</option>
+          <option value="moderate">moderate</option>
+          <option value="light">light</option>
+        </select>
+        <Badge variant="outline" className={cn("border", tierBadgeClass(tier))}>
+          {tier}
+        </Badge>
+      </div>
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          checked={useOverride}
+          onChange={(e) => setUseOverride(e.target.checked)}
+          className="size-3.5 rounded border-border"
+        />
+        Override provider/model
+      </label>
+      {useOverride && (
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={provider}
+            onChange={(e) => {
+              setProvider(e.target.value);
+              const newModels = providerModels[e.target.value] ?? [];
+              if (newModels.length > 0 && !newModels.some((m) => m.id === model)) {
+                setModel(newModels[0].id);
+              }
+            }}
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+          >
+            {providers.map((p) => (
+              <option key={p.id} value={p.id}>{p.id}</option>
+            ))}
+          </select>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+          >
+            {models.length === 0 ? (
+              <option value="">(no models)</option>
+            ) : (
+              models.map((m) => (
+                <option key={m.id} value={m.id}>{m.id}</option>
+              ))
+            )}
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ModelsPage() {
   const [config, setConfig] = useState<ProvidersConfigResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -487,97 +799,12 @@ export default function ModelsPage() {
 
       <Separator />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Layers className="h-4 w-4 text-muted-foreground" />
-              Tier Mappings
-            </CardTitle>
-            <CardDescription>
-              Default provider + model for each routing tier.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {tiers.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No tier mappings configured.
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tier</TableHead>
-                    <TableHead>Provider</TableHead>
-                    <TableHead>Model</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tiers.map((t) => (
-                    <TableRow key={t.tier}>
-                      <TableCell>
-                        <Badge variant="outline" className={cn("border", tierBadgeClass(t.tier))}>
-                          {t.tier}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{t.provider}</TableCell>
-                      <TableCell className="font-mono text-xs">{t.model}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <ListChecks className="h-4 w-4 text-muted-foreground" />
-              Task Overrides
-            </CardTitle>
-            <CardDescription>
-              Per-task model selection overrides.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {taskEntries.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No task overrides configured.
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Task</TableHead>
-                    <TableHead>Tier</TableHead>
-                    <TableHead>Provider</TableHead>
-                    <TableHead>Model</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {taskEntries.map(([task, ov]) => (
-                    <TableRow key={task}>
-                      <TableCell className="font-mono text-xs">{task}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn("border", tierBadgeClass(ov.tier))}>
-                          {ov.tier}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {ov.provider ?? <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {ov.model ?? <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <TierTaskEditor
+        tiers={tiers}
+        taskEntries={taskEntries}
+        providers={config.providers}
+        onSaved={loadConfig}
+      />
     </div>
   );
 }

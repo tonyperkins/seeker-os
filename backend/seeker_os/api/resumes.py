@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -13,6 +13,101 @@ from seeker_os.api.schemas import MessageResponse
 from seeker_os.database import get_connection, json_decode
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
+
+
+class MasterResumeInfo(BaseModel):
+    """Info about the master resume."""
+    path: str
+    exists: bool
+    size_bytes: int = 0
+    format: str = ""  # 'md', 'docx', 'pdf'
+    text_preview: str = ""  # first 500 chars
+
+
+@router.get("/master", response_model=MasterResumeInfo)
+def get_master_resume_info():
+    """Get info about the configured master resume file."""
+    from seeker_os.config import Settings
+
+    settings = Settings()
+    if not settings.profile or not settings.profile.resume:
+        raise HTTPException(status_code=404, detail="No resume config in profile.yml")
+
+    master_path = Path(settings.profile.resume.master_path).expanduser()
+    fmt = master_path.suffix.lstrip(".").lower() if master_path.suffix else ""
+
+    if not master_path.exists():
+        return MasterResumeInfo(
+            path=str(master_path),
+            exists=False,
+            format=fmt,
+        )
+
+    # Read preview (md only for speed; docx/pdf need extraction)
+    preview = ""
+    if fmt == "md":
+        try:
+            text = master_path.read_text(encoding="utf-8")
+            preview = text[:500]
+        except Exception:
+            pass
+
+    return MasterResumeInfo(
+        path=str(master_path),
+        exists=True,
+        size_bytes=master_path.stat().st_size,
+        format=fmt,
+        text_preview=preview,
+    )
+
+
+@router.post("/master/upload", response_model=MasterResumeInfo)
+async def upload_master_resume(file: UploadFile = File(...)):
+    """Upload a master resume file (md, docx, or pdf).
+
+    Saves the file to the configured master_path in profile.yml.
+    If the path has no extension, the uploaded file's extension is appended.
+    """
+    from seeker_os.config import Settings
+
+    settings = Settings()
+    if not settings.profile or not settings.profile.resume:
+        raise HTTPException(status_code=404, detail="No resume config in profile.yml")
+
+    master_path = Path(settings.profile.resume.master_path).expanduser()
+
+    # Determine format from uploaded filename
+    uploaded_name = file.filename or "resume.md"
+    ext = Path(uploaded_name).suffix.lower()
+    if ext not in (".md", ".docx", ".pdf"):
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {ext}. Use .md, .docx, or .pdf")
+
+    # If the configured path has no extension or a different one, use the uploaded extension
+    if master_path.suffix.lower() != ext:
+        master_path = master_path.with_suffix(ext)
+
+    # Ensure parent dir exists
+    master_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write the file
+    content = await file.read()
+    master_path.write_bytes(content)
+
+    fmt = ext.lstrip(".")
+    preview = ""
+    if fmt == "md":
+        try:
+            preview = content.decode("utf-8")[:500]
+        except Exception:
+            pass
+
+    return MasterResumeInfo(
+        path=str(master_path),
+        exists=True,
+        size_bytes=len(content),
+        format=fmt,
+        text_preview=preview,
+    )
 
 
 class ResumeGenerateRequest(BaseModel):

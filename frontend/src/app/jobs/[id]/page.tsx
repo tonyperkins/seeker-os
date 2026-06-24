@@ -28,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { JobActions } from "@/components/job-actions";
 import { GenerateResumeButton } from "@/components/generate-resume-button";
+import { JDRenderer } from "@/components/jd-renderer";
 import { api, type JobDetail } from "@/lib/api";
 
 function formatComp(job: JobDetail): string {
@@ -305,9 +306,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[480px] rounded-md border border-border p-4">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                  {job.jd_full || "No JD text available."}
-                </pre>
+                <JDRenderer content={job.jd_full || ""} />
               </ScrollArea>
             </CardContent>
           </Card>

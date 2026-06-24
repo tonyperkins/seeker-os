@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { MasterResumeUpload } from "@/components/master-resume-upload";
 import { api, type SettingsResponse } from "@/lib/api";
 
 function ConfigViewer({ data }: { data: Record<string, unknown> | null }) {
@@ -177,6 +178,11 @@ export default async function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Separator />
+
+      {/* Master Resume */}
+      <MasterResumeUpload />
 
       <Separator />
 

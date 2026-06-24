@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 
 const REJECT_REASONS = [
@@ -36,11 +37,23 @@ const REJECT_REASONS = [
   "other",
 ];
 
+const REASON_HINTS: Record<string, string> = {
+  comp_too_low: "e.g. 'Max is $140K, below my floor of $150K'",
+  wrong_seniority: "e.g. 'Entry-level role, I need senior+'",
+  wrong_location: "e.g. 'Requires relocation to NYC'",
+  tech_stack_mismatch: "e.g. 'Heavy on Java, I'm Python/Go'",
+  not_remote: "e.g. '4 days onsite, I need full remote'",
+  duplicate: "e.g. 'Same job as #42, different ATS posting'",
+  not_relevant: "e.g. 'Solutions architect role, not infra/SRE'",
+  other: "Describe what specifically doesn't fit...",
+};
+
 export function JobActions({ jobId, currentStatus }: { jobId: number; currentStatus: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [rejectDetails, setRejectDetails] = useState("");
   const [snoozeDays, setSnoozeDays] = useState("7");
   const [rejectOpen, setRejectOpen] = useState(false);
 
@@ -83,7 +96,8 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
             <DialogHeader>
               <DialogTitle>Reject job</DialogTitle>
               <DialogDescription>
-                Choose a reason. This moves the job to the rejected status.
+                Choose a reason and add details about what specifically doesn&rsquo;t fit.
+                This feedback helps refine the filters for future job discovery.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3">
@@ -92,7 +106,10 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
                 <select
                   id="reject-reason"
                   value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
+                  onChange={(e) => {
+                    setRejectReason(e.target.value);
+                    setRejectDetails("");
+                  }}
                   className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                 >
                   <option value="">Select a reason…</option>
@@ -103,6 +120,24 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
                   ))}
                 </select>
               </div>
+              {rejectReason && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="reject-details">
+                    Details
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      (optional but helpful)
+                    </span>
+                  </Label>
+                  <Textarea
+                    id="reject-details"
+                    value={rejectDetails}
+                    onChange={(e) => setRejectDetails(e.target.value)}
+                    placeholder={REASON_HINTS[rejectReason] || "What specifically about this job makes you reject it?"}
+                    rows={3}
+                    className="text-sm"
+                  />
+                </div>
+              )}
             </div>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
@@ -110,9 +145,14 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
                 variant="destructive"
                 disabled={!rejectReason || busy !== null}
                 onClick={() =>
-                  doAction("reject", () => api.jobs.reject(jobId, rejectReason), true).then(() => {
+                  doAction(
+                    "reject",
+                    () => api.jobs.reject(jobId, rejectReason, rejectDetails.trim() || undefined),
+                    true,
+                  ).then(() => {
                     setRejectOpen(false);
                     setRejectReason("");
+                    setRejectDetails("");
                   })
                 }
               >

@@ -157,6 +157,10 @@ MIGRATIONS: list[str] = [
     CREATE INDEX IF NOT EXISTS idx_resumes_job_id ON resumes(job_id);
     CREATE INDEX IF NOT EXISTS idx_resumes_generated_at ON resumes(generated_at);
     """,
+    # Migration 3: Add reject_details column for free-text rejection feedback
+    """
+    ALTER TABLE jobs ADD COLUMN reject_details TEXT;
+    """,
 ]
 
 
