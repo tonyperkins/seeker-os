@@ -9,17 +9,18 @@ scoring:
   min_score: 0
 
   # Base score — first matching pattern wins
+  # Patterns use (senior|sr\.?) to match both "Senior" and "Sr." abbreviations
   base_scores:
-    - pattern: "(principal|staff).*(sre|site reliability|platform|infra|devops)"
+    - pattern: "(principal|staff).*(sre|site reliability|platform|infra|devops|infrastructure)"
       score: 4.5
       label: "Principal/Staff SRE/Platform/Infra"
-    - pattern: "senior.*(sre|site reliability|platform|infra)"
+    - pattern: "(senior|sr\\.?).*?(sre|site reliability|platform|infra|infrastructure)"
       score: 4.0
       label: "Senior SRE/Platform/Infra"
-    - pattern: "senior.*(devops|cloud.?engineer)"
+    - pattern: "(senior|sr\\.?).*?(devops|cloud.?engineer)"
       score: 3.5
       label: "Senior DevOps/Cloud"
-    - pattern: "senior.*(release|build)"
+    - pattern: "(senior|sr\\.?).*?(release|build)"
       score: 3.0
       label: "Senior Release/Build"
     - pattern: "(sre|site reliability|platform.?engineer|infrastructure.?engineer|devops|cloud.?engineer)"

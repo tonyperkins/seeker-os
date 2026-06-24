@@ -57,7 +57,7 @@ hard_rejects:
   - reason: "Customer-facing/solutions role"
     pattern: "pre.?sales|solutions architect|customer success|technical account manager"
   - reason: "Early career/junior"
-    pattern: "early.?career|entry.?level|new.?grad|junior|intern|associate"
+    pattern: "early.?career|entry.?level|new.?grad|\\bjunior\\b|\\bintern\\b|\\binternship\\b|\\bassociate\\b"
   - reason: "Defense/ITAR"
     pattern: "defense contractor|itar|classified"
   - reason: "Relocation required"
