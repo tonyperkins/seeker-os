@@ -343,28 +343,53 @@ function ProviderStep({
       // Find the first provider with models and auto-assign tiers
       const providerWithModels = enabledProviders.find((p) => p.models.length > 0);
       if (providerWithModels) {
-        const models = providerWithModels.models;
-        const ids = models.map((m) => m.id);
+        const ids = providerWithModels.models.map((m) => m.id);
 
-        // Pick a model for a tier using a list of patterns (checked in order).
-        // Each pattern is a substring match against the model ID (case-insensitive).
-        // Returns the first matching model ID, or undefined.
-        const pick = (patterns: string[]): string | undefined =>
-          ids.find((id) => patterns.some((pat) => id.toLowerCase().includes(pat)));
+        // Extract a version number from a model ID (e.g. "claude-opus-4.8" → 4.8).
+        // Returns 0 if no version found.
+        const versionOf = (id: string): number => {
+          const m = id.match(/(\d+\.?\d*)/);
+          return m ? parseFloat(m[1]) : 0;
+        };
 
-        // Heavy: most capable models (opus, o1, frontier, etc.)
-        const heavy = pick(["opus", "o1", "o3", "frontier", "gpt-4-turbo", "gpt-4o", "llama-70", "llama-405", "deepseek"])
+        // Pick the best model for a Claude family (opus/sonnet/haiku) by:
+        // 1. Preferring "anthropic/" prefix over "stealth/" or "~anthropic/"
+        // 2. Excluding "-fast" variants (we want full-capability models)
+        // 3. Sorting by version number descending (highest first)
+        const pickClaude = (family: string): string | undefined => {
+          const matches = ids.filter((id) => id.toLowerCase().includes(family));
+          if (matches.length === 0) return undefined;
+          const preferred = matches
+            .filter((id) => !id.includes("-fast"))
+            .sort((a, b) => {
+              const aAnthropic = a.startsWith("anthropic/") ? 1 : 0;
+              const bAnthropic = b.startsWith("anthropic/") ? 1 : 0;
+              if (aAnthropic !== bAnthropic) return bAnthropic - aAnthropic;
+              return versionOf(b) - versionOf(a);
+            });
+          if (preferred.length > 0) return preferred[0];
+          // Only -fast variants available — pick highest version anyway
+          return matches.sort((a, b) => versionOf(b) - versionOf(a))[0];
+        };
+
+        // Heavy: opus (highest version), then o1/o3, then gateway "frontier"
+        const heavy = pickClaude("opus")
+          ?? ids.find((id) => /o[13]/.test(id))
+          ?? ids.find((id) => id.includes("frontier"))
+          ?? ids.find((id) => id.includes("gpt-4-turbo") || id.includes("gpt-4o"))
           ?? ids[0];
 
-        // Moderate: balanced models (sonnet, balanced, gpt-4o-mini, etc.)
-        // Exclude the heavy pick so tiers get distinct models
-        const moderate = pick(["sonnet", "balanced", "gpt-4o-mini", "gpt-4-mini", "llama-8", "mistral-large"])
+        // Moderate: sonnet (highest version), then gateway "balanced"
+        const moderate = pickClaude("sonnet")
+          ?? ids.find((id) => id.includes("balanced"))
+          ?? ids.find((id) => id.includes("gpt-4o-mini") || id.includes("gpt-4-mini"))
           ?? ids.find((id) => id !== heavy)
           ?? ids[0];
 
-        // Light: fast/cheap models (haiku, efficient, small, mini, etc.)
-        // Exclude heavy and moderate picks
-        const light = pick(["haiku", "efficient", "small", "mini", "flash", "llama-3", "mistral-small", "free"])
+        // Light: haiku (latest), then gateway "efficient"/"small"/"free"
+        const light = pickClaude("haiku")
+          ?? ids.find((id) => id.includes("efficient") || id.includes("small") || id.includes("free"))
+          ?? ids.find((id) => id.includes("mini") || id.includes("flash"))
           ?? ids.find((id) => id !== heavy && id !== moderate)
           ?? ids.find((id) => id !== heavy)
           ?? ids[0];
