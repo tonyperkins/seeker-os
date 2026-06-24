@@ -19,7 +19,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { RunPipelineButton } from "@/components/run-pipeline-button";
-import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary } from "@/lib/api";
+import { SetupGuide } from "@/components/setup-guide";
+import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo } from "@/lib/api";
 
 function StatCard({
   label,
@@ -127,13 +128,17 @@ export default async function DashboardPage() {
   let funnel: FunnelStats | null = null;
   let runs: PipelineRunRecord[] = [];
   let topMatches: JobSummary[] = [];
+  let settings: SettingsResponse | null = null;
+  let resumeInfo: MasterResumeInfo | null = null;
   let error: string | null = null;
 
   try {
-    [funnel, runs, topMatches] = await Promise.all([
+    [funnel, runs, topMatches, settings, resumeInfo] = await Promise.all([
       api.analytics.funnel(),
       api.pipeline.runs(),
       api.jobs.list({ status: "ready", limit: 5 }),
+      api.settings.get(),
+      api.resumes.getMaster().catch(() => null),
     ]);
     // Sort top matches by score desc (defensive — API may already sort)
     topMatches = [...topMatches].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
@@ -159,6 +164,11 @@ export default async function DashboardPage() {
   const jdFetchSuccess = funnel?.jd_fetch_success ?? 0;
   const jdFetchPct = jdFetchTotal > 0 ? Math.round((jdFetchSuccess / jdFetchTotal) * 100) : 0;
 
+  // Detect new-install state: placeholder profile name or no resume
+  const isProfilePlaceholder = !settings?.profile_loaded;
+  const totalJobs = funnel?.total_jobs ?? 0;
+  const isNewInstall = isProfilePlaceholder || !resumeInfo?.exists || totalJobs === 0;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -169,6 +179,15 @@ export default async function DashboardPage() {
           </p>
         </div>
       </div>
+
+      {/* Setup guide for new installs */}
+      {isNewInstall && (
+        <SetupGuide
+          resumeInfo={resumeInfo}
+          isProfilePlaceholder={isProfilePlaceholder}
+          totalJobs={totalJobs}
+        />
+      )}
 
       {/* Funnel stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
