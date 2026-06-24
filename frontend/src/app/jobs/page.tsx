@@ -211,54 +211,56 @@ function JobsPageInner() {
               No jobs match these filters.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16">Score</TableHead>
-                  <TableHead className="min-w-[200px]">Title</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead className="w-28">Status</TableHead>
-                  <TableHead className="w-32">Comp</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead className="w-28">ATS</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedJobs.map((job) => (
-                  <TableRow
-                    key={job.id}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/jobs/${job.id}`)}
-                  >
-                    <TableCell className="font-mono font-medium">
-                      {job.score != null ? job.score : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        {job.is_pinned && <Pin className="size-3.5 text-amber-500" />}
-                        <span className="font-medium">{job.title}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{job.company}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusBadgeVariant(job.status)}>{job.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatComp(job.comp_min, job.comp_max)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {job.location || "—"}
-                      {job.workplace_type && job.workplace_type !== "unknown" && (
-                        <span className="ml-1 text-xs">· {job.workplace_type}</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {job.ats_source ?? "—"}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-14 shrink-0">Score</TableHead>
+                    <TableHead className="min-w-[160px] max-w-[260px]">Title</TableHead>
+                    <TableHead className="min-w-[100px] max-w-[180px]">Company</TableHead>
+                    <TableHead className="w-24 shrink-0">Status</TableHead>
+                    <TableHead className="w-28 shrink-0">Comp</TableHead>
+                    <TableHead className="min-w-[80px] max-w-[140px]">Location</TableHead>
+                    <TableHead className="w-24 shrink-0">ATS</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {sortedJobs.map((job) => (
+                    <TableRow
+                      key={job.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/jobs/${job.id}`)}
+                    >
+                      <TableCell className="whitespace-nowrap font-mono font-medium">
+                        {job.score != null ? job.score : "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[260px]">
+                        <div className="flex items-center gap-1.5">
+                          {job.is_pinned && <Pin className="size-3.5 shrink-0 text-amber-500" />}
+                          <span className="truncate font-medium">{job.title}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[180px] truncate text-muted-foreground">{job.company}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <Badge variant={statusBadgeVariant(job.status)}>{job.status}</Badge>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatComp(job.comp_min, job.comp_max)}
+                      </TableCell>
+                      <TableCell className="max-w-[140px] truncate text-muted-foreground">
+                        {job.location || "—"}
+                        {job.workplace_type && job.workplace_type !== "unknown" && (
+                          <span className="ml-1 text-xs">· {job.workplace_type}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {job.ats_source ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
