@@ -354,3 +354,63 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
         healthy=healthy,
         health_message=health_message,
     )
+
+
+class TierUpdateRequest(BaseModel):
+    """PUT /api/models/tiers/{tier} — update a tier mapping."""
+    provider: str
+    model: str
+
+
+class TaskUpdateRequest(BaseModel):
+    """PUT /api/models/tasks/{task} — update a task override."""
+    tier: str
+    provider: str | None = None
+    model: str | None = None
+
+
+def _write_providers_yml(raw: dict) -> None:
+    """Write the providers.yml config back to disk."""
+    import yaml
+    from seeker_os.config import CONFIG_DIR
+
+    providers_yml_path = CONFIG_DIR / "providers.yml"
+    with open(providers_yml_path, "w") as f:
+        yaml.dump(raw, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+
+def _read_providers_yml() -> dict:
+    """Read the raw providers.yml config from disk."""
+    import yaml
+    from seeker_os.config import CONFIG_DIR
+
+    providers_yml_path = CONFIG_DIR / "providers.yml"
+    if not providers_yml_path.exists():
+        raise HTTPException(status_code=404, detail="providers.yml not found")
+    with open(providers_yml_path) as f:
+        return yaml.safe_load(f)
+
+
+@router.put("/tiers/{tier}", response_model=TierMappingResponse)
+def update_tier(tier: str, body: TierUpdateRequest):
+    """Update a tier mapping in providers.yml."""
+    raw = _read_providers_yml()
+    tiers = raw.setdefault("tiers", {})
+    tiers[tier] = {"provider": body.provider, "model": body.model}
+    _write_providers_yml(raw)
+    return TierMappingResponse(provider=body.provider, model=body.model)
+
+
+@router.put("/tasks/{task}", response_model=TaskOverrideResponse)
+def update_task(task: str, body: TaskUpdateRequest):
+    """Update a task override in providers.yml."""
+    raw = _read_providers_yml()
+    tasks = raw.setdefault("tasks", {})
+    entry: dict = {"tier": body.tier}
+    if body.provider is not None:
+        entry["provider"] = body.provider
+    if body.model is not None:
+        entry["model"] = body.model
+    tasks[task] = entry
+    _write_providers_yml(raw)
+    return TaskOverrideResponse(tier=body.tier, provider=body.provider, model=body.model)
