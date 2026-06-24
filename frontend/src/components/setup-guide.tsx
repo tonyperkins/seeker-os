@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Server,
   Upload,
@@ -34,9 +35,9 @@ export function SetupGuide({
   totalJobs: number;
   hasProvider: boolean;
 }) {
+  const router = useRouter();
   const [info, setInfo] = useState<MasterResumeInfo | null>(resumeInfo);
   const [parsing, setParsing] = useState(false);
-  const [parsed, setParsed] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
   const onUploaded = useCallback(() => {
@@ -48,26 +49,28 @@ export function SetupGuide({
     setParseError(null);
     try {
       await api.resumes.parse();
-      setParsed(true);
+      // Parse succeeded and backend saved to config — navigate to settings for review
+      router.push("/settings");
     } catch (e) {
       setParseError(e instanceof Error ? e.message : "Failed to parse resume");
     } finally {
       setParsing(false);
     }
-  }, []);
+  }, [router]);
 
   // Determine step completion
   const step0Done = hasProvider;
   const step1Done = info?.exists ?? false;
-  const step2Done = parsed;
   const step3Done = !isProfilePlaceholder;
   const step4Done = totalJobs > 0;
+  // Step 2 (parse) is done if step3 is done (parse saves to config, which fills profile)
+  const step2Done = step3Done;
 
   const steps = [
     {
       icon: Server,
       title: "Configure an LLM provider",
-      description: "Set up at least one provider with an API key and assign models to tiers. This powers resume parsing, scoring, and generation.",
+      description: "Set up at least one provider with an API key or OAuth and assign models to tiers. This powers resume parsing, scoring, and generation.",
       done: step0Done,
       action: !step0Done ? "providers" : null,
     },
@@ -81,16 +84,16 @@ export function SetupGuide({
     {
       icon: Sparkles,
       title: "Parse your resume",
-      description: "Extract contact info, experience, skills, and suggested filter parameters automatically using your configured LLM.",
+      description: "Extract contact info, experience, skills, and suggested filter parameters. Saves to your profile and filter config automatically.",
       done: step2Done,
       action: step1Done && !step2Done ? "parse" : null,
     },
     {
       icon: SlidersHorizontal,
       title: "Review your profile & filters",
-      description: "Check the extracted data, adjust your filter parameters, and add any free-form instructions.",
+      description: "Check the extracted data, adjust your filter parameters, and add any free-form instructions. Save your changes.",
       done: step3Done,
-      action: step2Done && !step3Done ? "settings" : (step0Done && step1Done && !step3Done ? "settings" : null),
+      action: step2Done && !step3Done ? "settings" : null,
     },
     {
       icon: Play,
@@ -106,6 +109,7 @@ export function SetupGuide({
   if (allDone) return null;
 
   const currentStep = steps.find((s) => !s.done);
+  const currentStepIndex = steps.findIndex((s) => !s.done);
 
   return (
     <Card>
@@ -115,7 +119,7 @@ export function SetupGuide({
           Welcome to Seeker OS
         </CardTitle>
         <CardDescription>
-          Let&apos;s get you set up. Follow these steps to start finding your next role.
+          Let&apos;s get you set up. Complete each step in order — step {currentStepIndex + 1} of {steps.length}.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -125,12 +129,13 @@ export function SetupGuide({
             {steps.map((step, i) => {
               const Icon = step.icon;
               const isCurrent = step === currentStep;
+              const isLocked = i > currentStepIndex;
               return (
                 <div
                   key={i}
                   className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
                     isCurrent ? "border-primary/40 bg-primary/5" : "border-border"
-                  }`}
+                  } ${isLocked ? "opacity-50" : ""}`}
                 >
                   <div className="flex size-7 shrink-0 items-center justify-center rounded-full">
                     {step.done ? (
@@ -177,7 +182,9 @@ export function SetupGuide({
           {currentStep?.action === "parse" && (
             <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
               <p className="text-sm text-muted-foreground">
-                Your resume is uploaded. Now let&apos;s extract your profile data.
+                Your resume is uploaded. Click parse to extract your profile data —
+                contact info, experience, skills, and suggested filters will be saved
+                to your config automatically. You&apos;ll then review and edit them.
               </p>
               <Button onClick={handleParse} disabled={parsing} size="lg">
                 {parsing ? <Loader2 className="animate-spin" /> : <Sparkles />}
@@ -186,12 +193,6 @@ export function SetupGuide({
               {parseError && (
                 <p className="text-xs text-destructive">{parseError}</p>
               )}
-              {parsed && (
-                <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="size-4" />
-                  Resume parsed! Review your profile in Settings.
-                </div>
-              )}
             </div>
           )}
 
@@ -199,7 +200,7 @@ export function SetupGuide({
             <Link href="/settings" className="inline-flex">
               <Button variant="outline" size="lg" className="w-full">
                 <SlidersHorizontal />
-                Go to Settings to Review & Edit
+                Review & Edit Profile and Filters
                 <ArrowRight />
               </Button>
             </Link>

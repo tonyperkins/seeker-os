@@ -173,6 +173,7 @@ export default async function DashboardPage() {
     (p) => p.enabled && (p.api_key_set || p.healthy === true) && p.models.length > 0,
   );
   const isNewInstall = !hasProvider || isProfilePlaceholder || !resumeInfo?.exists || totalJobs === 0;
+  const setupComplete = hasProvider && !isProfilePlaceholder && resumeInfo?.exists;
 
   return (
     <div className="flex flex-col gap-6">
@@ -232,7 +233,7 @@ export default async function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <RunPipelineButton />
+            <RunPipelineButton setupComplete={setupComplete} />
           </CardContent>
         </Card>
 

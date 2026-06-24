@@ -197,7 +197,7 @@ Rules:
         text = re.sub(r'\s*```$', '', text)
         data = json.loads(text)
 
-        return ResumeParseResult(
+        result = ResumeParseResult(
             contact=ContactInfoSchema(**data.get("contact", {})),
             experience_years=data.get("experience_years"),
             current_title=data.get("current_title", ""),
@@ -207,10 +207,68 @@ Rules:
             summary=data.get("summary", ""),
         )
 
+        # Save extracted data to config files
+        _save_parsed_to_config(settings, result)
+
+        return result
+
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"LLM returned invalid JSON: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Resume parsing failed: {e}")
+
+
+def _save_parsed_to_config(settings, result: ResumeParseResult) -> None:
+    """Save parsed resume data to profile.yml and filters.yml."""
+    from seeker_os.config_writer import write_profile, write_filters
+
+    profile = settings.profile
+    filters_cfg = settings.filters
+
+    # Update profile with extracted contact info
+    if result.contact.name and result.contact.name != "Your Name":
+        profile.user.name = result.contact.name
+    if result.contact.email and "@" in result.contact.email:
+        profile.user.email = result.contact.email
+    if result.contact.location:
+        profile.user.location = result.contact.location
+    if result.contact.phone:
+        if not hasattr(profile.user, "phone") or not profile.user.phone:
+            profile.user.phone = result.contact.phone
+    # Update contact URLs
+    if hasattr(profile, "resume") and profile.resume:
+        urls = []
+        for url_key in ["portfolio", "linkedin", "github", "other"]:
+            url_val = getattr(result.contact.urls, url_key, None) if result.contact.urls else None
+            if url_val:
+                urls.append(url_val)
+        if urls:
+            profile.resume.contact_urls = urls
+
+    # Update experience years
+    if result.experience_years and hasattr(profile, "experience"):
+        profile.experience.years = result.experience_years
+        if result.experience_years >= 10:
+            profile.experience.anchor_phrase = f"{result.experience_years}+ years"
+
+    # Update comp floor from suggestion
+    if result.suggested_comp_floor and hasattr(profile, "comp"):
+        profile.comp.floor = result.suggested_comp_floor
+
+    write_profile(profile)
+
+    # Update filters with suggested title patterns and comp floor
+    if filters_cfg:
+        if result.suggested_title_positive:
+            # Merge with existing positive patterns (avoid duplicates)
+            existing = set(filters_cfg.title_filters.positive)
+            merged = list(existing) + [t for t in result.suggested_title_positive if t not in existing]
+            filters_cfg.title_filters.positive = merged
+
+        if result.suggested_comp_floor:
+            filters_cfg.comp_floor = result.suggested_comp_floor
+
+        write_filters(filters_cfg)
 
 
 class ResumeGenerateRequest(BaseModel):
