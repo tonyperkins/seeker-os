@@ -164,22 +164,27 @@ careflow%2FEA.00A → careflow/EA.00A (after URL decode)
 - Pinned jobs should always be filtered out (`is_hc_pinned == true` or `source == "hiring_cafe_pin"`)
 - ~50% of hits have structured compensation (integer); other 50% have null comp
 
-## ⚠ Seniority Enum — Incomplete Observation
+## ⚠ Seniority Enum — Probe Results (2026-06-23)
 
-The `seniority_level` field was only observed with these values during probing:
-- `"Senior Level"`
-- `"Mid Level"`
+A probe across all 8 queries (167 total hits) confirmed the seniority enum is very coarse:
 
-**Staff and Principal roles may NOT be tagged distinctly.** A "Staff SRE" job might
-be tagged as `"Senior Level"` or as some other value we haven't observed yet
-(`"Staff Level"`, `"Lead"`, etc.).
+| `seniority_level` | Count | Notes |
+|---|---|---|
+| `"Senior Level"` | 155 | Dominant — includes Staff and Principal roles |
+| `None` (null) | 8 | No seniority tag at all |
+| `"Mid Level"` | 4 | Appears even in senior/staff/principal queries |
+
+**Key finding:** There is NO distinct "Staff Level", "Principal Level", or "Lead" enum
+value. Staff and Principal roles are tagged as `"Senior Level"`. The `seniority_level`
+field cannot distinguish between Senior, Staff, and Principal — it only distinguishes
+Senior-ish from Mid/Entry.
 
 **Implementation guidance:**
-- Do NOT rely on exact-match seniority filtering alone for the seniority floor.
-- Use title-based fallback: if `seniority_level` is None or unrecognized, check the
-  title for keywords (staff, principal, senior, lead, jr, junior, entry, associate).
-- Before shipping the seniority filter, run a probe to capture the full enum vocabulary:
-  `curl` a few staff/principal queries and log all distinct `seniority_level` values.
-- The filter config should include a `seniority_unknown_passes: true` setting so that
-  unrecognized seniority values pass through to scoring rather than being rejected.
-- ~50% of hits have structured compensation (integer); other 50% have null comp
+- The `seniority_floor` filter should accept `"Senior Level"` (which covers Staff/Principal
+  too) and reject `"Mid Level"` / `"Entry Level"` / `"Junior"` / `"Associate"`.
+- Use title-based fallback: if `seniority_level` is None, check the title for keywords
+  (staff, principal, senior, lead, jr, junior, entry, associate).
+- `filters.yml` includes `seniority_unknown_passes: true` so unrecognized/None values
+  pass through to scoring rather than being rejected.
+- The Staff/Principal distinction is made by the scoring rubric's base_scores patterns
+  (which match on title), NOT by the seniority_level field.
