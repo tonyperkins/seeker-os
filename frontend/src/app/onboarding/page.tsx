@@ -344,22 +344,35 @@ function ProviderStep({
       const providerWithModels = enabledProviders.find((p) => p.models.length > 0);
       if (providerWithModels) {
         const models = providerWithModels.models;
-        const heavy = models.find((m) => m.id.includes("opus")) ??
-                      models.find((m) => m.id.includes("gpt-4")) ??
-                      models.find((m) => m.id.includes("llama")) ??
-                      models[0];
-        const moderate = models.find((m) => m.id.includes("sonnet")) ??
-                         models.find((m) => m.id.includes("gpt-4o-mini")) ??
-                         models.find((m) => m.id.includes("llama")) ??
-                         models[0];
-        const light = models.find((m) => m.id.includes("haiku")) ??
-                      models.find((m) => m.id.includes("mini")) ??
-                      models.find((m) => m.id.includes("llama")) ??
-                      models[0];
+        const ids = models.map((m) => m.id);
+
+        // Pick a model for a tier using a list of patterns (checked in order).
+        // Each pattern is a substring match against the model ID (case-insensitive).
+        // Returns the first matching model ID, or undefined.
+        const pick = (patterns: string[]): string | undefined =>
+          ids.find((id) => patterns.some((pat) => id.toLowerCase().includes(pat)));
+
+        // Heavy: most capable models (opus, o1, frontier, etc.)
+        const heavy = pick(["opus", "o1", "o3", "frontier", "gpt-4-turbo", "gpt-4o", "llama-70", "llama-405", "deepseek"])
+          ?? ids[0];
+
+        // Moderate: balanced models (sonnet, balanced, gpt-4o-mini, etc.)
+        // Exclude the heavy pick so tiers get distinct models
+        const moderate = pick(["sonnet", "balanced", "gpt-4o-mini", "gpt-4-mini", "llama-8", "mistral-large"])
+          ?? ids.find((id) => id !== heavy)
+          ?? ids[0];
+
+        // Light: fast/cheap models (haiku, efficient, small, mini, etc.)
+        // Exclude heavy and moderate picks
+        const light = pick(["haiku", "efficient", "small", "mini", "flash", "llama-3", "mistral-small", "free"])
+          ?? ids.find((id) => id !== heavy && id !== moderate)
+          ?? ids.find((id) => id !== heavy)
+          ?? ids[0];
+
         await Promise.all([
-          api.models.updateTier("heavy", providerWithModels.id, heavy.id),
-          api.models.updateTier("moderate", providerWithModels.id, moderate.id),
-          api.models.updateTier("light", providerWithModels.id, light.id),
+          api.models.updateTier("heavy", providerWithModels.id, heavy),
+          api.models.updateTier("moderate", providerWithModels.id, moderate),
+          api.models.updateTier("light", providerWithModels.id, light),
         ]);
         await onRefresh();
       }
