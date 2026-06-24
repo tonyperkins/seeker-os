@@ -394,11 +394,10 @@ function ProviderStep({
           ?? ids.find((id) => id !== heavy)
           ?? ids[0];
 
-        await Promise.all([
-          api.models.updateTier("heavy", providerWithModels.id, heavy),
-          api.models.updateTier("moderate", providerWithModels.id, moderate),
-          api.models.updateTier("light", providerWithModels.id, light),
-        ]);
+        // Save sequentially to avoid race conditions on providers.yml
+        await api.models.updateTier("heavy", providerWithModels.id, heavy);
+        await api.models.updateTier("moderate", providerWithModels.id, moderate);
+        await api.models.updateTier("light", providerWithModels.id, light);
         await onRefresh();
       }
     } catch (e) {

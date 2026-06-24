@@ -390,6 +390,11 @@ class TaskUpdateRequest(BaseModel):
     model: str | None = None
 
 
+import threading as _threading
+
+_providers_yml_lock = _threading.Lock()
+
+
 def _write_providers_yml(raw: dict) -> None:
     """Write the providers.yml config back to disk."""
     import yaml
@@ -415,25 +420,27 @@ def _read_providers_yml() -> dict:
 @router.put("/tiers/{tier}", response_model=TierMappingResponse)
 def update_tier(tier: str, body: TierUpdateRequest):
     """Update a tier mapping in providers.yml."""
-    raw = _read_providers_yml()
-    tiers = raw.setdefault("tiers", {})
-    tiers[tier] = {"provider": body.provider, "model": body.model}
-    _write_providers_yml(raw)
+    with _providers_yml_lock:
+        raw = _read_providers_yml()
+        tiers = raw.setdefault("tiers", {})
+        tiers[tier] = {"provider": body.provider, "model": body.model}
+        _write_providers_yml(raw)
     return TierMappingResponse(provider=body.provider, model=body.model)
 
 
 @router.put("/tasks/{task}", response_model=TaskOverrideResponse)
 def update_task(task: str, body: TaskUpdateRequest):
     """Update a task override in providers.yml."""
-    raw = _read_providers_yml()
-    tasks = raw.setdefault("tasks", {})
-    entry: dict = {"tier": body.tier}
-    if body.provider is not None:
-        entry["provider"] = body.provider
-    if body.model is not None:
-        entry["model"] = body.model
-    tasks[task] = entry
-    _write_providers_yml(raw)
+    with _providers_yml_lock:
+        raw = _read_providers_yml()
+        tasks = raw.setdefault("tasks", {})
+        entry: dict = {"tier": body.tier}
+        if body.provider is not None:
+            entry["provider"] = body.provider
+        if body.model is not None:
+            entry["model"] = body.model
+        tasks[task] = entry
+        _write_providers_yml(raw)
     return TaskOverrideResponse(tier=body.tier, provider=body.provider, model=body.model)
 
 
