@@ -1,12 +1,12 @@
 import Link from "next/link";
 import {
-  TrendingUp,
   CheckCircle2,
   XCircle,
   Layers,
   Clock,
   ArrowRight,
   Trophy,
+  FileSearch,
 } from "lucide-react";
 import {
   Card,
@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { RunPipelineButton } from "@/components/run-pipeline-button";
-import { api, type FunnelStats, type PipelineRunRecord, type JobSummary } from "@/lib/api";
+import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary } from "@/lib/api";
 
 function StatCard({
   label,
@@ -75,61 +75,26 @@ function RunStatusBadge({ status }: { status: string }) {
   return <Badge variant={variant}>{status}</Badge>;
 }
 
-const TIER_LABELS: Record<string, string> = {
-  "1": "Tier 1: Discovery",
-  "2": "Tier 2: Filtering",
-  "3": "Tier 3: JD Fetch",
-  "4": "Tier 4: Scoring",
-  "5": "Tier 5: Ranking",
+const STAGE_COLORS: Record<number, string> = {
+  0: "bg-slate-400/70 dark:bg-slate-600/70",
+  1: "bg-sky-500/80 dark:bg-sky-600/80",
+  2: "bg-indigo-500/80 dark:bg-indigo-600/80",
+  4: "bg-purple-500/80 dark:bg-purple-600/80",
 };
 
-const TIER_COLORS: Record<string, string> = {
-  "1": "bg-sky-500/80 dark:bg-sky-600/80",
-  "2": "bg-indigo-500/80 dark:bg-indigo-600/80",
-  "3": "bg-violet-500/80 dark:bg-violet-600/80",
-  "4": "bg-purple-500/80 dark:bg-purple-600/80",
-  "5": "bg-fuchsia-500/80 dark:bg-fuchsia-600/80",
-};
+function FunnelChart({ stages }: { stages: FunnelStage[] }) {
+  const maxCount = Math.max(...stages.map((s) => s.count), 1);
 
-function FunnelChart({
-  tierEntries,
-  totalJobs,
-}: {
-  tierEntries: [string, number][];
-  totalJobs: number;
-}) {
-  const maxCount = Math.max(totalJobs, ...tierEntries.map(([, c]) => c), 1);
-
-  // Build funnel stages: start with total, then each tier
-  const stages: { label: string; count: number; pct: number; color: string }[] = [];
-
-  // Add "All jobs" as the top of the funnel
-  stages.push({
-    label: "All Jobs",
-    count: totalJobs,
-    pct: 100,
-    color: "bg-slate-400/70 dark:bg-slate-600/70",
-  });
-
-  for (const [tier, count] of tierEntries) {
-    const pct = (count / maxCount) * 100;
-    stages.push({
-      label: TIER_LABELS[tier] || `Tier ${tier}`,
-      count,
-      pct: Math.max(pct, 5), // min 5% width so small bars are visible
-      color: TIER_COLORS[tier] || "bg-primary/60",
-    });
-  }
-
-  // Calculate drop-off between stages
   return (
     <div className="flex flex-col gap-2">
       {stages.map((stage, i) => {
+        const pct = (stage.count / maxCount) * 100;
         const prevCount = i > 0 ? stages[i - 1].count : null;
         const dropoff = prevCount != null ? prevCount - stage.count : 0;
         const dropoffPct = prevCount != null && prevCount > 0
           ? Math.round((dropoff / prevCount) * 100)
           : 0;
+        const color = STAGE_COLORS[stage.tier] || "bg-primary/60";
 
         return (
           <div key={stage.label} className="flex flex-col gap-1">
@@ -146,10 +111,10 @@ function FunnelChart({
             </div>
             <div className="h-7 w-full overflow-hidden rounded-md bg-muted/40">
               <div
-                className={`flex h-full items-center justify-end rounded-md px-2 text-xs font-medium text-white transition-all ${stage.color}`}
-                style={{ width: `${stage.pct}%` }}
+                className={`flex h-full items-center justify-end rounded-md px-2 text-xs font-medium text-white transition-all ${color}`}
+                style={{ width: `${Math.max(pct, 5)}%` }}
               >
-                {stage.count > 0 && stage.pct > 15 && stage.count}
+                {stage.count > 0 && pct > 15 && stage.count}
               </div>
             </div>
           </div>
@@ -190,8 +155,10 @@ export default async function DashboardPage() {
     );
   }
 
-  const byTier = funnel?.by_tier ?? {};
-  const tierEntries = Object.entries(byTier).sort((a, b) => a[0].localeCompare(b[0]));
+  const funnelStages = funnel?.funnel ?? [];
+  const jdFetchTotal = funnel?.jd_fetch_total ?? 0;
+  const jdFetchSuccess = funnel?.jd_fetch_success ?? 0;
+  const jdFetchPct = jdFetchTotal > 0 ? Math.round((jdFetchSuccess / jdFetchTotal) * 100) : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -209,18 +176,24 @@ export default async function DashboardPage() {
         <StatCard label="Total Jobs" value={funnel?.total_jobs ?? 0} icon={Layers} />
         <StatCard label="Ready" value={funnel?.ready ?? 0} icon={CheckCircle2} tone="good" />
         <StatCard label="Rejected" value={funnel?.rejected ?? 0} icon={XCircle} tone="bad" />
-        <StatCard label="Discovered" value={funnel?.discovered ?? 0} icon={TrendingUp} />
+        <StatCard
+          label="JD Fetch Rate"
+          value={jdFetchTotal > 0 ? `${jdFetchSuccess}/${jdFetchTotal} (${jdFetchPct}%)` : "—"}
+          icon={FileSearch}
+        />
       </div>
 
       {/* Pipeline funnel */}
-      {tierEntries.length > 0 && (
+      {funnelStages.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Pipeline Funnel</CardTitle>
-            <CardDescription>Jobs surviving each tier — narrowing toward ready</CardDescription>
+            <CardDescription>
+              Cumulative jobs surviving each stage — narrowing toward scored
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <FunnelChart tierEntries={tierEntries} totalJobs={funnel?.total_jobs ?? 0} />
+            <FunnelChart stages={funnelStages} />
           </CardContent>
         </Card>
       )}

@@ -221,7 +221,14 @@ class FunnelStats(BaseModel):
     rejected: int = 0
     duplicate_flagged: int = 0
     capped: int = 0
-    by_tier: dict[int, int] = {}
+    # Cumulative funnel: jobs that reached AT LEAST this tier
+    funnel: list[dict] = []  # [{tier: 1, label: "Discovery", count: 142}, ...]
+    # JD fetch stats (enrichment, not a funnel gate)
+    jd_fetch_total: int = 0  # jobs that passed tier 2 and need JD fetch
+    jd_fetch_success: int = 0
+    jd_fetch_failed: int = 0
+    jd_fetch_pending: int = 0
+    by_tier: dict[int, int] = {}  # raw tier_passed counts (kept for compatibility)
     by_status: dict[str, int] = {}
     by_ats_source: dict[str, int] = {}
     rejection_reasons: dict[str, int] = {}

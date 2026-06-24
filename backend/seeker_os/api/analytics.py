@@ -11,7 +11,11 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 @router.get("/funnel", response_model=FunnelStats)
 def get_funnel_stats():
-    """Pipeline funnel stats — counts at each tier and by status."""
+    """Pipeline funnel stats — cumulative counts at each tier and by status.
+
+    The funnel is: All Jobs → Tier 1 (Discovery) → Tier 2 (Filtering) → Scored.
+    JD fetch is enrichment, not a funnel gate — shown as a separate metric.
+    """
     db = get_connection()
 
     # Total
@@ -23,11 +27,40 @@ def get_funnel_stats():
     ).fetchall()
     by_status = {r["status"]: r["c"] for r in status_rows}
 
-    # By tier
+    # By tier (raw counts — jobs whose highest passed tier is N)
     tier_rows = db.execute(
         "SELECT tier_passed, COUNT(*) as c FROM jobs GROUP BY tier_passed"
     ).fetchall()
     by_tier = {r["tier_passed"]: r["c"] for r in tier_rows}
+
+    # Cumulative funnel: jobs that reached AT LEAST tier N
+    # tier_passed >= 1 means passed discovery
+    # tier_passed >= 2 means passed hard filters
+    # tier_passed >= 4 means scored (tier 3 = JD fetch is enrichment, not a gate)
+    passed_t1 = db.execute("SELECT COUNT(*) as c FROM jobs WHERE tier_passed >= 1").fetchone()["c"]
+    passed_t2 = db.execute("SELECT COUNT(*) as c FROM jobs WHERE tier_passed >= 2").fetchone()["c"]
+    scored = db.execute("SELECT COUNT(*) as c FROM jobs WHERE tier_passed >= 4").fetchone()["c"]
+
+    funnel = [
+        {"tier": 0, "label": "All Jobs", "count": total},
+        {"tier": 1, "label": "Discovery", "count": passed_t1},
+        {"tier": 2, "label": "Filtering", "count": passed_t2},
+        {"tier": 4, "label": "Scored", "count": scored},
+    ]
+
+    # JD fetch stats — for jobs that passed tier 2 (the ones that need JD fetch)
+    jd_fetch_rows = db.execute(
+        """
+        SELECT jd_fetch_status, COUNT(*) as c
+        FROM jobs WHERE tier_passed >= 2
+        GROUP BY jd_fetch_status
+        """
+    ).fetchall()
+    jd_stats = {r["jd_fetch_status"]: r["c"] for r in jd_fetch_rows}
+    jd_fetch_total = sum(jd_stats.values())
+    jd_fetch_success = jd_stats.get("fetched", 0)
+    jd_fetch_failed = jd_stats.get("failed", 0)
+    jd_fetch_pending = jd_stats.get("pending", 0)
 
     # By ATS source
     ats_rows = db.execute(
@@ -70,6 +103,11 @@ def get_funnel_stats():
         rejected=by_status.get("rejected", 0),
         duplicate_flagged=by_status.get("duplicate_flagged", 0),
         capped=by_status.get("capped", 0),
+        funnel=funnel,
+        jd_fetch_total=jd_fetch_total,
+        jd_fetch_success=jd_fetch_success,
+        jd_fetch_failed=jd_fetch_failed,
+        jd_fetch_pending=jd_fetch_pending,
         by_tier=by_tier,
         by_status=by_status,
         by_ats_source=by_ats,
