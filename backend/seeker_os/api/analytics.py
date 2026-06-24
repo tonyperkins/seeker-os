@@ -33,18 +33,17 @@ def get_funnel_stats():
     ).fetchall()
     by_tier = {r["tier_passed"]: r["c"] for r in tier_rows}
 
-    # Cumulative funnel: jobs that reached AT LEAST tier N
-    # tier_passed >= 1 means passed discovery
+    # Cumulative funnel: jobs that reached AT LEAST each stage
+    # Every job in the DB has tier_passed >= 1 (that's how it got inserted),
+    # so "All Jobs" and "Discovery" are the same — we collapse them.
     # tier_passed >= 2 means passed hard filters
     # tier_passed >= 4 means scored (tier 3 = JD fetch is enrichment, not a gate)
-    passed_t1 = db.execute("SELECT COUNT(*) as c FROM jobs WHERE tier_passed >= 1").fetchone()["c"]
     passed_t2 = db.execute("SELECT COUNT(*) as c FROM jobs WHERE tier_passed >= 2").fetchone()["c"]
     scored = db.execute("SELECT COUNT(*) as c FROM jobs WHERE tier_passed >= 4").fetchone()["c"]
 
     funnel = [
-        {"tier": 0, "label": "All Jobs", "count": total},
-        {"tier": 1, "label": "Discovery", "count": passed_t1},
-        {"tier": 2, "label": "Filtering", "count": passed_t2},
+        {"tier": 1, "label": "Discovered", "count": total},
+        {"tier": 2, "label": "Passed Filters", "count": passed_t2},
         {"tier": 4, "label": "Scored", "count": scored},
     ]
 

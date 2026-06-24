@@ -76,7 +76,6 @@ function RunStatusBadge({ status }: { status: string }) {
 }
 
 const STAGE_COLORS: Record<number, string> = {
-  0: "bg-slate-400/70 dark:bg-slate-600/70",
   1: "bg-sky-500/80 dark:bg-sky-600/80",
   2: "bg-indigo-500/80 dark:bg-indigo-600/80",
   4: "bg-purple-500/80 dark:bg-purple-600/80",
