@@ -31,6 +31,7 @@ import { JobActions } from "@/components/job-actions";
 import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { JDRenderer } from "@/components/jd-renderer";
 import { api, type JobDetail } from "@/lib/api";
+import { formatDate } from "@/lib/date";
 
 function formatComp(job: JobDetail): string {
   if (job.comp_min == null && job.comp_max == null) return "Not listed";
@@ -40,15 +41,6 @@ function formatComp(job: JobDetail): string {
   }
   if (job.comp_min != null) return `${fmt(job.comp_min)}+`;
   return `≤${fmt(job.comp_max as number)}`;
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 function InfoRow({

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from seeker_os.config import SourceConfig, SourcesConfig
+from seeker_os.config import SourcesConfig
 from seeker_os.discovery.cache import DiskCache
 from seeker_os.discovery.sources.base import SourceAdapter
 from seeker_os.discovery.sources.hiring_cafe import HiringCafeAdapter

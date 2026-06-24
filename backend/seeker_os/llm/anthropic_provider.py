@@ -49,7 +49,7 @@ def _load_oauth_token(token_path: str) -> str:
         return data["accessToken"]
     if "access_token" in data:
         return data["access_token"]
-    raise ValueError(f"OAuth token file has no accessToken/access_token field")
+    raise ValueError("OAuth token file has no accessToken/access_token field")
 
 
 def _is_token_expired(token_path: str, skew_seconds: int = 60) -> bool:

@@ -30,17 +30,7 @@ import { RevalidateButton } from "@/components/revalidate-button";
 import { ResumeEditor } from "@/components/resume-editor";
 import { DeleteResumeButton } from "@/components/delete-resume-button";
 import { api, type ResumeDetail } from "@/lib/api";
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { formatDateTime } from "@/lib/date";
 
 function severityVariant(severity: string) {
   switch (severity.toLowerCase()) {

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from seeker_os.models import JobCard, SourcePage, SourceQuery
+from seeker_os.models import SourcePage, SourceQuery
 
 
 @runtime_checkable

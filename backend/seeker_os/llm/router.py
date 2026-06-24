@@ -10,9 +10,8 @@ Resolution order:
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
-from seeker_os.config import Settings, ProviderConfig, ProvidersConfig, TierMapping, TaskOverride
+from seeker_os.config import Settings, ProviderConfig, ProvidersConfig
 from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth
 from seeker_os.llm.base import LLMProvider
 from seeker_os.llm.anthropic_provider import AnthropicProvider

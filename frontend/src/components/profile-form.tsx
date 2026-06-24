@@ -198,7 +198,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function TagInput({ values, onChange, placeholder }: { values: string[]; onChange: (values: string[]) => void; placeholder?: string }) {
+function TagInput({ values, onChange, placeholder }: { values: string[]; onChange: (_values: string[]) => void; placeholder?: string }) {
   const [input, setInput] = useState("");
 
   function add() {

@@ -522,7 +522,7 @@ function ProviderCard({
   provider: ProvidersConfigResponse["providers"][number];
   fetching: boolean;
   onFetchModels: () => void;
-  onToggleEnabled: (enabled: boolean) => void;
+  onToggleEnabled: (_enabled: boolean) => void;
   onConnectAnthropic: () => void;
   onEdit: () => void;
   editingOpen: boolean;
@@ -902,7 +902,7 @@ function ParseStep({
 }: {
   hasResume: boolean;
   parseResult: ResumeParseResult | null;
-  onParsed: (result: ResumeParseResult) => void;
+  onParsed: (_result: ResumeParseResult) => void;
   onBack: () => void;
   onNext: () => void;
 }) {

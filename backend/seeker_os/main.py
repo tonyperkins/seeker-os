@@ -200,7 +200,7 @@ def cmd_models(args: argparse.Namespace) -> None:
     """LLM model management commands."""
     from seeker_os.config import Settings
     from seeker_os.llm.router import ModelRouter
-    from seeker_os.llm.cache import get_cached_models, save_cached_models
+    from seeker_os.llm.cache import save_cached_models
 
     settings = Settings()
 

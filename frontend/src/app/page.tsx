@@ -19,17 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { RunPipelineButton } from "@/components/run-pipeline-button";
 import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
+import { formatDateTime } from "@/lib/date";
 
-
-function formatRunDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function RunStatusBadge({ status }: { status: string }) {
   const variant =
@@ -243,7 +234,7 @@ export default async function DashboardPage() {
                 {runs.slice(0, 8).map((run) => (
                   <div key={run.id} className="flex items-center gap-3 py-2.5 text-sm">
                     <Clock className="size-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{formatRunDate(run.started_at)}</span>
+                    <span className="text-muted-foreground">{formatDateTime(run.started_at)}</span>
                     <span className="font-mono text-xs text-muted-foreground">
                       {run.run_id.slice(0, 8)}
                     </span>

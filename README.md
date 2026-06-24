@@ -27,7 +27,9 @@ automation.
 
 ## Status
 
-**Planning phase** — design complete, implementation not started.
+**Phases 1-3 complete** — Core pipeline, web dashboard, and resume generation are
+fully implemented. Phase 4 (manual job entry & capture) is planned. See [docs/PLAN.md](docs/PLAN.md)
+for the full roadmap.
 
 ## Tech Stack
 

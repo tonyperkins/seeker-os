@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import queue
+import queue as queue_module
 import threading
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from seeker_os.api.schemas import (
-    PipelineRunRequest, PipelineRunSummary, PipelineRunRecord, MessageResponse,
+    PipelineRunRequest, PipelineRunSummary, PipelineRunRecord,
 )
 from seeker_os.database import get_connection
 
@@ -65,7 +66,11 @@ def run_pipeline_stream(body: PipelineRunRequest):
 
     def event_stream():
         while True:
-            item = event_queue.get(timeout=300)
+            try:
+                item = event_queue.get(timeout=300)
+            except queue_module.Empty:
+                yield 'data: {"type":"error","message":"Pipeline timeout"}\n\n'
+                break
             if isinstance(item, tuple):
                 if item[0] == "done":
                     yield f"event: done\ndata: {json.dumps(item[1].model_dump())}\n\n"

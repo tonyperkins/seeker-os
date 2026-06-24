@@ -21,7 +21,7 @@ export function AnthropicAuthDialog({
   onSuccess,
 }: {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (_open: boolean) => void;
   onSuccess?: () => void;
 }) {
   const [step, setStep] = useState<"idle" | "initiating" | "waiting" | "done" | "error">("idle");

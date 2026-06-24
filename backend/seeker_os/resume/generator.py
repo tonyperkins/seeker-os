@@ -14,7 +14,7 @@ from pathlib import Path
 from seeker_os.config import Settings
 from seeker_os.database import get_connection, json_decode
 from seeker_os.llm.router import ModelRouter
-from seeker_os.resume.validator import AccuracyValidator, ValidationResult
+from seeker_os.resume.validator import AccuracyValidator
 
 
 SYSTEM_PROMPT = """You are an expert resume writer who tailors resumes for specific job descriptions.

@@ -145,7 +145,6 @@ def register_keys(
 
     Registers composite key in dedup_registry (url_hash is in jobs table via UNIQUE).
     """
-    from seeker_os.database import json_encode
     from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc).isoformat()

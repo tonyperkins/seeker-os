@@ -17,7 +17,7 @@ from typing import Any
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # Path helpers
@@ -109,7 +109,7 @@ class ResumePrefs(BaseModel):
     output_dir: str
     contact_urls: list[str] = []
 
-    @field_validator("master_path", "output_dir")
+    @field_validator("master_path", "output_dir", "accuracy_rules_path")
     @classmethod
     def _expand(cls, v: str) -> str:
         return expand_path(v)

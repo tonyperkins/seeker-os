@@ -72,7 +72,12 @@ export function RunPipelineButton({ setupComplete = true }: { setupComplete?: bo
           } else if (line.startsWith("data: ")) {
             const data = line.slice(6);
             if (currentEvent === "done") {
-              finalResult = JSON.parse(data);
+              try {
+                finalResult = JSON.parse(data);
+              } catch {
+                streamError = "Failed to parse pipeline response";
+                break;
+              }
             } else if (currentEvent === "error") {
               const parsed = JSON.parse(data);
               streamError = parsed.error;

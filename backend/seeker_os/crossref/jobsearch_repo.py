@@ -7,7 +7,6 @@ See docs/PHASE1_SPEC.md §3.9 and docs/PLAN.md §9.
 
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 

@@ -6,7 +6,6 @@ See docs/PHASE1_SPEC.md §3.4 for the full spec.
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
 
 from seeker_os.config import FilterConfig, ProfileConfig, TitleFilters

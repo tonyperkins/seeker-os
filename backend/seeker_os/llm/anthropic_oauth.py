@@ -20,7 +20,6 @@ import secrets
 import time
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
 from seeker_os.config import DATA_DIR
 

@@ -19,15 +19,7 @@ import {
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/delete-button";
 import { api, type ResumeSummary } from "@/lib/api";
-
-function formatDate(iso: string): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
+import { formatDate } from "@/lib/date";
 
 export default function ResumesPage() {
   return (

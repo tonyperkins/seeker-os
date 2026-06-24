@@ -91,7 +91,7 @@ the architecture is product-grade.
 # Backend
 cd backend
 pip install -e .
-uvicorn seeker_os.main:app --reload --port 8000
+uvicorn seeker_os.api.app:app --reload --port 8000
 
 # Frontend
 cd frontend

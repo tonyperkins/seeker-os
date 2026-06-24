@@ -123,7 +123,7 @@ export function ResumeEditor({
         )}
 
         {mode === "preview" ? (
-          <ScrollArea className="h-[600px] rounded-md border border-border bg-white dark:bg-zinc-950 shadow-inner">
+          <ScrollArea className="h-[600px] rounded-md border border-border bg-background shadow-inner">
             <div className="resume-preview p-8">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{text || "No resume text available."}</ReactMarkdown>
             </div>

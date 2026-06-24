@@ -61,7 +61,6 @@ def export_docx(markdown_path: Path, output_path: Path | None = None) -> Path | 
     """
     try:
         from docx import Document
-        from docx.shared import Pt, Inches
     except ImportError:
         return None
 

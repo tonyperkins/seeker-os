@@ -168,7 +168,7 @@ class AccuracyValidator:
 
     def revalidate(self, resume_id: int) -> ValidationResult:
         """Re-validate a stored resume from the database."""
-        from seeker_os.database import get_connection, json_decode
+        from seeker_os.database import get_connection
 
         db = get_connection()
         row = db.execute("SELECT * FROM resumes WHERE id = ?", (resume_id,)).fetchone()

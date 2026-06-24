@@ -10,10 +10,8 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from seeker_os.api.schemas import ResumeParseResult, ContactInfoSchema
-
-from seeker_os.api.schemas import MessageResponse
-from seeker_os.database import get_connection, json_decode
+from seeker_os.api.schemas import ResumeParseResult, ContactInfoSchema, MessageResponse
+from seeker_os.database import get_connection
 
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 

@@ -125,6 +125,8 @@ MIGRATIONS: list[str] = [
     CREATE INDEX IF NOT EXISTS idx_jobs_source_job_id ON jobs(source_job_id);
     CREATE INDEX IF NOT EXISTS idx_dedup_key_value ON dedup_registry(key_value);
     CREATE INDEX IF NOT EXISTS idx_dedup_key_type ON dedup_registry(key_type);
+    CREATE INDEX IF NOT EXISTS idx_jobs_tier_passed ON jobs(tier_passed);
+    CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score);
     """,
     # v2: resumes table (Phase 3)
     """

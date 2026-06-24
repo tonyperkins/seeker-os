@@ -218,7 +218,7 @@ export function FilterForm({
   );
 }
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (_v: boolean) => void }) {
   return (
     <label className="flex items-center gap-2 rounded-md border border-border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
       <input
@@ -232,7 +232,7 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   );
 }
 
-function TagInputField({ label, values, onChange, placeholder }: { label: string; values: string[]; onChange: (values: string[]) => void; placeholder?: string }) {
+function TagInputField({ label, values, onChange, placeholder }: { label: string; values: string[]; onChange: (_values: string[]) => void; placeholder?: string }) {
   const [input, setInput] = useState("");
 
   function add() {

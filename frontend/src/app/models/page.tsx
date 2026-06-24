@@ -531,7 +531,7 @@ function TaskRow({
   providers: ProviderInfoResponse[];
   providerModels: Record<string, ModelInfoResponse[]>;
   saving: boolean;
-  onSave: (task: string, tier: string, provider: string | null, model: string | null) => void;
+  onSave: (_task: string, _tier: string, _provider: string | null, _model: string | null) => void;
 }) {
   const [tier, setTier] = useState(currentTier);
   const [useOverride, setUseOverride] = useState(currentProvider !== null || currentModel !== null);

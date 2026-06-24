@@ -13,7 +13,7 @@ from typing import Callable
 import sqlite3
 
 from seeker_os.config import Settings
-from seeker_os.database import get_connection, json_encode, json_decode, DB_PATH
+from seeker_os.database import get_connection, json_encode, json_decode
 from seeker_os.discovery.cache import DiskCache
 from seeker_os.discovery.engine import fetch_all_queries
 from seeker_os.discovery.sources.registry import build_adapters

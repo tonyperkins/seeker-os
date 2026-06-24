@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from seeker_os.api.schemas import MessageResponse
@@ -249,7 +249,6 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
     API keys are written as env var references (${VAR_NAME}) to .env,
     not stored literally in providers.yml.
     """
-    import os
     import yaml
     from seeker_os.config import Settings, CONFIG_DIR, PROJECT_ROOT
 

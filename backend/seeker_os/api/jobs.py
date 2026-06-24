@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -91,96 +90,103 @@ def list_jobs(
 ):
     """List jobs with optional filters."""
     db = get_connection()
-    query = "SELECT * FROM jobs WHERE 1=1"
-    params: list = []
+    try:
+        query = "SELECT * FROM jobs WHERE 1=1"
+        params: list = []
 
-    if status:
-        query += " AND status = ?"
-        params.append(status)
-    if min_score is not None:
-        query += " AND score >= ?"
-        params.append(min_score)
-    if company:
-        query += " AND company LIKE ?"
-        params.append(f"%{company}%")
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if min_score is not None:
+            query += " AND score >= ?"
+            params.append(min_score)
+        if company:
+            query += " AND company LIKE ?"
+            params.append(f"%{company}%")
 
-    query += " ORDER BY"
-    if status == "ready":
-        query += " score DESC,"
-    query += " discovered_at DESC LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
+        query += " ORDER BY"
+        if status == "ready":
+            query += " score DESC,"
+        query += " discovered_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
 
-    rows = db.execute(query, params).fetchall()
-    db.close()
-    return [_row_to_summary(r) for r in rows]
+        rows = db.execute(query, params).fetchall()
+        return [_row_to_summary(r) for r in rows]
+    finally:
+        db.close()
 
 
 @router.get("/{job_id}", response_model=JobDetail)
 def get_job(job_id: int):
     """Get full job detail."""
     db = get_connection()
-    row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    db.close()
-    if not row:
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-    return _row_to_detail(row)
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        return _row_to_detail(row)
+    finally:
+        db.close()
 
 
 @router.patch("/{job_id}", response_model=MessageResponse)
 def update_job(job_id: int, update: JobUpdate):
     """Update job status, notes, or pinned state."""
     db = get_connection()
-    row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    if not row:
-        db.close()
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    now = datetime.now(timezone.utc).isoformat()
-    if update.status is not None:
-        db.execute("UPDATE jobs SET status=?, updated_at=? WHERE id=?", (update.status, now, job_id))
-    if update.is_pinned is not None:
-        db.execute("UPDATE jobs SET is_pinned=?, updated_at=? WHERE id=?", (update.is_pinned, now, job_id))
-    db.commit()
-    db.close()
-    return MessageResponse(message=f"Job {job_id} updated")
+        now = datetime.now(timezone.utc).isoformat()
+        if update.status is not None:
+            db.execute("UPDATE jobs SET status=?, updated_at=? WHERE id=?", (update.status, now, job_id))
+        if update.is_pinned is not None:
+            db.execute("UPDATE jobs SET is_pinned=?, updated_at=? WHERE id=?", (update.is_pinned, now, job_id))
+        db.commit()
+        return MessageResponse(message=f"Job {job_id} updated")
+    finally:
+        db.close()
 
 
 @router.post("/{job_id}/reject", response_model=MessageResponse)
 def reject_job(job_id: int, body: JobReject):
     """Reject a job with a reason."""
     db = get_connection()
-    row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    if not row:
-        db.close()
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    now = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        "UPDATE jobs SET status='rejected', reject_reason=?, reject_details=?, updated_at=? WHERE id=?",
-        (body.reason, body.details, now, job_id),
-    )
-    db.commit()
-    db.close()
-    return MessageResponse(message=f"Job {job_id} rejected: {body.reason}")
+        now = datetime.now(timezone.utc).isoformat()
+        db.execute(
+            "UPDATE jobs SET status='rejected', reject_reason=?, reject_details=?, updated_at=? WHERE id=?",
+            (body.reason, body.details, now, job_id),
+        )
+        db.commit()
+        return MessageResponse(message=f"Job {job_id} rejected: {body.reason}")
+    finally:
+        db.close()
 
 
 @router.post("/{job_id}/snooze", response_model=MessageResponse)
 def snooze_job(job_id: int, body: JobSnooze):
     """Snooze a job for N days (sets status to 'skipped')."""
     db = get_connection()
-    row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    if not row:
-        db.close()
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    now = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        "UPDATE jobs SET status='skipped', reject_reason=?, updated_at=? WHERE id=?",
-        (f"Snoozed for {body.days} days", now, job_id),
-    )
-    db.commit()
-    db.close()
-    return MessageResponse(message=f"Job {job_id} snoozed for {body.days} days")
+        now = datetime.now(timezone.utc).isoformat()
+        db.execute(
+            "UPDATE jobs SET status='skipped', reject_reason=?, updated_at=? WHERE id=?",
+            (f"Snoozed for {body.days} days", now, job_id),
+        )
+        db.commit()
+        return MessageResponse(message=f"Job {job_id} snoozed for {body.days} days")
+    finally:
+        db.close()
 
 
 @router.get("/{job_id}/cross-ref", response_model=dict)
@@ -190,18 +196,20 @@ def check_cross_ref(job_id: int):
     from seeker_os.crossref.jobsearch_repo import check_cross_reference
 
     db = get_connection()
-    row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    db.close()
-    if not row:
-        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-    settings = Settings()
-    if not settings.profile:
-        raise HTTPException(status_code=400, detail="Profile config not loaded")
+        settings = Settings()
+        if not settings.profile:
+            raise HTTPException(status_code=400, detail="Profile config not loaded")
 
-    result = check_cross_reference(
-        title=row["title"] or "",
-        company=row["company"] or "",
-        repo_path=settings.profile.cross_reference.repo_path,
-    )
-    return result.model_dump()
+        result = check_cross_reference(
+            title=row["title"] or "",
+            company=row["company"] or "",
+            repo_path=settings.profile.cross_reference.repo_path,
+        )
+        return result.model_dump()
+    finally:
+        db.close()
