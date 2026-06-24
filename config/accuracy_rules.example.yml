@@ -1,77 +1,73 @@
 # Seeker OS — Resume Accuracy Rules (EXAMPLE TEMPLATE)
 # Copy to accuracy_rules.yml and adjust. accuracy_rules.yml is .gitignore'd.
-# Schema is defined in Phase 1; validation begins in Phase 3.
-# See docs/ACCURACY_RULES.md for the full reference.
+# These rules are validated programmatically after every resume generation.
+# Violations are flagged for manual review (high severity blocks, medium warns).
+#
+# Rule types:
+#   disallowed_phrases    — phrases that must NOT appear in the generated resume
+#   forbidden_technologies — technologies that must NEVER be claimed
+#   required_phrases      — phrases that MUST appear (e.g. contact URLs)
+#   experience_anchor     — regex patterns for non-standard year counts
+#   education_omission    — regex patterns for education mentions to flag
+#
+# Severity: "high" (blocks — resume flagged as failed) or "medium" (warning only)
 
 rules:
-  - id: aws_depth
-    description: "Never claim deep AWS expertise or year count"
+  # --- Disallowed phrases: prevent overclaiming depth/expertise ---
+  - id: no_expert_claims
+    description: "Avoid claiming 'expert' or 'mastery' — show via impact, not adjectives"
     type: disallowed_phrases
-    phrases: ["deep aws expertise", "aws expert", "since aws launch"]
-    severity: high
-
-  - id: azure_depth
-    description: "Never claim deep independent Azure expertise"
-    type: disallowed_phrases
-    phrases: ["azure expert", "deep azure"]
-    severity: high
-
-  - id: gcp_depth
-    description: "Never claim production GCP depth"
-    type: disallowed_phrases
-    phrases: ["gcp experience", "google cloud production", "gcp expertise"]
-    severity: high
-
-  - id: powershell_depth
-    description: "Never claim PowerShell depth/mastery"
-    type: disallowed_phrases
-    phrases: ["powershell expert", "powershell mastery", "strong powershell"]
-    severity: high
-
-  - id: ansible_current
-    description: "Never claim Ansible as current competency"
-    type: disallowed_phrases
-    phrases: ["ansible expertise", "current ansible experience"]
-    severity: high
-
-  - id: k8s_depth
-    description: "Never claim Kubernetes cluster administration depth"
-    type: disallowed_phrases
-    phrases: ["kubernetes admin", "kubernetes expert", "deep k8s", "cluster administration", "k8s architect"]
-    severity: high
-
-  - id: go_primary
-    description: "Never claim Go as primary language"
-    type: disallowed_phrases
-    phrases: ["go expert", "go primary language", "deep go", "go proficiency"]
+    phrases:
+      - "expert in"
+      - "mastery of"
+      - "deep expertise"
+      - "world-class"
+      - "ninja"
+      - "rockstar"
+      - "guru"
     severity: medium
 
-  - id: spinnaker_depth
-    description: "Never claim Spinnaker operational depth"
+  - id: no_year_inflation
+    description: "Don't inflate years of experience beyond what's in the master resume"
     type: disallowed_phrases
-    phrases: ["spinnaker expertise", "operated spinnaker", "spinnaker administration"]
-    severity: medium
+    phrases:
+      - "20+ years"
+      - "30+ years"
+      - "15+ years in"
+      - "25+ years in"
+    severity: high
 
-  - id: experience_anchor
-    description: "Use '25+ years' only, attached to overall career not cloud"
-    type: disallowed_phrases
-    phrases: ["20+ years", "30+ years", "25+ years in cloud", "25+ years in devops"]
-    severity: medium
-
-  - id: education_omission
-    description: "Omit education entirely"
-    type: disallowed_phrases
-    phrases: ["devry", "electronics engineering technology"]
-    severity: medium
-
-  - id: never_claim_tech
+  # --- Forbidden technologies: never claim these ---
+  # Add technologies you don't know or don't want associated with your profile.
+  # The validator uses word-boundary matching (case-insensitive).
+  - id: forbidden_technologies
     description: "These technologies must NEVER appear in generated resumes"
     type: forbidden_technologies
-    technologies: ["ArgoCD", "Helm", "Kargo", "Consul", "Vault", "Rust", "Temporal"]
+    technologies: []
     severity: high
 
+  # --- Required phrases: ensure contact info is present ---
+  # Add your portfolio, LinkedIn, GitHub URLs here so they always appear.
   - id: contact_urls_visible
     description: "Always render full literal https:// URLs as visible text"
     type: required_phrases
-    phrases: ["https://example.com", "https://linkedin.com/in/example", "https://github.com/example"]
+    phrases: []
     severity: medium
+
+  # --- Experience anchor: flag non-standard year counts ---
+  - id: experience_anchor
+    description: "Use the standard experience anchor from your profile, not arbitrary counts"
+    type: experience_anchor
+    patterns:
+      - "(20|30)\\+\\s*years"
+    severity: medium
+
+  # --- Education omission: flag education mentions if you choose to omit ---
+  # Uncomment and add patterns if you want to flag education mentions.
+  # - id: education_omission
+  #   description: "Omit education entirely from generated resumes"
+  #   type: education_omission
+  #   patterns:
+  #     - "(?i)\\b(b\\.?s\\.?|b\\.?a\\.?|m\\.?s\\.?|m\\.?a\\.?|ph\\.?d|mba|associate|diploma)\\b"
+  #     - "(?i)\\b(university|college|institute)\\b"
+  #   severity: medium

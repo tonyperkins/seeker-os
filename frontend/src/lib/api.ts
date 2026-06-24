@@ -244,6 +244,20 @@ export interface FiltersData {
   };
 }
 
+export interface AccuracyRule {
+  id: string;
+  description: string;
+  type: "disallowed_phrases" | "forbidden_technologies" | "required_phrases" | "experience_anchor" | "education_omission";
+  severity: "high" | "medium";
+  phrases?: string[] | null;
+  technologies?: string[] | null;
+  patterns?: string[] | null;
+}
+
+export interface AccuracyRulesData {
+  rules: AccuracyRule[];
+}
+
 export interface ResumeParseResult {
   contact: ContactInfo;
   experience_years: number | null;
@@ -445,6 +459,14 @@ export const api = {
     get: () => fetchAPI<FiltersData>("/api/filters"),
     update: (data: Partial<FiltersData>) =>
       fetchAPI<MessageResponse>("/api/filters", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+  },
+  accuracyRules: {
+    get: () => fetchAPI<AccuracyRulesData>("/api/accuracy-rules"),
+    update: (data: AccuracyRulesData) =>
+      fetchAPI<MessageResponse>("/api/accuracy-rules", {
         method: "PUT",
         body: JSON.stringify(data),
       }),

@@ -16,20 +16,27 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { SettingsClient } from "@/components/settings-client";
 import { SettingsConfigCard } from "@/components/settings-config-card";
-import { api, type SettingsResponse, type ProfileData, type FiltersData } from "@/lib/api";
+import { AccuracyRulesCard } from "@/components/accuracy-rules-card";
+import { api, type SettingsResponse, type ProfileData, type FiltersData, type AccuracyRule } from "@/lib/api";
 
 export default async function SettingsPage() {
   let settings: SettingsResponse | null = null;
   let profile: ProfileData | null = null;
   let filters: FiltersData | null = null;
+  let accuracyRules: AccuracyRule[] = [];
   let error: string | null = null;
 
   try {
-    [settings, profile, filters] = await Promise.all([
+    const [s, p, f, ar] = await Promise.all([
       api.settings.get(),
       api.profile.get().catch(() => null),
       api.filters.get().catch(() => null),
+      api.accuracyRules.get().catch(() => null),
     ]);
+    settings = s;
+    profile = p;
+    filters = f;
+    accuracyRules = ar?.rules ?? [];
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load settings";
   }
@@ -112,6 +119,11 @@ export default async function SettingsPage() {
         profile={profile}
         filters={filters}
       />
+
+      <Separator />
+
+      {/* Accuracy Rules — editable resume validation constraints */}
+      <AccuracyRulesCard initialRules={accuracyRules} />
 
       <Separator />
 

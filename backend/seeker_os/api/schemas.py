@@ -262,6 +262,27 @@ class FiltersUpdate(BaseModel):
     title_filters: dict | None = None
 
 
+class AccuracyRule(BaseModel):
+    """A single accuracy rule for resume validation."""
+    id: str
+    description: str = ""
+    type: str  # disallowed_phrases, forbidden_technologies, required_phrases, experience_anchor, education_omission
+    severity: str = "medium"  # high or medium
+    phrases: list[str] | None = None
+    technologies: list[str] | None = None
+    patterns: list[str] | None = None
+
+
+class AccuracyRulesResponse(BaseModel):
+    """GET /api/accuracy-rules — all accuracy rules."""
+    rules: list[AccuracyRule]
+
+
+class AccuracyRulesUpdate(BaseModel):
+    """PUT /api/accuracy-rules — replace all accuracy rules."""
+    rules: list[AccuracyRule]
+
+
 class ResumeParseResult(BaseModel):
     """POST /api/resumes/parse — extracted data from resume."""
     contact: ContactInfoSchema = ContactInfoSchema()

@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import yaml
 from fastapi import APIRouter, HTTPException
 from seeker_os.api.schemas import (
     ProfileResponse, ProfileUpdate,
     FiltersResponse, FiltersUpdate,
+    AccuracyRulesResponse, AccuracyRulesUpdate, AccuracyRule,
     MessageResponse,
 )
-from seeker_os.config import Settings, ProfileConfig, FiltersConfig, FilterConfig, TitleFilters
-from seeker_os.config_writer import write_profile, write_filters
+from seeker_os.config import Settings, ProfileConfig, FiltersConfig, FilterConfig, TitleFilters, CONFIG_DIR
+from seeker_os.config_writer import write_profile, write_filters, write_accuracy_rules
 
 router = APIRouter(prefix="/api", tags=["profile"])
 
@@ -125,3 +127,63 @@ def update_filters(body: FiltersUpdate):
 
     path = write_filters(new_filter_config)
     return MessageResponse(message=f"Filters saved to {path.name}")
+
+
+# ---------------------------------------------------------------------------
+# Accuracy Rules
+# ---------------------------------------------------------------------------
+
+@router.get("/accuracy-rules", response_model=AccuracyRulesResponse)
+def get_accuracy_rules():
+    """Get all accuracy rules from accuracy_rules.yml."""
+    rules_path = CONFIG_DIR / "accuracy_rules.yml"
+    if not rules_path.exists():
+        return AccuracyRulesResponse(rules=[])
+    with open(rules_path) as f:
+        data = yaml.safe_load(f) or {}
+    raw_rules = data.get("rules", [])
+    rules = []
+    for r in raw_rules:
+        rules.append(AccuracyRule(
+            id=r.get("id", "unknown"),
+            description=r.get("description", ""),
+            type=r.get("type", ""),
+            severity=r.get("severity", "medium"),
+            phrases=r.get("phrases"),
+            technologies=r.get("technologies"),
+            patterns=r.get("patterns"),
+        ))
+    return AccuracyRulesResponse(rules=rules)
+
+
+@router.put("/accuracy-rules", response_model=MessageResponse)
+def update_accuracy_rules(body: AccuracyRulesUpdate):
+    """Replace all accuracy rules in accuracy_rules.yml."""
+    # Validate rule types
+    valid_types = {"disallowed_phrases", "forbidden_technologies", "required_phrases", "experience_anchor", "education_omission"}
+    for rule in body.rules:
+        if rule.type not in valid_types:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid rule type '{rule.type}' for rule '{rule.id}'. Valid types: {', '.join(sorted(valid_types))}",
+            )
+        if rule.severity not in ("high", "medium"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid severity '{rule.severity}' for rule '{rule.id}'. Must be 'high' or 'medium'.",
+            )
+
+    # Convert to plain dicts for the writer
+    rules_data = []
+    for rule in body.rules:
+        d = {"id": rule.id, "description": rule.description, "type": rule.type, "severity": rule.severity}
+        if rule.phrases is not None:
+            d["phrases"] = rule.phrases
+        if rule.technologies is not None:
+            d["technologies"] = rule.technologies
+        if rule.patterns is not None:
+            d["patterns"] = rule.patterns
+        rules_data.append(d)
+
+    path = write_accuracy_rules(rules_data)
+    return MessageResponse(message=f"Accuracy rules saved to {path.name}")
