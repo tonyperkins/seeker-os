@@ -199,6 +199,7 @@ class SettingsResponse(BaseModel):
     scoring: dict | None = None
     sources: dict | None = None
     profile_loaded: bool = False
+    profile_configured: bool = False
     queries_count: int = 0
 
 

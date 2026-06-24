@@ -33,11 +33,24 @@ def get_settings():
         for src in sources_data.get("sources", []):
             src.pop("api_key", None)
 
+    # Check if profile has real (non-placeholder) data
+    profile_configured = False
+    if settings.profile and settings.profile.user:
+        name = settings.profile.user.name or ""
+        email = settings.profile.user.email or ""
+        # Placeholder values from the example template
+        is_placeholder = (
+            name in ("", "Your Name")
+            or email in ("", "you@example.com")
+        )
+        profile_configured = not is_placeholder
+
     return SettingsResponse(
         filters=filters_data,
         scoring=scoring_data,
         sources=sources_data,
         profile_loaded=settings.profile is not None,
+        profile_configured=profile_configured,
         queries_count=len(settings.queries.queries) if settings.queries else 0,
     )
 

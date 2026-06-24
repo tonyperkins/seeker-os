@@ -177,6 +177,7 @@ export interface SettingsResponse {
   scoring: Record<string, unknown> | null;
   sources: Record<string, unknown> | null;
   profile_loaded: boolean;
+  profile_configured: boolean;
   queries_count: number;
 }
 

@@ -167,7 +167,7 @@ export default async function DashboardPage() {
   const jdFetchPct = jdFetchTotal > 0 ? Math.round((jdFetchSuccess / jdFetchTotal) * 100) : 0;
 
   // Detect new-install state: no provider, placeholder profile, no resume, or no jobs
-  const isProfilePlaceholder = !settings?.profile_loaded;
+  const isProfilePlaceholder = !settings?.profile_configured;
   const totalJobs = funnel?.total_jobs ?? 0;
   const hasProvider = (providers?.providers ?? []).some(
     (p) => p.enabled && (p.api_key_set || p.healthy === true) && p.models.length > 0,
