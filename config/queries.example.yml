@@ -1,0 +1,55 @@
+# Seeker OS — Search Queries (EXAMPLE TEMPLATE)
+# Copy to queries.yml and adjust. queries.yml is .gitignore'd.
+# All queries default to max_pages: 1 (page 0 only — stays within robots.txt).
+# Deeper pagination (max_pages: 2+) is explicit opt-in per query and crosses
+# the robots.txt pagination line. Use sparingly with conservative request timing.
+
+queries:
+  - source_id: hiring_cafe
+    slug: senior-sre-remote
+    label: "Senior SRE Remote"
+    commitment: full_time
+    max_pages: 1
+    enabled: true
+  - source_id: hiring_cafe
+    slug: staff-sre-remote
+    label: "Staff SRE Remote"
+    commitment: full_time
+    max_pages: 1
+    enabled: true
+  - source_id: hiring_cafe
+    slug: principal-sre-remote
+    label: "Principal SRE Remote"
+    commitment: full_time
+    max_pages: 1
+    enabled: true
+  - source_id: hiring_cafe
+    slug: senior-site-reliability-engineer-remote
+    label: "Senior Site Reliability Engineer"
+    commitment: full_time
+    max_pages: 1
+    enabled: true
+  - source_id: hiring_cafe
+    slug: staff-platform-engineer-remote
+    label: "Staff Platform Engineer"
+    commitment: full_time
+    max_pages: 1
+    enabled: true
+  - source_id: hiring_cafe
+    slug: principal-devops-engineer-remote
+    label: "Principal DevOps"
+    commitment: full_time
+    max_pages: 1
+    enabled: true
+  - source_id: hiring_cafe
+    slug: senior-devops-engineer-remote-us
+    label: "Senior DevOps US"
+    commitment: full_time
+    max_pages: 1
+    enabled: true
+  - source_id: hiring_cafe
+    slug: senior-infrastructure-engineer-remote
+    label: "Senior Infrastructure"
+    commitment: full_time
+    max_pages: 1
+    enabled: true

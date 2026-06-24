@@ -1,0 +1,67 @@
+# Seeker OS — User Profile (EXAMPLE TEMPLATE)
+# Copy to profile.yml and fill in your values. profile.yml is .gitignore'd.
+
+user:
+  name: "Your Name"
+  email: "you@example.com"
+  location: "Your City, ST"
+
+location:
+  remote_only: true
+  accepted_cities:
+    - austin
+    - leander
+    - cedar park
+    - round rock
+    - georgetown
+    - pflugerville
+    - taylor
+  accepted_states: [tx, texas]
+  rejected_cities: [new york, san francisco, seattle, chicago, boston, denver]
+
+comp:
+  floor: 150000              # hard reject if comp_max < this (ceiling below floor)
+  target: 165000             # positive scoring modifier at this level (comp_min >= target)
+  stretch: 220000            # ranking/display context only
+
+experience:
+  years: 25
+  anchor_phrase: "25+ years"  # the only acceptable experience claim
+
+employment:
+  commitment: "Full Time"     # required commitment type
+  reject_commitments: []      # e.g. ["Part Time", "Contract"]
+  role_type: "Individual Contributor"
+  reject_role_types: ["Manager", "Director", "VP", "Head of"]
+
+blacklist:
+  - example-company-1
+  - example-company-2
+
+resume:
+  master_path: "~/projects/job-search/resume/Your_Master_Resume.md"
+  accuracy_rules_path: "config/accuracy_rules.yml"
+  output_dir: "data/resumes"
+  contact_urls:
+    - "https://your-website.com"
+    - "https://linkedin.com/in/yourprofile"
+    - "https://github.com/yourusername"
+
+cross_reference:
+  repo_path: "~/projects/job-search"
+  auto_pull: true
+
+hard_rejects:
+  - reason: "FedRAMP/clearance required"
+    pattern: "fedramp|security clearance|active clearance|ts/sci|top secret"
+  - reason: "Customer-facing/solutions role"
+    pattern: "pre.?sales|solutions architect|customer success|technical account manager"
+  - reason: "Early career/junior"
+    pattern: "early.?career|entry.?level|new.?grad|junior|intern|associate"
+  - reason: "Defense/ITAR"
+    pattern: "defense contractor|itar|classified"
+  - reason: "Relocation required"
+    pattern: "relocation required"
+  - reason: "AI/ML Engineer (non-infra)"
+    pattern: "ai/ml engineer|machine learning engineer"
+    unless_pattern: "ml infra|ml platform|gpu infra|model serving|mlops"
