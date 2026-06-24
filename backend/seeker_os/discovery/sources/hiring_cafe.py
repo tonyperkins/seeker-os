@@ -128,6 +128,9 @@ class HiringCafeAdapter:
         title = job_info.get("title", "") or v5.get("core_job_title", "")
         core_title = v5.get("core_job_title", title)
 
+        # Company name may be missing — fall back through multiple sources
+        company = v5.get("company_name") or enriched.get("name") or ""
+
         return JobCard(
             source_id=self._id,
             source_job_id=raw_id,
@@ -137,7 +140,7 @@ class HiringCafeAdapter:
             apply_url=hit.get("apply_url", ""),
             title=title,
             core_title=core_title,
-            company=v5.get("company_name", enriched.get("name", "")),
+            company=company,
             company_homepage=enriched.get("homepage_uri"),
             location=v5.get("formatted_workplace_location", ""),
             workplace_type=v5.get("workplace_type", ""),
@@ -166,7 +169,9 @@ class HiringCafeAdapter:
         6. Cache response
         7. Return SourcePage
         """
-        url = f"{self.base_url}/jobs/{query.slug}?page={page}"
+        url = f"{self.base_url}/jobs/{query.slug}"
+        if page > 0:
+            url += f"?page={page}"
         html = self._fetch_html(url)
         data = self._extract_next_data(html)
 

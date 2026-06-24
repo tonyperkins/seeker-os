@@ -308,7 +308,11 @@ class Settings:
             self.profile = ProfileConfig(**self._load_yaml("profile.yml"))
 
         if (self.config_dir / "scoring_rubric.yml").exists():
-            self.scoring = ScoringConfig(**self._load_yaml("scoring_rubric.yml"))
+            scoring_data = self._load_yaml("scoring_rubric.yml")
+            # YAML has top-level 'scoring' key; unwrap it
+            if "scoring" in scoring_data:
+                scoring_data = scoring_data["scoring"]
+            self.scoring = ScoringConfig(**scoring_data)
 
         if (self.config_dir / "queries.yml").exists():
             self.queries = QueriesConfig(**self._load_yaml("queries.yml"))

@@ -26,12 +26,12 @@ class JobCard(BaseModel):
     apply_url: str
 
     # Job details (normalized)
-    title: str
-    core_title: str              # normalized/core job title
-    company: str
+    title: str = ""
+    core_title: str = ""         # normalized/core job title
+    company: str = ""
     company_homepage: str | None = None
-    location: str
-    workplace_type: str          # Remote, On-Site, Hybrid
+    location: str = ""
+    workplace_type: str = ""     # Remote, On-Site, Hybrid
     workplace_countries: list[str] = []
     seniority_level: str | None = None
     commitment: list[str] = []

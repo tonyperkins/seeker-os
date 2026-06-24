@@ -21,7 +21,7 @@ from seeker_os.config import Settings
 from seeker_os.database import get_connection, run_migrations
 from seeker_os.pipeline.runner import run_pipeline
 
-console = Console()
+console = Console(width=120)
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -57,11 +57,11 @@ def cmd_report(args: argparse.Namespace) -> None:
         console.print("[yellow]No jobs ready for review. Run the pipeline first.[/yellow]")
         return
 
-    table = Table(title=f"Top Matches ({len(jobs)} jobs ready)", show_lines=True)
-    table.add_column("Rank", style="dim", width=4)
-    table.add_column("Score", style="bold", width=6)
-    table.add_column("Title", width=35)
-    table.add_column("Company", width=18)
+    table = Table(title=f"Top Matches ({len(jobs)} jobs ready)", show_lines=True, expand=True)
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Score", style="bold green", width=6, justify="right")
+    table.add_column("Title", width=40)
+    table.add_column("Company", width=20)
     table.add_column("Comp", width=15)
     table.add_column("Cross-Ref", width=12)
 
