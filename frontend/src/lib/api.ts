@@ -473,6 +473,18 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(body),
       }),
+    // Anthropic OAuth flow
+    oauthInitiate: () =>
+      fetchAPI<{ auth_url: string; state: string }>("/api/models/anthropic/oauth/initiate", { method: "POST" }),
+    oauthCallback: (code: string, state: string) =>
+      fetchAPI<MessageResponse>("/api/models/anthropic/oauth/callback", {
+        method: "POST",
+        body: JSON.stringify({ code, state }),
+      }),
+    oauthStatus: () =>
+      fetchAPI<{ exists: boolean; expired: boolean; expires_at: number | null; path: string }>(
+        "/api/models/anthropic/oauth/status",
+      ),
   },
 
   // Health

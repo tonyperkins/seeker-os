@@ -414,3 +414,72 @@ def update_task(task: str, body: TaskUpdateRequest):
     tasks[task] = entry
     _write_providers_yml(raw)
     return TaskOverrideResponse(tier=body.tier, provider=body.provider, model=body.model)
+
+
+# ---------------------------------------------------------------------------
+# Anthropic OAuth flow
+# ---------------------------------------------------------------------------
+
+class OAuthInitiateResponse(BaseModel):
+    auth_url: str
+    state: str
+
+
+class OAuthCallbackRequest(BaseModel):
+    code: str
+    state: str
+
+
+class OAuthStatusResponse(BaseModel):
+    exists: bool
+    expired: bool
+    expires_at: int | None = None
+    path: str
+
+
+@router.post("/anthropic/oauth/initiate", response_model=OAuthInitiateResponse)
+def initiate_anthropic_oauth():
+    """Start the Anthropic OAuth PKCE flow.
+
+    Returns an authorization URL for the user to open in their browser.
+    After authorizing, the user gets a code to paste back.
+    """
+    from seeker_os.llm.anthropic_oauth import initiate_oauth
+    result = initiate_oauth()
+    return OAuthInitiateResponse(**result)
+
+
+@router.post("/anthropic/oauth/callback", response_model=MessageResponse)
+def anthropic_oauth_callback(body: OAuthCallbackRequest):
+    """Exchange the OAuth authorization code for tokens.
+
+    Saves the tokens to data/.anthropic_oauth.json and updates providers.yml
+    to point to the local token file.
+    """
+    from seeker_os.llm.anthropic_oauth import exchange_code, get_token_path
+    try:
+        exchange_code(body.code, body.state)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Token exchange failed: {e}")
+
+    # Update providers.yml to use the local token file
+    raw = _read_providers_yml()
+    for provider in raw.get("providers", []):
+        if provider.get("type") == "anthropic":
+            provider["auth_method"] = "oauth"
+            provider["oauth_token_path"] = get_token_path()
+            provider["enabled"] = True
+            break
+    _write_providers_yml(raw)
+
+    return MessageResponse(message="Anthropic OAuth successful — token saved")
+
+
+@router.get("/anthropic/oauth/status", response_model=OAuthStatusResponse)
+def anthropic_oauth_status():
+    """Check the status of the local Anthropic OAuth token."""
+    from seeker_os.llm.anthropic_oauth import get_token_status
+    result = get_token_status()
+    return OAuthStatusResponse(**result)
