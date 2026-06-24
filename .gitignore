@@ -47,6 +47,10 @@ data/seeker.db
 data/cache/
 data/checkpoint.json
 data/resumes/
+**/data/seeker.db
+**/data/cache/
+**/data/checkpoint.json
+**/data/resumes/
 
 # Seeker OS — Real config files (contain personal data)
 # Templates (*.example.yml) ARE committed
