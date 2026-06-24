@@ -10,12 +10,15 @@ dependencies = [
     "python-dotenv>=1.0",    # .env file loading for API keys
     "rapidfuzz>=3.0",        # Fuzzy dedup matching
     "rich>=13.0",            # CLI output (tables, colors)
+    "fastapi>=0.110",        # API backend (Phase 2)
+    "uvicorn[standard]>=0.29",  # ASGI server
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "httpx>=0.27",           # for TestClient
 ]
 
 [build-system]
