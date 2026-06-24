@@ -266,7 +266,7 @@ def _save_parsed_to_config(settings, result: ResumeParseResult) -> None:
             filters_cfg.title_filters.positive = merged
 
         if result.suggested_comp_floor:
-            filters_cfg.comp_floor = result.suggested_comp_floor
+            filters_cfg.filters.comp_floor = result.suggested_comp_floor
 
         write_filters(filters_cfg)
 
