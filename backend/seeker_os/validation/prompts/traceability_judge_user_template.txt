@@ -1,0 +1,15 @@
+## ARTIFACT TYPE
+{artifact_type}
+
+## MASTER RESUME (source of truth)
+---
+{master_resume}
+---
+
+## GENERATED ARTIFACT (to be audited)
+---
+{artifact_text}
+---
+
+Extract every factual claim from the generated artifact and judge each one against the
+master resume. Return ONLY valid JSON matching the output schema.

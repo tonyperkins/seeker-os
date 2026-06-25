@@ -1,0 +1,25 @@
+## MASTER RESUME (source of truth — do not deviate)
+---
+{master_resume}
+---
+
+## TARGET JOB
+Title: {job_title}
+Company: {company}
+
+## JOB DESCRIPTION
+---
+{jd_text}
+---
+
+## ACCURACY RULES (MUST FOLLOW)
+---
+{accuracy_rules_text}
+---
+{anchor_section}
+## INSTRUCTIONS
+Write a tailored cover letter for this specific job. Connect specific experience from the
+master resume to the job requirements. Do NOT add anything not in the master resume.
+Follow ALL accuracy rules above.
+
+Generate the cover letter:

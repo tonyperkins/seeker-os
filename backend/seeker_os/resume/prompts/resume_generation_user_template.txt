@@ -1,0 +1,26 @@
+## MASTER RESUME
+Do not deviate from the facts in this resume. You may reorganize and emphasize, but never invent.
+
+---
+{master_resume}
+---
+
+## TARGET JOB
+Title: {job_title}
+Company: {company}
+
+## JOB DESCRIPTION
+---
+{jd_text}
+---
+
+## ACCURACY RULES (MUST FOLLOW)
+These rules are validated programmatically after generation. Violations will flag the resume for manual review.
+---
+{accuracy_rules_text}
+---
+{anchor_section}
+## INSTRUCTIONS
+Tailor the master resume for this specific job. Emphasize relevant experience and skills. De-emphasize irrelevant parts. Do NOT add anything not in the master resume. Follow ALL accuracy rules above.
+
+Generate the tailored resume in Markdown format:

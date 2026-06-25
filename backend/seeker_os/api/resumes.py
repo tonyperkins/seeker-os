@@ -17,6 +17,8 @@ from seeker_os.database import get_connection
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+
 
 class MasterResumeInfo(BaseModel):
     """Info about the master resume."""
@@ -159,30 +161,7 @@ def parse_master_resume():
     try:
         from seeker_os.llm.router import ModelRouter
         router = ModelRouter(settings)
-        system_prompt = """You are a resume parser. Extract structured information from the resume text.
-Return ONLY valid JSON (no markdown, no code fences) with this exact schema:
-{
-  "contact": {
-    "name": "Full Name",
-    "email": "email@example.com",
-    "phone": "phone number or empty string",
-    "location": "City, ST",
-    "urls": {"github": "url or empty", "linkedin": "url or empty", "portfolio": "url or empty", "other": "url or empty"}
-  },
-  "experience_years": 25,
-  "current_title": "Most recent or current job title",
-  "key_skills": ["Go", "Kubernetes", "Terraform", ...],
-  "suggested_title_positive": ["sre", "site reliability", "platform engineer", ...],
-  "suggested_comp_floor": 150000,
-  "summary": "One paragraph summary of the candidate's profile"
-}
-
-Rules:
-- experience_years: integer, estimate from work history if not explicit
-- suggested_title_positive: lowercase substrings that would match this person's target roles in job titles
-- suggested_comp_floor: integer USD, infer from current/target comp or experience level
-- key_skills: top 10-15 technologies, tools, and methodologies
-- If a field can't be determined, use empty string, empty list, or null"""
+        system_prompt = (_PROMPTS_DIR / "resume_parser_system.txt").read_text(encoding="utf-8")
 
         response = router.generate(
             task="resume_parsing",

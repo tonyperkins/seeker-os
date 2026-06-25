@@ -22,34 +22,11 @@ from seeker_os.validation import AccuracyValidator
 from seeker_os.validation.traceability import TraceabilityChecker
 
 
-SYSTEM_PROMPT = """You are an expert at drafting application answers for job applications.
-
-CRITICAL RULES — VIOLATIONS WILL CAUSE THE ANSWER TO BE REJECTED:
-1. NEVER invent skills, technologies, or experience not present in the master resume.
-2. NEVER inflate years of experience or claim depth beyond what the master resume states.
-3. Every claim must be traceable to the master resume.
-4. Answer the question directly and concisely — typically 1-3 paragraphs.
-5. Use the master resume as the sole source of factual claims.
-
-OUTPUT FORMAT:
-- Plain text (no markdown headers)
-- Direct, professional tone
-- Answer the specific question asked
-"""
-
-
-CRITIQUE_SYSTEM_PROMPT = """You are an expert at critiquing application answers for job applications.
-
-Your job is to review a user-supplied draft answer and provide feedback:
-1. Check for factual claims not supported by the master resume.
-2. Check for overstated qualifications.
-3. Suggest improvements for clarity and impact.
-4. Do NOT rewrite the answer — only critique and suggest.
-
-OUTPUT FORMAT:
-- List of specific feedback points
-- For each point, quote the relevant text and explain the issue or suggestion
-"""
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+SYSTEM_PROMPT = (_PROMPTS_DIR / "application_answer_generation_system.txt").read_text(encoding="utf-8")
+CRITIQUE_SYSTEM_PROMPT = (_PROMPTS_DIR / "application_answer_critique_system.txt").read_text(encoding="utf-8")
+_USER_PROMPT_TEMPLATE = (_PROMPTS_DIR / "application_answer_generation_user_template.txt").read_text(encoding="utf-8")
+_CRITIQUE_USER_TEMPLATE = (_PROMPTS_DIR / "application_answer_critique_user_template.txt").read_text(encoding="utf-8")
 
 
 def _build_user_prompt(
@@ -61,33 +38,14 @@ def _build_user_prompt(
     accuracy_rules_text: str,
 ) -> str:
     """Build the user prompt for generating an application answer."""
-    return f"""## MASTER RESUME (source of truth — do not deviate)
----
-{master_resume}
----
-
-## TARGET JOB
-Title: {job_title}
-Company: {company}
-
-## JOB DESCRIPTION
----
-{jd_text}
----
-
-## ACCURACY RULES (MUST FOLLOW)
----
-{accuracy_rules_text}
----
-
-## APPLICATION QUESTION
-{question}
-
-## INSTRUCTIONS
-Draft a direct, professional answer to the application question above. Use only facts
-from the master resume. Do NOT invent or inflate. Follow ALL accuracy rules.
-
-Generate the answer:"""
+    return _USER_PROMPT_TEMPLATE.format(
+        master_resume=master_resume,
+        job_title=job_title,
+        company=company,
+        question=question,
+        jd_text=jd_text,
+        accuracy_rules_text=accuracy_rules_text,
+    )
 
 
 def _build_critique_prompt(
@@ -96,21 +54,11 @@ def _build_critique_prompt(
     user_draft: str,
 ) -> str:
     """Build the user prompt for critiquing a user-supplied draft."""
-    return f"""## MASTER RESUME (source of truth)
----
-{master_resume}
----
-
-## APPLICATION QUESTION
-{question}
-
-## USER'S DRAFT ANSWER
----
-{user_draft}
----
-
-Review the draft answer against the master resume. Flag any unsupported or overstated
-claims. Suggest improvements. Do NOT rewrite the answer."""
+    return _CRITIQUE_USER_TEMPLATE.format(
+        master_resume=master_resume,
+        question=question,
+        user_draft=user_draft,
+    )
 
 
 def _load_accuracy_rules_text(settings: Settings) -> str:

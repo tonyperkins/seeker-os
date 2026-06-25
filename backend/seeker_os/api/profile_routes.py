@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import yaml
 from fastapi import APIRouter, HTTPException
@@ -19,6 +20,8 @@ from seeker_os.validation import KNOWN_RULE_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["profile"])
+
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 # ---------------------------------------------------------------------------
@@ -218,38 +221,7 @@ def ai_generate_rules(body: AIGenerateRulesRequest):
     if not settings.providers:
         raise HTTPException(status_code=400, detail="No LLM providers configured")
 
-    system_prompt = """You are an expert at creating resume accuracy validation rules.
-
-Given a user's natural language description, generate structured accuracy rules
-for resume generation validation. Output ONLY valid JSON — no markdown, no explanation.
-
-Output format:
-{
-  "rules": [
-    {
-      "id": "snake_case_id",
-      "description": "Human-readable description",
-      "type": "disallowed_phrases" | "forbidden_technologies" | "required_phrases" | "experience_anchor" | "education_omission",
-      "severity": "high" | "medium",
-      "phrases": ["phrase1", "phrase2"],        // for disallowed_phrases or required_phrases
-      "technologies": ["Tech1", "Tech2"],        // for forbidden_technologies
-      "patterns": ["regex1"]                     // for experience_anchor or education_omission
-    }
-  ]
-}
-
-Guidelines:
-- Use "high" severity for things that MUST NEVER happen (forbidden tech, inflated experience)
-- Use "medium" severity for style preferences and warnings
-- Create concise, snake_case IDs
-- For forbidden_technologies, use the exact technology names as they'd appear in a resume
-- For experience_anchor patterns, use regex that matches non-standard year counts
-- For education_omission, use regex patterns matching degree names, university names, etc.
-- Only include the relevant field for each rule type (phrases/technologies/patterns)
-- Generate 1-10 rules depending on the complexity of the request
-- If the user mentions specific URLs that must appear, use required_phrases with those URLs
-
-Output ONLY the JSON. No markdown fences, no explanation."""
+    system_prompt = (_PROMPTS_DIR / "ai_rule_generator_system.txt").read_text(encoding="utf-8")
 
     user_prompt = f"""Generate accuracy rules based on this description:
 

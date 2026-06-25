@@ -18,24 +18,9 @@ from seeker_os.validation import AccuracyValidator
 from seeker_os.validation.traceability import TraceabilityChecker
 
 
-SYSTEM_PROMPT = """You are an expert resume writer who tailors resumes for specific job descriptions.
-
-CRITICAL RULES — VIOLATIONS WILL CAUSE THE RESUME TO BE REJECTED:
-1. NEVER invent skills, technologies, or experience not present in the master resume.
-2. NEVER inflate years of experience or claim depth beyond what the master resume states.
-3. NEVER use technologies listed as "forbidden" in the accuracy rules.
-4. NEVER mention education unless explicitly required by the JD (and even then, only state it factually).
-5. Every claim must be traceable to the master resume. You may reorganize, emphasize, or de-emphasize, but never fabricate.
-6. If the JD requires a technology not in the master resume, simply omit it — do not claim it. The gap is noted elsewhere.
-
-OUTPUT FORMAT:
-- Markdown format
-- Start with a professional summary (2-3 lines)
-- Skills/core competencies section
-- Professional experience (reverse chronological)
-- Keep it concise — 1-2 pages max
-- Use action verbs and quantified achievements where available in the master resume
-"""
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+SYSTEM_PROMPT = (_PROMPTS_DIR / "resume_generation_system.txt").read_text(encoding="utf-8")
+_USER_PROMPT_TEMPLATE = (_PROMPTS_DIR / "resume_generation_user_template.txt").read_text(encoding="utf-8")
 
 
 def _build_user_prompt(
@@ -51,32 +36,14 @@ def _build_user_prompt(
     if anchor_text:
         anchor_section = f"\n## EXPERIENCE ANCHOR\n{anchor_text}\n"
 
-    return f"""## MASTER RESUME
-Do not deviate from the facts in this resume. You may reorganize and emphasize, but never invent.
-
----
-{master_resume}
----
-
-## TARGET JOB
-Title: {job_title}
-Company: {company}
-
-## JOB DESCRIPTION
----
-{jd_text}
----
-
-## ACCURACY RULES (MUST FOLLOW)
-These rules are validated programmatically after generation. Violations will flag the resume for manual review.
----
-{accuracy_rules_text}
----
-{anchor_section}
-## INSTRUCTIONS
-Tailor the master resume for this specific job. Emphasize relevant experience and skills. De-emphasize irrelevant parts. Do NOT add anything not in the master resume. Follow ALL accuracy rules above.
-
-Generate the tailored resume in Markdown format:"""
+    return _USER_PROMPT_TEMPLATE.format(
+        master_resume=master_resume,
+        job_title=job_title,
+        company=company,
+        jd_text=jd_text,
+        accuracy_rules_text=accuracy_rules_text,
+        anchor_section=anchor_section,
+    )
 
 
 def _load_accuracy_rules_text(settings: Settings) -> str:

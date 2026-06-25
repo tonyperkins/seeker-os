@@ -18,24 +18,9 @@ from seeker_os.validation import AccuracyValidator
 from seeker_os.validation.traceability import TraceabilityChecker
 
 
-SYSTEM_PROMPT = """You are an expert cover letter writer who tailors cover letters for specific job descriptions.
-
-CRITICAL RULES — VIOLATIONS WILL CAUSE THE COVER LETTER TO BE REJECTED:
-1. NEVER invent skills, technologies, or experience not present in the master resume.
-2. NEVER inflate years of experience or claim depth beyond what the master resume states.
-3. NEVER use technologies listed as "forbidden" in the accuracy rules.
-4. Every claim must be traceable to the master resume. You may reorganize, emphasize, or de-emphasize, but never fabricate.
-5. If the JD requires a technology not in the master resume, simply omit it — do not claim it.
-
-OUTPUT FORMAT:
-- Professional cover letter format
-- 3-4 paragraphs, concise (half to one page)
-- Address the hiring manager if a name is available, otherwise "Dear Hiring Manager"
-- Open with genuine interest referencing the role and company
-- Body paragraphs: connect specific experience from the master resume to JD requirements
-- Close with a call to action
-- Use the master resume as the sole source of factual claims
-"""
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+SYSTEM_PROMPT = (_PROMPTS_DIR / "cover_letter_generation_system.txt").read_text(encoding="utf-8")
+_USER_PROMPT_TEMPLATE = (_PROMPTS_DIR / "cover_letter_generation_user_template.txt").read_text(encoding="utf-8")
 
 
 def _build_user_prompt(
@@ -51,31 +36,14 @@ def _build_user_prompt(
     if anchor_text:
         anchor_section = f"\n## EXPERIENCE ANCHOR\n{anchor_text}\n"
 
-    return f"""## MASTER RESUME (source of truth — do not deviate)
----
-{master_resume}
----
-
-## TARGET JOB
-Title: {job_title}
-Company: {company}
-
-## JOB DESCRIPTION
----
-{jd_text}
----
-
-## ACCURACY RULES (MUST FOLLOW)
----
-{accuracy_rules_text}
----
-{anchor_section}
-## INSTRUCTIONS
-Write a tailored cover letter for this specific job. Connect specific experience from the
-master resume to the job requirements. Do NOT add anything not in the master resume.
-Follow ALL accuracy rules above.
-
-Generate the cover letter:"""
+    return _USER_PROMPT_TEMPLATE.format(
+        master_resume=master_resume,
+        job_title=job_title,
+        company=company,
+        jd_text=jd_text,
+        accuracy_rules_text=accuracy_rules_text,
+        anchor_section=anchor_section,
+    )
 
 
 def _load_accuracy_rules_text(settings: Settings) -> str:

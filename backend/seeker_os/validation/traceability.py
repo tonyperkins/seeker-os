@@ -20,6 +20,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +28,9 @@ from seeker_os.config import Settings
 from seeker_os.validation import Violation, ValidationResult
 
 logger = logging.getLogger(__name__)
+
+
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 class ClaimJudgment(BaseModel):
@@ -50,60 +54,16 @@ class TraceabilityResult(BaseModel):
             result.passed = False
 
 
-JUDGE_SYSTEM_PROMPT = """You are a strict accuracy auditor. You judge whether factual claims
-in a generated artifact are substantiated by the candidate's master resume.
-
-## Your job
-1. Extract every factual claim from the generated artifact. A factual claim is any
-   statement about skills, technologies, years of experience, quantified achievements,
-   job titles, responsibilities, or project outcomes.
-2. For each claim, judge it against the master resume:
-   - **supported**: The master resume directly substantiates this claim.
-   - **unsupported**: The master resume does NOT contain any evidence for this claim.
-   - **overstated**: The master resume contains partial evidence, but the artifact
-     inflates it (e.g., "expert" when the resume says "familiar", or "led a team of 20"
-     when the resume says "contributed to a team").
-
-## Rules — STRICT, not charitable
-- A claim is UNSUPPORTED unless the master resume substantiates it. Absence of evidence
-  is evidence of absence.
-- Rounding up a qualifier counts as OVERSTATED. "Familiar, growing" → "expert" is overstated.
-  "Contributed to" → "led" is overstated.
-- Do not give the benefit of the doubt. If the resume doesn't clearly support it, flag it.
-- Formatting/reorganization is not a claim. "Put skills section first" is not a factual claim.
-- The artifact type may be resume, cover_letter, or application_answer. The same standard applies.
-
-## Output format
-Return ONLY valid JSON (no markdown, no code fences):
-{
-  "claims": [
-    {
-      "claim": "The factual claim as stated in the artifact",
-      "verdict": "supported | unsupported | overstated",
-      "explanation": "Why — cite the master resume or note its absence",
-      "offending_text": "The exact text from the artifact that is problematic (empty if supported)"
-    }
-  ]
-}
-"""
+JUDGE_SYSTEM_PROMPT = (_PROMPTS_DIR / "traceability_judge_system.txt").read_text(encoding="utf-8")
+_JUDGE_USER_TEMPLATE = (_PROMPTS_DIR / "traceability_judge_user_template.txt").read_text(encoding="utf-8")
 
 
 def _build_judge_user_prompt(artifact_text: str, master_resume: str, artifact_type: str) -> str:
-    return f"""## ARTIFACT TYPE
-{artifact_type}
-
-## MASTER RESUME (source of truth)
----
-{master_resume}
----
-
-## GENERATED ARTIFACT (to be audited)
----
-{artifact_text}
----
-
-Extract every factual claim from the generated artifact and judge each one against the
-master resume. Return ONLY valid JSON matching the output schema."""
+    return _JUDGE_USER_TEMPLATE.format(
+        artifact_type=artifact_type,
+        master_resume=master_resume,
+        artifact_text=artifact_text,
+    )
 
 
 def _strip_code_fences(text: str) -> str:

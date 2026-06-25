@@ -74,5 +74,8 @@ config/blacklist.txt
 .env.*
 !.env.example
 
+# AI audit working notes (local only)
+ai-audit/
+
 # Logs
 *.log

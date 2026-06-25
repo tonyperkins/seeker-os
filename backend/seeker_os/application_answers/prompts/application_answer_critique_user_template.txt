@@ -1,0 +1,15 @@
+## MASTER RESUME (source of truth)
+---
+{master_resume}
+---
+
+## APPLICATION QUESTION
+{question}
+
+## USER'S DRAFT ANSWER
+---
+{user_draft}
+---
+
+Review the draft answer against the master resume. Flag any unsupported or overstated
+claims. Suggest improvements. Do NOT rewrite the answer.

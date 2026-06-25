@@ -21,78 +21,9 @@ from seeker_os.config import Settings
 from seeker_os.database import get_connection, json_encode
 
 
-SYSTEM_PROMPT = """You evaluate a single job posting against the candidate's profile and produce a
-fit verdict for a job-search dashboard. Output is ingested into a database AND
-rendered as an analysis card, so return valid JSON matching the schema below and
-nothing else. No prose outside the JSON.
-
-## How to think (this is the conversational analysis, formalized)
-1. STATE GAPS FIRST. Before any recommendation, name where the candidate does not
-   meet the JD as written. Be blunt. A principal-level honest gap is the product,
-   not a thing to hide.
-2. Score each rubric dimension, apply bonuses/penalties/blockers from RUBRIC, and
-   compute the weighted total. Show the per-dimension breakdown.
-3. Check HARD BLOCKERS explicitly. Any present => verdict cannot exceed SKIP
-   regardless of score. Blockers include: onsite/hybrid outside commute tolerance,
-   clearance/citizenship requirements, and any never-claim tech as a PRIMARY stack
-   requirement.
-4. Check COMP against the floor in PREFS. Unposted comp is a flag, not a blocker.
-5. Check POSITIONING. The candidate's positioning is provided below in the injected
-   context. Roles that mismatch the candidate's positioning should be called out,
-   even if the stack overlaps.
-6. Produce tailoring guidance — but tailoring is REORDER and REFRAME ONLY.
-
-## Accuracy guardrails (NON-NEGOTIABLE — override helpfulness)
-- NEVER invent or upgrade a competency to match the JD. Do not mirror JD language
-  back as a claimed skill.
-- NEVER suggest claiming any item on the never-claim list as production depth.
-- Honest skill qualifiers from MASTER_RESUME are verbatim. Do not round up
-  ("familiar, growing" stays that; it does not become "experienced").
-- Tailoring guidance may only reorder the competency table and reframe the summary
-  for emphasis. Every bullet stays verbatim from the master. If a suggestion would
-  require a new claim, do not make it — flag the gap instead.
-- If the JD demands something the candidate genuinely lacks, the correct output is a
-  lower score and a named gap, never a fabricated qualification.
-
-## Output schema
-{
-  "company": "string",
-  "title": "string",
-  "url": "string",
-  "verdict": "APPLY | CONDITIONAL | MONITOR | SKIP",
-  "weighted_score": 0.0,
-  "one_line": "blunt one-sentence verdict",
-  "named_gaps": [
-    { "area": "", "jd_requires": "", "candidate_actual": "", "severity": "low|med|high|blocker" }
-  ],
-  "hard_blockers": [ { "type": "", "detail": "" } ],
-  "rubric_breakdown": [
-    { "dimension": "", "weight": 0.0, "raw": 0.0, "weighted": 0.0, "note": "" }
-  ],
-  "bonuses_applied": [ "" ],
-  "penalties_applied": [ "" ],
-  "comp": { "posted": null, "meets_floor": null, "note": "" },
-  "positioning": { "aligned": true, "note": "" },
-  "company_fit": { "size_bucket": null, "stage": null, "remote_policy": null, "note": "" },
-  "tailoring": {
-    "lead_with": [ "competencies to surface first — must already exist in master" ],
-    "reframe_summary": "emphasis-only reframe, no new claims",
-    "do_not_claim": [ "JD terms that would be embellishment if mirrored back" ]
-  },
-  "red_flags": [ "" ],
-  "confidence": 0.0
-}
-
-## Verdict rules
-- SKIP: any hard blocker present, OR positioning is a clear mismatch, OR
-  weighted_score below the RUBRIC skip threshold.
-- MONITOR: borderline score, or interesting company with a current disqualifier
-  (e.g., comp unposted + size unknown) worth re-checking later.
-- CONDITIONAL: good fit with one named, surmountable gap or an open question
-  (e.g., comp not posted, remote policy ambiguous).
-- APPLY: clears blockers, meets comp floor or close, positioning aligned, score
-  above the apply threshold.
-Always populate named_gaps even on APPLY. There is always at least one gap to name."""
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+SYSTEM_PROMPT = (_PROMPTS_DIR / "jd_analysis_system.txt").read_text(encoding="utf-8")
+_USER_PROMPT_TEMPLATE = (_PROMPTS_DIR / "jd_analysis_user_template.txt").read_text(encoding="utf-8")
 
 
 def _strip_code_fences(text: str) -> str:
@@ -240,46 +171,19 @@ def _build_user_prompt(
     elif comp_max is not None:
         comp_str = f"≤${comp_max:,}"
 
-    return f"""## Injected context (authoritative — do not contradict)
-
-### MASTER_RESUME
----
-{master_resume}
----
-
-### PREFERENCES
----
-{prefs_text}
----
-
-### IDENTITY (positioning, honest qualifiers, never-claim)
----
-{identity_text}
----
-
-### RULES (accuracy + never-claim guardrails)
----
-{rules_text}
----
-
-### RUBRIC (weighted scoring dimensions, bonuses, penalties, blockers)
----
-{rubric_text}
----
-
-### JOB_POSTING
----
-{jd_text}
----
-
-### JOB_META
-- Company: {company}
-- Title: {title}
-- Location: {location}
-- Comp (if posted): {comp_str}
-- URL: {url}
-
-Produce the analysis now. Return ONLY valid JSON matching the output schema."""
+    return _USER_PROMPT_TEMPLATE.format(
+        master_resume=master_resume,
+        prefs_text=prefs_text,
+        identity_text=identity_text,
+        rules_text=rules_text,
+        rubric_text=rubric_text,
+        jd_text=jd_text,
+        company=company,
+        title=title,
+        location=location,
+        comp_str=comp_str,
+        url=url,
+    )
 
 
 def analyze_job(
