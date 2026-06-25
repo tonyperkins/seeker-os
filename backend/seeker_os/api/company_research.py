@@ -90,10 +90,12 @@ def run_company_research(job_id: int):
             raise HTTPException(status_code=400, detail="Job has no company name")
 
         company_homepage = job["company_homepage"] if "company_homepage" in job.keys() else None
+        jd_full = job["jd_full"] if "jd_full" in job.keys() else None
 
         result = research_company(
             company=company,
             company_homepage=company_homepage,
+            jd_text=jd_full or "",
         )
 
         now = datetime.now(timezone.utc).isoformat()

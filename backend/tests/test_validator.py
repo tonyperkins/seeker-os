@@ -147,3 +147,38 @@ class TestValidator:
         assert d["passed"] is False
         assert len(d["violations"]) == 1
         assert d["violations"][0]["rule_id"] == "test"
+
+    def test_unknown_rule_type_warns(self, tmp_path, monkeypatch, caplog):
+        """Unknown rule types should log a warning at load time, not be silently ignored."""
+        import logging
+        import shutil
+        from seeker_os.config import CONFIG_DIR
+
+        test_config = tmp_path / "config"
+        test_config.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config / f.name)
+
+        rules_with_unknown = TEST_RULES + [
+            {"id": "bogus_rule", "description": "Nonexistent type",
+             "type": "nonexistent_type", "severity": "high"},
+        ]
+        (test_config / "accuracy_rules.yml").write_text(
+            yaml.dump({"rules": rules_with_unknown}, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
+        monkeypatch.setattr("seeker_os.config_writer.CONFIG_DIR", test_config)
+
+        settings = Settings()
+        settings.config_dir = test_config
+
+        with caplog.at_level(logging.WARNING, logger="seeker_os.resume.validator"):
+            validator = AccuracyValidator(settings)
+
+        # The warning should mention the unknown type and rule id
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("nonexistent_type" in r.getMessage() for r in warnings)
+        assert any("bogus_rule" in r.getMessage() for r in warnings)

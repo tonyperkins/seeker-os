@@ -61,7 +61,6 @@ nothing else. No prose outside the JSON.
   "company": "string",
   "title": "string",
   "url": "string",
-  "analyzed_at": "ISO8601",
   "verdict": "APPLY | CONDITIONAL | MONITOR | SKIP",
   "weighted_score": 0.0,
   "one_line": "blunt one-sentence verdict",
@@ -346,7 +345,7 @@ def analyze_job(
             data.get("weighted_score", 0.0),
             data.get("one_line", ""),
             data.get("confidence", 0.0),
-            data.get("analyzed_at", now),
+            now,
             now,
         ),
     )
@@ -358,6 +357,7 @@ def analyze_job(
     result = dict(data)
     result["id"] = analysis_id
     result["job_id"] = job_id
+    result["analyzed_at"] = now
     result["provider"] = response.provider
     result["model"] = response.model
     result["input_tokens"] = response.input_tokens

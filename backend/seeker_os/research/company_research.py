@@ -263,7 +263,6 @@ clearance/citizenship requirements.
 ## Output schema
 {
   "company": "string",
-  "researched_at": "ISO8601",
   "overall_confidence": 0.0,
   "summary": "3-4 sentence plain-English verdict: stage, health, sentiment, fit",
   "verdict_flags": { "green": ["..."], "red": ["..."], "watch": ["..."] },
@@ -312,6 +311,7 @@ def fetch_llm_dossier(
     wikipedia_extract: str = "",
     wikidata_founded: int | None = None,
     wikidata_headcount: int | None = None,
+    jd_text: str = "",
 ) -> CompanyResearchResult | None:
     """Generate a full company dossier using the configured LLM.
 
@@ -346,6 +346,8 @@ def fetch_llm_dossier(
         context_parts.append(f"Domain: {company_domain}")
     if careers_url:
         context_parts.append(f"Careers URL: {careers_url}")
+    if jd_text:
+        context_parts.append(f"## Job description (primary source — may name investors, stage, remote policy)\n---\n{jd_text}\n---")
     context = "\n".join(context_parts) if context_parts else "No additional context available."
 
     user_prompt = f"""## Input
@@ -441,7 +443,7 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
 
         return CompanyResearchResult(
             company_name=data.get("company", company),
-            researched_at=data.get("researched_at", now),
+            researched_at=now,
             overall_confidence=data.get("overall_confidence", 0.0),
             summary=data.get("summary", ""),
             verdict_flags=verdict_flags,
@@ -463,6 +465,7 @@ def research_company(
     company: str,
     company_homepage: str | None = None,
     enable_llm: bool = True,
+    jd_text: str = "",
 ) -> CompanyResearchResult:
     """Research a company by aggregating data from multiple sources.
 
@@ -470,6 +473,9 @@ def research_company(
         company: Company name to research.
         company_homepage: Optional company homepage URL (used as company_domain).
         enable_llm: Whether to attempt LLM dossier generation.
+        jd_text: Optional job description text — fed to the LLM as a primary
+            source. The JD frequently names funding stage, investors, and remote
+            policy that the model otherwise cannot source.
 
     Returns:
         CompanyResearchResult with whatever data could be gathered.
@@ -507,6 +513,7 @@ def research_company(
             wikipedia_extract=wiki.extract if wiki else "",
             wikidata_founded=wikidata_founded,
             wikidata_headcount=wikidata_headcount,
+            jd_text=jd_text,
         )
         if dossier:
             # Preserve Wikipedia info and merge sources

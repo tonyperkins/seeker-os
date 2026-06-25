@@ -348,3 +348,106 @@ class TestCompanyResearchModels:
         assert restored.sentiment.overall_rating_estimate == 4.1
         assert restored.fit is not None
         assert restored.fit.remote_policy == "fully remote"
+
+
+class TestServerTimestamp:
+    """Tests that server clock wins over model-emitted timestamps."""
+
+    @patch("seeker_os.llm.router.ModelRouter")
+    @patch("seeker_os.config.Settings")
+    def test_dossier_uses_server_time_not_model_time(self, mock_settings_cls, mock_router_cls):
+        """researched_at must be server-generated now(), not the LLM's value."""
+        from datetime import datetime, timezone
+        from seeker_os.research.company_research import fetch_llm_dossier
+
+        bogus_date = "1999-01-01T00:00:00Z"
+
+        mock_settings = MagicMock()
+        mock_settings.providers = MagicMock()
+        mock_settings.providers.providers = ["fake"]
+        mock_settings_cls.return_value = mock_settings
+
+        mock_router = MagicMock()
+        mock_router.generate.return_value = MagicMock(
+            text=json.dumps({
+                "company": "TestCo",
+                "researched_at": bogus_date,
+                "overall_confidence": 0.5,
+                "summary": "Test summary.",
+                "verdict_flags": {"green": [], "red": [], "watch": []},
+                "funding": None,
+                "sentiment": None,
+                "fit": None,
+                "gaps": [],
+            })
+        )
+        mock_router_cls.return_value = mock_router
+
+        before = datetime.now(timezone.utc).isoformat()
+        result = fetch_llm_dossier(company="TestCo")
+        after = datetime.now(timezone.utc).isoformat()
+
+        assert result is not None
+        assert result.researched_at != bogus_date
+        # researched_at should be between before and after (server time)
+        assert before <= result.researched_at <= after
+
+    @patch("seeker_os.llm.router.ModelRouter")
+    @patch("seeker_os.config.Settings")
+    def test_dossier_prompt_includes_jd_text(self, mock_settings_cls, mock_router_cls):
+        """JD text must appear in the LLM prompt when provided."""
+        from seeker_os.research.company_research import fetch_llm_dossier
+
+        mock_settings = MagicMock()
+        mock_settings.providers = MagicMock()
+        mock_settings.providers.providers = ["fake"]
+        mock_settings_cls.return_value = mock_settings
+
+        mock_router = MagicMock()
+        mock_router.generate.return_value = MagicMock(
+            text=json.dumps({
+                "company": "TestCo",
+                "overall_confidence": 0.5,
+                "summary": "Test.",
+                "verdict_flags": {"green": [], "red": [], "watch": []},
+                "funding": None, "sentiment": None, "fit": None, "gaps": [],
+            })
+        )
+        mock_router_cls.return_value = mock_router
+
+        jd = "We are a Series B company backed by Sequoia. Fully remote."
+        fetch_llm_dossier(company="TestCo", jd_text=jd)
+
+        call_args = mock_router.generate.call_args
+        user_prompt = call_args.kwargs["user_prompt"]
+        assert "Job description" in user_prompt
+        assert jd in user_prompt
+
+    @patch("seeker_os.llm.router.ModelRouter")
+    @patch("seeker_os.config.Settings")
+    def test_dossier_prompt_without_jd_text(self, mock_settings_cls, mock_router_cls):
+        """When no JD is provided, the prompt should not include a JD section."""
+        from seeker_os.research.company_research import fetch_llm_dossier
+
+        mock_settings = MagicMock()
+        mock_settings.providers = MagicMock()
+        mock_settings.providers.providers = ["fake"]
+        mock_settings_cls.return_value = mock_settings
+
+        mock_router = MagicMock()
+        mock_router.generate.return_value = MagicMock(
+            text=json.dumps({
+                "company": "TestCo",
+                "overall_confidence": 0.5,
+                "summary": "Test.",
+                "verdict_flags": {"green": [], "red": [], "watch": []},
+                "funding": None, "sentiment": None, "fit": None, "gaps": [],
+            })
+        )
+        mock_router_cls.return_value = mock_router
+
+        fetch_llm_dossier(company="TestCo")
+
+        call_args = mock_router.generate.call_args
+        user_prompt = call_args.kwargs["user_prompt"]
+        assert "Job description" not in user_prompt

@@ -13,6 +13,7 @@ held for manual review if any high-severity violations exist.
 
 from __future__ import annotations
 
+import logging
 import re
 import yaml
 from datetime import datetime, timezone
@@ -21,6 +22,16 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from seeker_os.config import Settings
+
+logger = logging.getLogger(__name__)
+
+KNOWN_RULE_TYPES = frozenset({
+    "disallowed_phrases",
+    "forbidden_technologies",
+    "required_phrases",
+    "experience_anchor",
+    "education_omission",
+})
 
 
 class Violation(BaseModel):
@@ -70,6 +81,20 @@ class AccuracyValidator:
         with open(rules_path) as f:
             data = yaml.safe_load(f)
         self._rules = data.get("rules", [])
+
+        # Guard: warn on unknown rule types so they fail loudly instead of
+        # being silently ignored during validation.
+        for rule in self._rules:
+            rule_type = rule.get("type", "")
+            if rule_type not in KNOWN_RULE_TYPES:
+                rule_id = rule.get("id", "unknown")
+                logger.warning(
+                    "Unknown accuracy rule type '%s' for rule '%s' — "
+                    "this rule will be ignored. Known types: %s",
+                    rule_type,
+                    rule_id,
+                    ", ".join(sorted(KNOWN_RULE_TYPES)),
+                )
 
     def validate(self, generated_text: str, master_resume: str = "") -> ValidationResult:
         """Validate generated resume text against all rules.

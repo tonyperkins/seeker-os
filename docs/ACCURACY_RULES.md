@@ -28,14 +28,17 @@ The rules below are examples — customize them for your own resume and constrai
 
 ### Rule Types
 
-| Type | Description | Example |
-|---|---|---|
-| `disallowed_phrases` | Block specific phrases from appearing | "expert in", "mastery of", "deep expertise" |
-| `disallowed_in_section` | Block phrases only in specific sections | "ansible" in competencies section |
-| `forbidden_technologies` | Technologies that must never appear | List of tech names |
-| `experience_anchor` | Enforce a specific experience phrase | Required phrase + disallowed alternatives |
-| `required_urls` | URLs that must appear as visible text | Portfolio, LinkedIn, GitHub |
-| `role_constraint` | Per-company constraints on resume content | Max bullets, disallowed framings |
+| Type | Description | Fields | Example |
+|---|---|---|---|
+| `disallowed_phrases` | Block specific phrases from appearing (case-insensitive) | `phrases` | "expert in", "mastery of", "deep expertise" |
+| `forbidden_technologies` | Technologies that must never appear (word-boundary match) | `technologies` | List of tech names |
+| `required_phrases` | Phrases that MUST appear (case-insensitive) | `phrases` | Contact URLs, required disclaimers |
+| `experience_anchor` | Flag non-standard year counts via regex | `patterns` | Regex matching inflated year counts |
+| `education_omission` | Flag education mentions via regex | `patterns` | Regex matching degree names, university names |
+
+**Unknown rule types are flagged at load time** — a warning is logged and the
+rule is ignored. This prevents silent failures when a config has a typo or
+references a type that does not exist in the validator.
 
 ### Example Rules
 
@@ -48,76 +51,76 @@ rules:
     phrases: ["expert in", "mastery of", "deep expertise", "world-class", "ninja", "rockstar", "guru"]
     severity: medium
 
-  # Don't inflate years of experience
+  # Don't inflate years of experience — customize the phrases to match
+  # whatever year counts would be inflated for YOUR resume
   - id: no_year_inflation
     description: "Don't inflate years of experience beyond what's in the master resume"
     type: disallowed_phrases
-    phrases: ["20+ years", "30+ years"]
+    phrases: ["NN+ years", "NN+ years in"]  # Replace NN with your inflated thresholds
     severity: high
 
   # Technologies you don't know — must never appear in generated resumes
   - id: forbidden_technologies
-    description: "These technologies must never appear in generated resumes"
+    description: "These technologies must NEVER appear in generated resumes"
     type: forbidden_technologies
     technologies: []  # Add your own list
     severity: high
 
-  # Experience anchor — enforce consistent phrasing
-  - id: experience_anchor
-    description: "Use the standard experience anchor from your profile"
-    type: experience_anchor
-    required_phrase: "N+ years"
-    disallowed_phrases: ["inflated year counts"]
+  # Required phrases — ensure contact info or disclaimers are present
+  - id: contact_urls_visible
+    description: "Always render full literal https:// URLs as visible text"
+    type: required_phrases
+    phrases: []  # Add your portfolio, LinkedIn, GitHub URLs here
     severity: medium
 
-  # Contact URLs must be visible text (ATS parsers miss hidden URLs)
-  - id: contact_urls
-    description: "Full literal https:// URLs must be visible text"
-    type: required_urls
-    urls:
-      - "https://your-portfolio.com"
-      - "https://linkedin.com/in/yourprofile"
-      - "https://github.com/yourusername"
+  # Experience anchor — flag non-standard year counts via regex
+  - id: experience_anchor
+    description: "Use the standard experience anchor from your profile, not arbitrary counts"
+    type: experience_anchor
+    patterns:
+      - "(NN|NN)\\+\\s*years"  # Replace NN with year counts that would be inflated for you
     severity: medium
+
+  # Education omission — flag education mentions if you choose to omit
+  # Uncomment and add patterns if you want to flag education mentions.
+  # - id: education_omission
+  #   description: "Omit education entirely from generated resumes"
+  #   type: education_omission
+  #   patterns:
+  #     - "(?i)\\b(b\\.?s\\.?|b\\.?a\\.?|m\\.?s\\.?|m\\.?a\\.?|ph\\.?d|mba|associate|diploma)\\b"
+  #     - "(?i)\\b(university|college|institute)\\b"
+  #   severity: medium
 ```
 
 ## Validation Implementation
 
+The validator (`backend/seeker_os/resume/validator.py`) reads rules from
+`config/accuracy_rules.yml` and dispatches by `type`:
+
+- `disallowed_phrases` — case-insensitive substring match
+- `forbidden_technologies` — case-insensitive word-boundary regex match
+- `required_phrases` — case-insensitive substring match (flags if MISSING)
+- `experience_anchor` — regex match against `patterns` list
+- `education_omission` — regex match against `patterns` list
+
+Unknown rule types are logged as warnings at load time and ignored during
+validation. High-severity violations block the resume (flagged as failed);
+medium-severity violations are warnings only.
+
 ```python
-# Pseudocode for accuracy validation
-def validate_resume(generated_text: str, master_resume: str) -> ValidationResult:
-    violations = []
-
-    # Check for disallowed phrases
-    for rule in DISALLOWED_PHRASES:
-        if rule.pattern in generated_text.lower():
-            violations.append({
-                'rule': rule.name,
-                'violation': f"Contains disallowed phrase: '{rule.pattern}'",
-                'severity': 'high'
-            })
-
-    # Check for technologies that should never appear
-    for tech in NEVER_CLAIM_TECH:
-        if tech.lower() in generated_text.lower():
-            violations.append({
-                'rule': f'never_claim_{tech}',
-                'violation': f"Claims {tech} — not in master resume",
-                'severity': 'high'
-            })
-
-    # Check experience anchor
-    if re.search(r'(20|30)\+\s*years', generated_text):
-        violations.append({
-            'rule': 'experience_anchor',
-            'violation': "Uses non-standard experience anchor",
-            'severity': 'medium'
-        })
-
-    return ValidationResult(
-        passed=len(violations) == 0,
-        violations=violations
-    )
+# Simplified dispatch logic
+for rule in rules:
+    if rule.type == "disallowed_phrases":
+        # Check each phrase as case-insensitive substring
+    elif rule.type == "forbidden_technologies":
+        # Check each tech with word-boundary regex
+    elif rule.type == "required_phrases":
+        # Flag if any required phrase is MISSING
+    elif rule.type == "experience_anchor":
+        # Check regex patterns for non-standard year counts
+    elif rule.type == "education_omission":
+        # Check regex patterns for education mentions
+    # else: warned at load time, ignored
 ```
 
 ## Model Routing for Resume Tasks
