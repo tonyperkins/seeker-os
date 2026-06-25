@@ -36,6 +36,19 @@ The rules below are examples — customize them for your own resume and constrai
 | `experience_anchor` | Flag non-standard year counts via regex | `patterns` | Regex matching inflated year counts |
 | `education_omission` | Flag education mentions via regex | `patterns` | Regex matching degree names, university names |
 
+> **Note:** The experience anchor phrase, its disallowed variants, and the
+> identity-layer never-claim list now live in `config/identity_rules.yml`
+> (see [Identity Rules](#identity-rules-layer) below). The `experience_anchor`
+> rule type in `accuracy_rules.yml` still provides regex `patterns` for matching,
+> but the validator also merges `disallowed_variants` from `identity_rules.yml`
+> at check time. The violation message uses the configured anchor phrase from
+> `identity_rules.yml`.
+>
+> The `forbidden_technologies` rule type in `accuracy_rules.yml` is the
+> resume-output guard. The `never_claim` list in `identity_rules.yml` is the
+> identity-layer guard (used in JD analysis and prompt injection). Both are
+> enforced independently.
+
 **Unknown rule types are flagged at load time** — a warning is logged and the
 rule is ignored. This prevents silent failures when a config has a typo or
 references a type that does not exist in the validator.
@@ -100,7 +113,7 @@ The validator (`backend/seeker_os/resume/validator.py`) reads rules from
 - `disallowed_phrases` — case-insensitive substring match
 - `forbidden_technologies` — case-insensitive word-boundary regex match
 - `required_phrases` — case-insensitive substring match (flags if MISSING)
-- `experience_anchor` — regex match against `patterns` list
+- `experience_anchor` — regex match against `patterns` list (from accuracy_rules.yml) **plus** `disallowed_variants` from `identity_rules.yml`. Violation message references the anchor phrase from `identity_rules.yml`.
 - `education_omission` — regex match against `patterns` list
 
 Unknown rule types are logged as warnings at load time and ignored during
@@ -117,7 +130,8 @@ for rule in rules:
     elif rule.type == "required_phrases":
         # Flag if any required phrase is MISSING
     elif rule.type == "experience_anchor":
-        # Check regex patterns for non-standard year counts
+        # Check regex patterns from accuracy_rules.yml + identity_rules.yml
+        # disallowed_variants. Message uses identity_rules.yml anchor phrase.
     elif rule.type == "education_omission":
         # Check regex patterns for education mentions
     # else: warned at load time, ignored
@@ -132,3 +146,46 @@ for rule in rules:
 | Accuracy validation | Light tier (e.g. Haiku) | Fast, cheap, just constraint checking |
 | Cover letter (optional) | Moderate tier | Good writing, moderate cost |
 | Company research | Light tier or local | Summarization, doesn't need expensive model |
+
+## Identity Rules Layer
+
+The identity rules layer (`config/identity_rules.yml`) defines **who the candidate is** —
+separate from accuracy rules (which define **what not to write**). The JD analyzer and
+resume generator read identity rules at call time to inject positioning, honest
+qualifiers, and the never-claim list into prompts.
+
+### Fields
+
+| Field | Purpose | Consumed by |
+|---|---|---|
+| `positioning` | One-sentence identity statement | JD analyzer (positioning check), resume generator |
+| `experience_anchor.phrase` | The only acceptable experience phrasing | Resume generator (prompt), validator (message) |
+| `experience_anchor.applies_to` | What the anchor refers to | Resume generator (prompt) |
+| `experience_anchor.disallowed_variants` | Regex patterns for invalid anchors | Validator (merged with accuracy_rules patterns) |
+| `honest_qualifiers` | Skills with limited depth + verbatim framing | JD analyzer (prompt), resume generator (prompt) |
+| `never_claim` | Technologies that must never be claimed | JD analyzer (prompt) |
+
+If a field is absent or empty, the corresponding behavior is absent — there is no
+hardcoded default or fallback in code.
+
+## Channel Rules Layer
+
+Channel rules (`config/channel_rules.yml`) define per-output-type constraints and
+AI generation policy. Each channel controls how AI-generated content is produced.
+
+### Channels
+
+| Channel | Consumed by | Key fields |
+|---|---|---|
+| `resume` | Resume generator | `require_visible_urls`, `format_hints` |
+| `cover_letter` | Phase 2 | `require_visible_urls`, `format_hints` |
+| `application_answer` | Phase 2 | `require_visible_urls`, `format_hints` |
+| `analysis` | Phase 2 | `format_hints` |
+
+### Per-Application AI Policy
+
+In addition to channel-level defaults, each job can have a per-application AI
+policy override (`jobs.ai_policy` column, values: `allowed`, `draft_only`,
+`forbidden`, or null for channel default). This is set via the job detail page
+toggle and persists in the database. Phase 2 will consume this to gate AI
+authoring per posting.

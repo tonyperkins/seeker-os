@@ -69,6 +69,18 @@ class AccuracyValidator:
         self._rules: list[dict] = []
         self._load_rules()
 
+    def _load_identity_anchor(self) -> tuple[str, list[str]]:
+        """Load experience anchor phrase and disallowed_variants from identity_rules.yml.
+
+        Returns (phrase, disallowed_variants). If no identity or anchor is
+        configured, returns ("", []) — the check does not run.
+        """
+        identity = self.settings.identity
+        if not identity or not identity.experience_anchor.phrase:
+            return "", []
+        anchor = identity.experience_anchor
+        return anchor.phrase, anchor.disallowed_variants
+
     def _load_rules(self):
         """Load rules from accuracy_rules.yml."""
         if not self.settings.profile or not self.settings.profile.resume:
@@ -151,13 +163,20 @@ class AccuracyValidator:
                         ))
 
             elif rule_type == "experience_anchor":
-                # Check for non-standard year counts
-                for pattern in rule.get("patterns", [r'(20|30)\+\s*years']):
+                # Check for disallowed experience anchor variants.
+                # Patterns come from the rule's "patterns" list (accuracy_rules.yml)
+                # and from identity_rules.yml disallowed_variants.
+                anchor_phrase, identity_variants = self._load_identity_anchor()
+                patterns = rule.get("patterns", []) + identity_variants
+                for pattern in patterns:
                     if re.search(pattern, generated_text, re.IGNORECASE):
+                        violation_msg = "Uses a non-standard experience anchor"
+                        if anchor_phrase:
+                            violation_msg += f" (must be {anchor_phrase})"
                         violations.append(Violation(
                             rule_id=rule_id,
                             description=description,
-                            violation="Uses non-standard experience anchor (must be 25+)",
+                            violation=violation_msg,
                             severity=severity,
                         ))
 

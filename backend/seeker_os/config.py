@@ -293,6 +293,45 @@ class ProvidersConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Identity rules models
+# ---------------------------------------------------------------------------
+
+class HonestQualifier(BaseModel):
+    skill: str
+    framing: str
+
+
+class ExperienceAnchor(BaseModel):
+    phrase: str = ""
+    applies_to: str = ""
+    disallowed_variants: list[str] = []
+
+
+class IdentityConfig(BaseModel):
+    positioning: str = ""
+    experience_anchor: ExperienceAnchor = ExperienceAnchor()
+    honest_qualifiers: list[HonestQualifier] = []
+    never_claim: list[str] = []
+
+
+# ---------------------------------------------------------------------------
+# Channel rules models
+# ---------------------------------------------------------------------------
+
+class ChannelConfig(BaseModel):
+    require_visible_urls: bool = False
+    format_hints: str = ""
+    ai_generation_default: str = "allowed"
+
+
+class ChannelRulesConfig(BaseModel):
+    resume: ChannelConfig = ChannelConfig()
+    cover_letter: ChannelConfig = ChannelConfig()
+    application_answer: ChannelConfig = ChannelConfig()
+    analysis: ChannelConfig = ChannelConfig()
+
+
+# ---------------------------------------------------------------------------
 # Settings — top-level config container
 # ---------------------------------------------------------------------------
 
@@ -309,6 +348,8 @@ class Settings:
         self.sources: SourcesConfig | None = None
         self.queries: QueriesConfig | None = None
         self.providers: ProvidersConfig | None = None
+        self.identity: IdentityConfig | None = None
+        self.channel_rules: ChannelRulesConfig | None = None
 
         self._load_all()
 
@@ -344,6 +385,16 @@ class Settings:
 
         if (self.config_dir / "providers.yml").exists():
             self.providers = ProvidersConfig(**self._load_yaml("providers.yml"))
+
+        if (self.config_dir / "identity_rules.yml").exists():
+            data = self._load_yaml("identity_rules.yml")
+            if data and "identity" in data:
+                self.identity = IdentityConfig(**data["identity"])
+
+        if (self.config_dir / "channel_rules.yml").exists():
+            data = self._load_yaml("channel_rules.yml")
+            if data and "channels" in data:
+                self.channel_rules = ChannelRulesConfig(**data["channels"])
 
         # Cross-validate comp_floor between filters and profile
         if self.filters and self.profile:

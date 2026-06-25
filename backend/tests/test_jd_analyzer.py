@@ -161,3 +161,96 @@ class TestScoreIndependence:
         user_prompt = call_args.kwargs["user_prompt"]
         # The precomputed score (9.5) must NOT appear in the prompt
         assert "9.5" not in user_prompt
+
+
+class TestIdentityInjection:
+    """Task 2: identity rules are injected into the JD analyzer prompt."""
+
+    @patch("seeker_os.llm.router.ModelRouter")
+    def test_identity_text_injected_into_prompt(self, mock_router_cls, db_path):
+        from seeker_os.analysis.jd_analyzer import analyze_job
+
+        job_id = _insert_job(db_path)
+
+        mock_router = MagicMock()
+        mock_router.generate.return_value = MagicMock(
+            text=json.dumps({
+                "company": "TestCo", "title": "SRE", "url": "",
+                "verdict": "APPLY", "weighted_score": 7.0,
+                "one_line": "Good.", "named_gaps": [], "hard_blockers": [],
+                "rubric_breakdown": [], "bonuses_applied": [], "penalties_applied": [],
+                "comp": {"posted": None, "meets_floor": None, "note": ""},
+                "positioning": {"aligned": True, "note": ""},
+                "company_fit": {"size_bucket": None, "stage": None, "remote_policy": None, "note": ""},
+                "tailoring": {"lead_with": [], "reframe_summary": "", "do_not_claim": []},
+                "red_flags": [], "confidence": 0.8,
+            }),
+            provider="test", model="test-model",
+            input_tokens=100, output_tokens=200, latency_ms=50,
+        )
+        mock_router_cls.return_value = mock_router
+
+        # Create a mock settings with identity configured
+        from seeker_os.config import IdentityConfig, ExperienceAnchor, HonestQualifier
+        settings = MagicMock()
+        settings.profile = None
+        settings.scoring = None
+        settings.identity = IdentityConfig(
+            positioning="I build reliable systems, not design products",
+            experience_anchor=ExperienceAnchor(
+                phrase="NN+ years in engineering",
+                applies_to="overall career",
+            ),
+            honest_qualifiers=[
+                HonestQualifier(skill="Rust", framing="learning, not production"),
+            ],
+            never_claim=["Blockchain"],
+        )
+
+        analyze_job(settings, job_id)
+
+        call_args = mock_router.generate.call_args
+        user_prompt = call_args.kwargs["user_prompt"]
+        # Identity text should be injected
+        assert "I build reliable systems" in user_prompt
+        assert "NN+ years in engineering" in user_prompt
+        assert "Rust" in user_prompt
+        assert "Blockchain" in user_prompt
+        # The IDENTITY section header should be present
+        assert "IDENTITY" in user_prompt
+
+    @patch("seeker_os.llm.router.ModelRouter")
+    def test_no_identity_section_when_not_configured(self, mock_router_cls, db_path):
+        from seeker_os.analysis.jd_analyzer import analyze_job
+
+        job_id = _insert_job(db_path)
+
+        mock_router = MagicMock()
+        mock_router.generate.return_value = MagicMock(
+            text=json.dumps({
+                "company": "TestCo", "title": "SRE", "url": "",
+                "verdict": "APPLY", "weighted_score": 7.0,
+                "one_line": "Good.", "named_gaps": [], "hard_blockers": [],
+                "rubric_breakdown": [], "bonuses_applied": [], "penalties_applied": [],
+                "comp": {"posted": None, "meets_floor": None, "note": ""},
+                "positioning": {"aligned": True, "note": ""},
+                "company_fit": {"size_bucket": None, "stage": None, "remote_policy": None, "note": ""},
+                "tailoring": {"lead_with": [], "reframe_summary": "", "do_not_claim": []},
+                "red_flags": [], "confidence": 0.8,
+            }),
+            provider="test", model="test-model",
+            input_tokens=100, output_tokens=200, latency_ms=50,
+        )
+        mock_router_cls.return_value = mock_router
+
+        settings = MagicMock()
+        settings.profile = None
+        settings.scoring = None
+        settings.identity = None
+
+        analyze_job(settings, job_id)
+
+        call_args = mock_router.generate.call_args
+        user_prompt = call_args.kwargs["user_prompt"]
+        # Should have the placeholder text, not a crash
+        assert "no identity rules configured" in user_prompt

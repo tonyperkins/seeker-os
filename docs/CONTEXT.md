@@ -1,7 +1,7 @@
 # Seeker OS — Context & Current State
 
 **Last updated:** 2026-06-23
-**Phase:** Planning complete, Phase 1 implementation starting
+**Phase:** Phase 1 implementation — AI rules layer (identity, channel, per-application)
 
 ---
 
@@ -13,12 +13,16 @@ No personal values are hardcoded in code. All user-specific config (comp floor,
 blacklist, scoring weights, accuracy rules, resume path, location prefs) lives in
 YAML config files.
 
-The design is complete and documented. No code has been written yet.
+The design is complete and documented. Phase 1 adds a three-tier AI rules layer:
+identity rules (`identity_rules.yml`), channel rules (`channel_rules.yml`), and
+per-application AI policy (`jobs.ai_policy` column). All hardcoded personal values
+have been removed from system prompts and the validator.
 
 **Product mindset:** The engines (discovery, filtering, scoring, dedup, resume gen)
-are generic. The config files (`profile.yml`, `scoring_rubric.yml`, `accuracy_rules.yml`)
-make them personal. A different user creates their own config and gets their own
-pipeline — without touching Python code. See `docs/PRODUCT_DESIGN.md`.
+are generic. The config files (`profile.yml`, `scoring_rubric.yml`, `accuracy_rules.yml`,
+`identity_rules.yml`, `channel_rules.yml`) make them personal. A different user creates
+their own config and gets their own pipeline — without touching Python code.
+See `docs/PRODUCT_DESIGN.md`.
 
 ## The Problem Being Solved
 
@@ -65,7 +69,7 @@ tracks everything in a dashboard.
 | `docs/PLAN.md` | Full architecture, data model, dashboard design, 4 implementation phases | Understanding the big picture |
 | `docs/PHASE1_SPEC.md` | Exact interfaces, function signatures, CLI contract, acceptance criteria for Phase 1 | Implementing Phase 1 |
 | `docs/SCORING_RUBRIC.md` | Scoring rubric reference (the *values* — the *engine* reads them from YAML) | Implementing the scoring engine |
-| `docs/ACCURACY_RULES.md` | Resume accuracy rules reference (the *values* — the *validator* reads them from YAML) | Implementing resume generation (Phase 3) |
+| `docs/ACCURACY_RULES.md` | Resume accuracy rules reference (the *values* — the *validator* reads them from YAML). Also documents the identity-rules and channel-rules layers. | Implementing resume generation (Phase 3) |
 | `docs/HIRINGCAFE_FIELDS.md` | `__NEXT_DATA__` field reference, source mapping, query counts | Implementing discovery + dedup |
 | `docs/DEDUP_DESIGN.md` | 4-layer dedup with normalization functions and code examples | Implementing dedup |
 | `AGENTS.md` | Project rules for AI agents | Always (auto-loaded by agent tools) |

@@ -25,8 +25,8 @@ architecture is product-grade.
 
 ### Product Design (MOST IMPORTANT)
 - **NO HARDCODED PERSONAL VALUES in Python code.** All user-specific config lives in
-  YAML files: `profile.yml`, `scoring_rubric.yml`, `accuracy_rules.yml`, `queries.yml`,
-  `filters.yml`. Engines are generic; config makes them personal.
+  YAML files: `profile.yml`, `scoring_rubric.yml`, `accuracy_rules.yml`, `identity_rules.yml`,
+  `channel_rules.yml`, `queries.yml`, `filters.yml`. Engines are generic; config makes them personal.
 - Ship `*.example.yml` templates with placeholder values. Real configs are `.gitignore`d.
 - Audit rule: grep `.py` files for personal values (names, comp numbers, company names,
   specific technologies in scoring logic) — if found, it's a bug.
@@ -36,6 +36,14 @@ architecture is product-grade.
 - Accuracy rules are config-driven (`config/accuracy_rules.yml`), validated
   programmatically after generation. Violations are flagged for manual review.
 - Forbidden technologies (from config) must NEVER appear in generated resumes.
+- Identity rules (`config/identity_rules.yml`) define positioning, experience anchor,
+  honest qualifiers, and never-claim list. Injected into JD analyzer and resume generator
+  prompts at call time. No hardcoded identity values in system prompts.
+- Channel rules (`config/channel_rules.yml`) define per-output-type constraints
+  (require_visible_urls, format_hints). Wired into resume generator; cover letter and
+  application answer channels defined for Phase 2.
+- Per-application AI policy (`jobs.ai_policy` column) allows overriding channel defaults
+  per job (allowed, draft_only, forbidden, or null for channel default).
 
 ### hiring.cafe Access
 - hiring.cafe is one source adapter, not hardcoded. See `docs/SOURCE_ADAPTERS.md`.

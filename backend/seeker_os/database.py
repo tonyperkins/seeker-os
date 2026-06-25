@@ -222,6 +222,10 @@ MIGRATIONS: list[str] = [
     CREATE INDEX IF NOT EXISTS idx_job_analyses_job_id ON job_analyses(job_id);
     CREATE INDEX IF NOT EXISTS idx_job_analyses_verdict ON job_analyses(verdict);
     """,
+    # Migration 8: Add ai_policy column for per-application AI generation policy
+    """
+    ALTER TABLE jobs ADD COLUMN ai_policy TEXT;
+    """,
 ]
 
 

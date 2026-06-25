@@ -59,6 +59,8 @@ data/.anthropic_oauth.json
 config/profile.yml
 config/scoring_rubric.yml
 config/accuracy_rules.yml
+config/identity_rules.yml
+config/channel_rules.yml
 config/queries.yml
 config/providers.yml
 config/blacklist.txt

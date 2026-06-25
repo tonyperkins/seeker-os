@@ -25,9 +25,7 @@ CRITICAL RULES — VIOLATIONS WILL CAUSE THE RESUME TO BE REJECTED:
 3. NEVER use technologies listed as "forbidden" in the accuracy rules.
 4. NEVER mention education unless explicitly required by the JD (and even then, only state it factually).
 5. Every claim must be traceable to the master resume. You may reorganize, emphasize, or de-emphasize, but never fabricate.
-6. Always include the full literal https:// URLs from the master resume as visible text (not just hyperlinks).
-7. Use "25+ years" for experience anchor, attached to overall engineering career, NOT to cloud/DevOps specifically.
-8. If the JD requires a technology not in the master resume, simply omit it — do not claim it. The gap is noted elsewhere.
+6. If the JD requires a technology not in the master resume, simply omit it — do not claim it. The gap is noted elsewhere.
 
 OUTPUT FORMAT:
 - Markdown format
@@ -45,8 +43,13 @@ def _build_user_prompt(
     company: str,
     jd_text: str,
     accuracy_rules_text: str,
+    anchor_text: str = "",
 ) -> str:
     """Build the user prompt with the master resume, JD, and accuracy rules."""
+    anchor_section = ""
+    if anchor_text:
+        anchor_section = f"\n## EXPERIENCE ANCHOR\n{anchor_text}\n"
+
     return f"""## MASTER RESUME
 Do not deviate from the facts in this resume. You may reorganize and emphasize, but never invent.
 
@@ -68,7 +71,7 @@ These rules are validated programmatically after generation. Violations will fla
 ---
 {accuracy_rules_text}
 ---
-
+{anchor_section}
 ## INSTRUCTIONS
 Tailor the master resume for this specific job. Emphasize relevant experience and skills. De-emphasize irrelevant parts. Do NOT add anything not in the master resume. Follow ALL accuracy rules above.
 
@@ -102,6 +105,22 @@ def _load_accuracy_rules_text(settings: Settings) -> str:
             lines.append(f"  Patterns to avoid: {', '.join(rule['patterns'])}")
 
     return "\n".join(lines) if lines else "(no rules defined)"
+
+
+def _load_identity_anchor_text(settings: Settings) -> str:
+    """Load the experience anchor from identity_rules.yml for the prompt.
+
+    Returns empty string if no identity or anchor is configured — the prompt
+    says nothing about an anchor in that case. No hardcoded fallback.
+    """
+    identity = settings.identity
+    if not identity or not identity.experience_anchor.phrase:
+        return ""
+    anchor = identity.experience_anchor
+    parts = [f'Use "{anchor.phrase}" for the experience anchor']
+    if anchor.applies_to:
+        parts.append(f"attached to {anchor.applies_to}")
+    return ", ".join(parts) + "."
 
 
 def generate_resume(
@@ -149,16 +168,30 @@ def generate_resume(
 
     # 3. Build prompts
     accuracy_rules_text = _load_accuracy_rules_text(settings)
+    anchor_text = _load_identity_anchor_text(settings)
     user_prompt = _build_user_prompt(
         master_resume=master_resume,
         job_title=job["title"] or "",
         company=job["company"] or "",
         jd_text=jd_text,
         accuracy_rules_text=accuracy_rules_text,
+        anchor_text=anchor_text,
     )
 
-    # 4. Call LLM (inject user instructions into system prompt if present)
+    # 4. Call LLM (inject user instructions and channel rules into system prompt)
     system_prompt = SYSTEM_PROMPT
+    channel_rules = settings.channel_rules
+    if channel_rules and channel_rules.resume:
+        resume_channel = channel_rules.resume
+        channel_lines: list[str] = []
+        if resume_channel.require_visible_urls:
+            channel_lines.append(
+                "Always include the full literal https:// URLs from the master resume as visible text (not just hyperlinks)."
+            )
+        if resume_channel.format_hints:
+            channel_lines.append(f"Format: {resume_channel.format_hints}")
+        if channel_lines:
+            system_prompt += f"\n\n--- CHANNEL RULES (resume) ---\n" + "\n".join(channel_lines) + "\n--- END CHANNEL RULES ---\n"
     if settings.profile and settings.profile.instructions:
         system_prompt += f"\n\n--- USER INSTRUCTIONS ---\n{settings.profile.instructions}\n--- END USER INSTRUCTIONS ---\n"
     router = ModelRouter(settings)

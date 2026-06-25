@@ -182,3 +182,166 @@ class TestValidator:
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert any("nonexistent_type" in r.getMessage() for r in warnings)
         assert any("bogus_rule" in r.getMessage() for r in warnings)
+
+    def test_experience_anchor_uses_identity_phrase(self, tmp_path, monkeypatch):
+        """Validator experience_anchor message should use identity_rules.yml anchor phrase."""
+        import shutil
+        from seeker_os.config import CONFIG_DIR
+
+        test_config = tmp_path / "config"
+        test_config.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config / f.name)
+
+        # Write accuracy rules with experience_anchor but no hardcoded patterns
+        (test_config / "accuracy_rules.yml").write_text(
+            yaml.dump({"rules": [
+                {"id": "exp_anchor", "description": "Non-standard anchor",
+                 "type": "experience_anchor", "patterns": [], "severity": "high"},
+            ]}, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        # Write identity rules with anchor phrase and disallowed_variants
+        (test_config / "identity_rules.yml").write_text(
+            yaml.dump({"identity": {
+                "positioning": "Test positioning",
+                "experience_anchor": {
+                    "phrase": "NN+ years in software",
+                    "applies_to": "overall career",
+                    "disallowed_variants": [r"(40|50)\+\s*years"],
+                },
+                "honest_qualifiers": [],
+                "never_claim": [],
+            }}, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
+        settings = Settings()
+        settings.config_dir = test_config
+
+        validator = AccuracyValidator(settings)
+        # Text with a disallowed variant should trigger violation
+        result = validator.validate("40+ years of experience.\nhttps://example.com")
+        anchor_violations = [v for v in result.violations if v.rule_id == "exp_anchor"]
+        assert len(anchor_violations) > 0
+        # Message should contain the configured anchor phrase
+        assert "NN+ years in software" in anchor_violations[0].violation
+
+    def test_experience_anchor_no_identity_no_variants(self, tmp_path, monkeypatch):
+        """When no identity_rules.yml configured, only accuracy_rules patterns are checked."""
+        import shutil
+        from seeker_os.config import CONFIG_DIR
+
+        test_config = tmp_path / "config"
+        test_config.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config / f.name)
+
+        # Accuracy rules with a specific pattern
+        (test_config / "accuracy_rules.yml").write_text(
+            yaml.dump({"rules": [
+                {"id": "exp_anchor", "description": "Non-standard anchor",
+                 "type": "experience_anchor", "patterns": [r"(99)\+\s*years"], "severity": "high"},
+            ]}, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        # No identity_rules.yml — should not crash, should still check accuracy_rules patterns
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
+        settings = Settings()
+        settings.config_dir = test_config
+
+        validator = AccuracyValidator(settings)
+        result = validator.validate("99+ years of experience.\nhttps://example.com")
+        anchor_violations = [v for v in result.violations if v.rule_id == "exp_anchor"]
+        assert len(anchor_violations) > 0
+        # No anchor phrase configured, so message should not include one
+        assert "must be" not in anchor_violations[0].violation
+
+    def test_experience_anchor_both_empty_no_violation(self, tmp_path, monkeypatch):
+        """Both patterns=[] and disallowed_variants=[] — merged list is empty,
+        so the check must iterate nothing and produce zero violations.
+
+        Guards against a future refactor (e.g. combined regex) that could
+        silently produce a match-everything bug from empty input.
+        """
+        import shutil
+        from seeker_os.config import CONFIG_DIR
+
+        test_config = tmp_path / "config"
+        test_config.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config / f.name)
+
+        # accuracy_rules.yml: experience_anchor with empty patterns
+        (test_config / "accuracy_rules.yml").write_text(
+            yaml.dump({"rules": [
+                {"id": "exp_anchor", "description": "Non-standard anchor",
+                 "type": "experience_anchor", "patterns": [], "severity": "high"},
+            ]}, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        # No identity_rules.yml — _load_identity_anchor() returns ("", [])
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
+        settings = Settings()
+        settings.config_dir = test_config
+
+        validator = AccuracyValidator(settings)
+        # Resume contains a year count that WOULD match if a regex existed
+        result = validator.validate("20+ years of experience.\nhttps://example.com")
+        anchor_violations = [v for v in result.violations if v.rule_id == "exp_anchor"]
+        assert len(anchor_violations) == 0
+
+    def test_experience_anchor_phrase_only_no_violation(self, tmp_path, monkeypatch):
+        """Anchor phrase configured but disallowed_variants=[] and patterns=[].
+
+        A configured "correct" anchor is not itself a disallowed pattern.
+        The check must produce zero violations.
+        """
+        import shutil
+        from seeker_os.config import CONFIG_DIR
+
+        test_config = tmp_path / "config"
+        test_config.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config / f.name)
+
+        # accuracy_rules.yml: experience_anchor with empty patterns
+        (test_config / "accuracy_rules.yml").write_text(
+            yaml.dump({"rules": [
+                {"id": "exp_anchor", "description": "Non-standard anchor",
+                 "type": "experience_anchor", "patterns": [], "severity": "high"},
+            ]}, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        # identity_rules.yml: phrase set but disallowed_variants empty
+        (test_config / "identity_rules.yml").write_text(
+            yaml.dump({"identity": {
+                "positioning": "Test positioning",
+                "experience_anchor": {
+                    "phrase": "NN+ years in engineering",
+                    "applies_to": "overall career",
+                    "disallowed_variants": [],
+                },
+                "honest_qualifiers": [],
+                "never_claim": [],
+            }}, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
+        settings = Settings()
+        settings.config_dir = test_config
+
+        validator = AccuracyValidator(settings)
+        result = validator.validate("20+ years of experience.\nhttps://example.com")
+        anchor_violations = [v for v in result.violations if v.rule_id == "exp_anchor"]
+        assert len(anchor_violations) == 0

@@ -1,0 +1,45 @@
+# Seeker OS — Identity Rules (EXAMPLE TEMPLATE)
+# Copy to identity_rules.yml and adjust. identity_rules.yml is .gitignore'd.
+#
+# This file defines WHO the candidate is — positioning, experience anchor,
+# honest qualifiers, and technologies that must never be claimed.
+# The engines (JD analyzer, resume generator, validator) read these values
+# at call time. Nothing here is hardcoded in Python.
+#
+# If a field is absent or empty, the corresponding behavior is simply absent
+# — there is no hardcoded default and no fallback value in code.
+
+identity:
+  # --- Positioning: "I am X, not Y" ---
+  # A one-sentence identity statement. The JD analyzer uses this to check
+  # alignment; the resume generator uses it to frame the summary.
+  positioning: "<your positioning statement — e.g. 'I build and operate reliable systems, not design products'>"
+
+  # --- Experience anchor ---
+  # The only acceptable experience phrasing. The validator flags any variant
+  # listed in disallowed_variants. The resume generator instructs the LLM
+  # to use this exact phrase.
+  experience_anchor:
+    phrase: "<your standard experience phrase — e.g. 'NN+ years in software engineering'>"
+    applies_to: "<what the anchor refers to — e.g. 'overall engineering career, not a specific stack'>"
+    disallowed_variants: []
+    # Examples of disallowed_variants (regex patterns):
+    #   - "(NN|NN)\\+\\s*years"   # inflated year counts
+    #   - "decades of experience"  # vague inflation
+
+  # --- Honest qualifiers ---
+  # Skills where the candidate's depth is honestly limited. The LLM must use
+  # the verbatim framing and must never upgrade it.
+  honest_qualifiers: []
+  # Example entries:
+  #   - skill: "<a technology>"
+  #     framing: "<honest qualifier — e.g. 'familiar, growing'>"
+
+  # --- Never claim ---
+  # Technologies that must NEVER appear as claimed depth in generated resumes
+  # or analysis output. This is the identity-layer never-claim list; it is
+  # distinct from accuracy_rules.yml's forbidden_technologies (which is the
+  # resume-output guard). Both are enforced independently.
+  never_claim: []
+  # Example entries:
+  #   - "<a technology you don't want claimed>"

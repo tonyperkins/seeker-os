@@ -56,6 +56,7 @@ export interface JobSummary {
   cross_ref_status: string | null;
   is_pinned: boolean;
   reject_reason: string | null;
+  ai_policy: string | null;
 }
 
 export interface JobDetail extends JobSummary {
@@ -80,6 +81,7 @@ export interface JobDetail extends JobSummary {
   content_hash: string | null;
   cross_ref_date: string | null;
   cross_ref_score: number | null;
+  ai_policy: string | null;
 }
 
 export interface PipelineRunSummary {
@@ -362,7 +364,7 @@ export const api = {
       return fetchAPI<JobSummary[]>(`/api/jobs${qs ? `?${qs}` : ""}`);
     },
     get: (id: number) => fetchAPI<JobDetail>(`/api/jobs/${id}`),
-    update: (id: number, data: { status?: string; notes?: string; is_pinned?: boolean }) =>
+    update: (id: number, data: { status?: string; notes?: string; is_pinned?: boolean; ai_policy?: string }) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     reject: (id: number, reason: string, details?: string) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/reject`, {

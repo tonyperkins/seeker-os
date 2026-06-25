@@ -1,0 +1,40 @@
+# Seeker OS — Channel Rules (EXAMPLE TEMPLATE)
+# Copy to channel_rules.yml and adjust. channel_rules.yml is .gitignore'd.
+#
+# Channel rules define per-output-type constraints and AI generation policy.
+# Each channel controls how AI-generated content is produced for that medium.
+#
+# Channels:
+#   resume            — tailored resume generation
+#   cover_letter      — cover letter generation (Phase 2)
+#   application_answer — application question answers (Phase 2)
+#   analysis          — JD analysis verdict thresholds
+#
+# Fields per channel:
+#   require_visible_urls — if true, generated content must include full literal
+#                          https:// URLs as visible text
+#   format_hints         — free-text hints passed to the LLM (e.g. "1-2 pages,
+#                          markdown, reverse chronological")
+#   ai_generation_default — default AI policy when no per-job override is set
+#                           (allowed | draft_only | forbidden)
+
+channels:
+  resume:
+    require_visible_urls: true
+    format_hints: "1-2 pages, markdown, reverse chronological, action verbs"
+    ai_generation_default: allowed
+
+  cover_letter:
+    require_visible_urls: false
+    format_hints: "Half page, professional tone, address the JD's stated needs"
+    ai_generation_default: allowed
+
+  application_answer:
+    require_visible_urls: false
+    format_hints: "Concise, direct, no filler — answer the question asked"
+    ai_generation_default: allowed
+
+  analysis:
+    require_visible_urls: false
+    format_hints: ""
+    ai_generation_default: allowed

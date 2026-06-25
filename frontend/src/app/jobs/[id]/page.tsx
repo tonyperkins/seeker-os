@@ -28,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { JobActions } from "@/components/job-actions";
+import { AIPolicyToggle } from "@/components/ai-policy-toggle";
 import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { JDRenderer } from "@/components/jd-renderer";
 import { CompanyResearch } from "@/components/company-research";
@@ -177,6 +178,16 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             </CardHeader>
             <CardContent>
               <JobActions jobId={job.id} currentStatus={job.status} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Policy</CardTitle>
+              <CardDescription>Per-application AI generation override</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AIPolicyToggle jobId={job.id} initialPolicy={job.ai_policy} />
             </CardContent>
           </Card>
 

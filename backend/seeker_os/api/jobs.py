@@ -77,6 +77,7 @@ def _row_to_detail(row) -> JobDetail:
         cross_ref_date=row["cross_ref_date"],
         cross_ref_score=row["cross_ref_score"],
         is_pinned=bool(row["is_pinned"]),
+        ai_policy=row["ai_policy"] if "ai_policy" in row.keys() else None,
     )
 
 
@@ -147,6 +148,11 @@ def update_job(job_id: int, update: JobUpdate):
             db.execute("UPDATE jobs SET status=?, updated_at=? WHERE id=?", (update.status, now, job_id))
         if update.is_pinned is not None:
             db.execute("UPDATE jobs SET is_pinned=?, updated_at=? WHERE id=?", (update.is_pinned, now, job_id))
+        if update.ai_policy is not None:
+            valid_policies = {"allowed", "draft_only", "forbidden"}
+            if update.ai_policy not in valid_policies:
+                raise HTTPException(status_code=422, detail=f"ai_policy must be one of: {', '.join(valid_policies)}")
+            db.execute("UPDATE jobs SET ai_policy=?, updated_at=? WHERE id=?", (update.ai_policy, now, job_id))
         db.commit()
         return MessageResponse(message=f"Job {job_id} updated")
     finally:

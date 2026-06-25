@@ -28,10 +28,18 @@ The engines are generic; the config makes them personal.
 └───────────┘  └────────────┘  └──────────────┘
 
 ┌─────────────────────────────────────────────────┐
+│           AI Rules Layer (three-tier)             │
+│                                                   │
+│  identity_rules.yml  →  WHO (positioning, anchor) │
+│  channel_rules.yml   →  HOW (per-channel format)  │
+│  jobs.ai_policy      →  WHEN (per-application)    │
+└───────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
 │              Operational Config                   │
 │  queries.yml · filters.yml · blacklist.txt       │
 │  (already configurable — no changes needed)      │
-└──────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────┘
 ```
 
 ## Config Files
@@ -43,6 +51,8 @@ The engines are generic; the config makes them personal.
 | `config/profile.yml` | User identity, comp, location, blacklist, paths | Yes — `.gitignore`d |
 | `config/scoring_rubric.yml` | Scoring weights, patterns, thresholds | Yes — `.gitignore`d |
 | `config/accuracy_rules.yml` | Resume accuracy rules | Yes — `.gitignore`d |
+| `config/identity_rules.yml` | Candidate identity: positioning, experience anchor, honest qualifiers, never-claim | Yes — `.gitignore`d |
+| `config/channel_rules.yml` | Per-channel AI generation rules (resume, cover letter, analysis) | No — can be committed |
 | `config/queries.yml` | Search queries (hiring.cafe URL slugs) | Somewhat — `.gitignore`d |
 | `config/filters.yml` | Filter thresholds, request settings | No — can be committed |
 | `config/blacklist.txt` | Company blacklist (flat list) | Yes — `.gitignore`d |

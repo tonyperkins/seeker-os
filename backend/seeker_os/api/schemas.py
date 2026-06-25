@@ -89,6 +89,7 @@ class JobDetail(BaseModel):
     cross_ref_score: float | None = None
 
     is_pinned: bool = False
+    ai_policy: str | None = None
 
 
 class JobUpdate(BaseModel):
@@ -96,6 +97,7 @@ class JobUpdate(BaseModel):
     status: str | None = None
     notes: str | None = None
     is_pinned: bool | None = None
+    ai_policy: str | None = None
 
 
 class JobReject(BaseModel):

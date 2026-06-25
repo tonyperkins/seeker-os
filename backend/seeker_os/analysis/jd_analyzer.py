@@ -28,8 +28,7 @@ nothing else. No prose outside the JSON.
 
 ## How to think (this is the conversational analysis, formalized)
 1. STATE GAPS FIRST. Before any recommendation, name where the candidate does not
-   meet the JD as written. Be blunt. A principal-level honest gap ("K8s is primary
-   here; candidate is re-ramping, prod at one employer 2016–2020") is the product,
+   meet the JD as written. Be blunt. A principal-level honest gap is the product,
    not a thing to hide.
 2. Score each rubric dimension, apply bonuses/penalties/blockers from RUBRIC, and
    compute the weighted total. Show the per-dimension breakdown.
@@ -38,10 +37,9 @@ nothing else. No prose outside the JSON.
    clearance/citizenship requirements, and any never-claim tech as a PRIMARY stack
    requirement.
 4. Check COMP against the floor in PREFS. Unposted comp is a flag, not a blocker.
-5. Check POSITIONING. The candidate's identity is deploying/operating AI systems
-   reliably in production — the infra/reliability layer. Roles that are actually
-   AI/ML model- or feature-BUILDING are a positioning mismatch even if the stack
-   overlaps. Call this out.
+5. Check POSITIONING. The candidate's positioning is provided below in the injected
+   context. Roles that mismatch the candidate's positioning should be called out,
+   even if the stack overlaps.
 6. Produce tailoring guidance — but tailoring is REORDER and REFRAME ONLY.
 
 ## Accuracy guardrails (NON-NEGOTIABLE — override helpfulness)
@@ -74,7 +72,7 @@ nothing else. No prose outside the JSON.
   "bonuses_applied": [ "" ],
   "penalties_applied": [ "" ],
   "comp": { "posted": null, "meets_floor": null, "note": "" },
-  "positioning": { "aligned": true, "note": "AI-in-prod infra vs model/feature-building" },
+  "positioning": { "aligned": true, "note": "" },
   "company_fit": { "size_bucket": null, "stage": null, "remote_policy": null, "note": "" },
   "tailoring": {
     "lead_with": [ "competencies to surface first — must already exist in master" ],
@@ -198,11 +196,33 @@ def _load_rubric_text(settings: Settings) -> str:
     return "\n".join(lines)
 
 
+def _load_identity_text(settings: Settings) -> str:
+    """Load identity rules as a text block for the prompt."""
+    identity = settings.identity
+    if not identity:
+        return "(no identity rules configured)"
+    lines: list[str] = []
+    if identity.positioning:
+        lines.append(f"Positioning: {identity.positioning}")
+    if identity.experience_anchor.phrase:
+        lines.append(f"Experience anchor: {identity.experience_anchor.phrase}")
+        if identity.experience_anchor.applies_to:
+            lines.append(f"  Applies to: {identity.experience_anchor.applies_to}")
+    if identity.honest_qualifiers:
+        lines.append("Honest qualifiers (verbatim — do not upgrade):")
+        for hq in identity.honest_qualifiers:
+            lines.append(f"  - {hq.skill}: {hq.framing}")
+    if identity.never_claim:
+        lines.append(f"Never claim: {', '.join(identity.never_claim)}")
+    return "\n".join(lines) if lines else "(no identity rules configured)"
+
+
 def _build_user_prompt(
     master_resume: str,
     prefs_text: str,
     rules_text: str,
     rubric_text: str,
+    identity_text: str,
     jd_text: str,
     company: str,
     title: str,
@@ -230,6 +250,11 @@ def _build_user_prompt(
 ### PREFERENCES
 ---
 {prefs_text}
+---
+
+### IDENTITY (positioning, honest qualifiers, never-claim)
+---
+{identity_text}
 ---
 
 ### RULES (accuracy + never-claim guardrails)
@@ -295,6 +320,7 @@ def analyze_job(
     prefs_text = _load_prefs_text(settings)
     rules_text = _load_accuracy_rules_text(settings)
     rubric_text = _load_rubric_text(settings)
+    identity_text = _load_identity_text(settings)
 
     # 3. Build prompt
     user_prompt = _build_user_prompt(
@@ -302,6 +328,7 @@ def analyze_job(
         prefs_text=prefs_text,
         rules_text=rules_text,
         rubric_text=rubric_text,
+        identity_text=identity_text,
         jd_text=jd_text,
         company=job["company"] or "",
         title=job["title"] or "",
