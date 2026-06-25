@@ -3,9 +3,10 @@
 ## Overview
 
 Seeker OS is a **reusable product** — a structured job search pipeline with a web
-dashboard. It sources jobs from hiring.cafe, applies tiered filtering, scores against
-a user-configured rubric, generates tailored resumes with accuracy enforcement, and
-tracks the application lifecycle. The architecture is product-grade.
+dashboard. It sources jobs from pluggable source adapters (currently hiring.cafe),
+applies tiered filtering, scores against a user-configured rubric, generates tailored
+resumes with accuracy enforcement, and tracks the application lifecycle. The
+architecture is product-grade.
 
 ## Key Files
 

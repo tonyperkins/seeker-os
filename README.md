@@ -4,7 +4,7 @@ A structured, dashboard-driven job search pipeline.
 
 ## What It Does
 
-1. **Discovers** jobs from hiring.cafe's search API (no browser required)
+1. **Discovers** jobs from supported sources (currently hiring.cafe; pluggable adapter architecture for adding more)
 2. **Filters** aggressively using structured fields before fetching full JDs
 3. **Scores** survivors against a user-configured rubric
 4. **Analyzes** job fit with an AI agent that evaluates JD vs. profile, producing a verdict (APPLY/CONDITIONAL/MONITOR/SKIP) with named gaps, rubric breakdown, and tailoring guidance
@@ -24,6 +24,7 @@ queryable interface, no analytics, and no resume automation.
 - [LLM Routing](docs/LLM_ROUTING.md) — Multi-provider model routing
 - [Scoring Rubric](docs/SCORING_RUBRIC.md)
 - [Resume Accuracy Rules](docs/ACCURACY_RULES.md)
+- [Source Adapters](docs/SOURCE_ADAPTERS.md) — Pluggable source adapter design
 - [hiring.cafe Field Reference](docs/HIRINGCAFE_FIELDS.md)
 - [Dedup Design](docs/DEDUP_DESIGN.md)
 
@@ -38,4 +39,4 @@ JD analysis are implemented. See [docs/PLAN.md](docs/PLAN.md) for the full roadm
 - **Backend:** Python + FastAPI
 - **Frontend:** Next.js + Tailwind CSS
 - **AI:** Multi-provider (Ollama local, Anthropic, OpenAI) with model routing
-- **Job source:** hiring.cafe regular search API (`__NEXT_DATA__` JSON extraction)
+- **Job sources:** Pluggable adapter architecture (currently supports hiring.cafe via `__NEXT_DATA__` JSON extraction)
