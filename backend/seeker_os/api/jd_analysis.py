@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from seeker_os.api.schemas import JobAnalysisResponse
 from seeker_os.analysis.jd_analyzer import analyze_job, get_latest_analysis
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/jobs", tags=["jd-analysis"])
 
 
@@ -78,5 +81,6 @@ def run_analysis(job_id: int):
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
+    except Exception:
+        logger.exception("JD analysis failed for job_id=%s", job_id)
+        raise HTTPException(status_code=500, detail="Analysis failed — see server logs for details")

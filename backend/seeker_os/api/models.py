@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 from fastapi import APIRouter, HTTPException
@@ -9,6 +10,7 @@ from pydantic import BaseModel
 
 from seeker_os.api.schemas import MessageResponse
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/models", tags=["models"])
 
 
@@ -191,8 +193,9 @@ def fetch_models(provider_id: str):
             )
             for m in models
         ]
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {e}")
+    except Exception:
+        logger.exception("Failed to fetch models from provider '%s'", provider_id)
+        raise HTTPException(status_code=502, detail="Failed to fetch models — see server logs for details")
 
 
 @router.post("/test/{provider_id}", response_model=dict)
@@ -300,23 +303,8 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
 
     # Write .env updates (append or update)
     if env_updates:
-        env_path = PROJECT_ROOT / ".env"
-        existing_env = {}
-        if env_path.exists():
-            for line in env_path.read_text().splitlines():
-                if "=" in line and not line.strip().startswith("#"):
-                    k, _, v = line.partition("=")
-                    existing_env[k.strip()] = v.strip()
-
-        existing_env.update(env_updates)
-        env_lines = [f"{k}={v}" for k, v in existing_env.items()]
-        env_path.write_text("\n".join(env_lines) + "\n")
-
-        # Update the live environment so the new key takes effect immediately.
-        # load_dotenv uses override=False by default, so a key that already existed
-        # in os.environ at startup would NOT be refreshed by re-loading .env.
-        # This makes the UI the authoritative source on explicit save.
-        os.environ.update(env_updates)
+        from seeker_os.env_utils import write_env
+        write_env(env_updates)
 
     # Write providers.yml back
     with open(providers_yml_path, "w") as f:
@@ -496,8 +484,9 @@ def anthropic_oauth_callback(body: OAuthCallbackRequest):
         exchange_code(body.code, body.state)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Token exchange failed: {e}")
+    except Exception:
+        logger.exception("OAuth token exchange failed")
+        raise HTTPException(status_code=500, detail="Token exchange failed — see server logs for details")
 
     # Update providers.yml to use the local token file
     raw = _read_providers_yml()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 import yaml
@@ -9,8 +10,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from seeker_os.api.schemas import MessageResponse
-from seeker_os.config import Settings, CONFIG_DIR, PROJECT_ROOT
+from seeker_os.config import Settings, CONFIG_DIR
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings", tags=["company-research-settings"])
 
 RETRIEVAL_API_KEY_ENV = "RETRIEVAL_API_KEY"
@@ -86,23 +88,6 @@ def _seed_cr_yaml() -> dict:
     return CompanyResearchConfig().model_dump()
 
 
-def _write_env(key: str, value: str) -> None:
-    """Write a key=value pair to .env, updating if exists. Mirrors api/models.py."""
-    env_path = PROJECT_ROOT / ".env"
-    existing_env: dict[str, str] = {}
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            if "=" in line and not line.strip().startswith("#"):
-                k, _, v = line.partition("=")
-                existing_env[k.strip()] = v.strip()
-
-    existing_env[key] = value
-    env_lines = [f"{k}={v}" for k, v in existing_env.items()]
-    env_path.write_text("\n".join(env_lines) + "\n")
-
-    os.environ.update({key: value})
-
-
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -160,7 +145,8 @@ def update_retrieval_settings(body: RetrievalSettingsUpdate):
         retrieval["type"] = body.provider_type
 
     if body.api_key is not None:
-        _write_env(RETRIEVAL_API_KEY_ENV, body.api_key)
+        from seeker_os.env_utils import write_env
+        write_env({RETRIEVAL_API_KEY_ENV: body.api_key})
         retrieval["api_key"] = f"${{{RETRIEVAL_API_KEY_ENV}}}"
 
     if body.max_results is not None:
@@ -220,5 +206,6 @@ def test_retrieval_connection():
             ok=ok,
             message="Connection successful" if ok else "Connection failed — check API key and network",
         )
-    except Exception as e:
-        return TestConnectionResponse(ok=False, message=f"Error: {e}")
+    except Exception:
+        logger.exception("Retrieval connection test failed")
+        return TestConnectionResponse(ok=False, message="Connection test failed — see server logs for details")

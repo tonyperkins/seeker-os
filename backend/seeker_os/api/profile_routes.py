@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -15,6 +17,7 @@ from seeker_os.config import Settings, ProfileConfig, FiltersConfig, FilterConfi
 from seeker_os.config_writer import write_profile, write_filters, write_accuracy_rules
 from seeker_os.validation import KNOWN_RULE_TYPES
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["profile"])
 
 
@@ -264,8 +267,9 @@ Output the JSON now:"""
             temperature=0.3,
             max_tokens=4000,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
+    except Exception:
+        logger.exception("LLM call failed for AI rule generation")
+        raise HTTPException(status_code=500, detail="LLM call failed — see server logs for details")
 
     # Parse the JSON response
     import json
@@ -279,10 +283,11 @@ Output the JSON now:"""
 
     try:
         data = json.loads(text)
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
+        logger.exception("LLM returned invalid JSON for AI rule generation. Raw text: %s", text[:500])
         raise HTTPException(
             status_code=500,
-            detail=f"LLM returned invalid JSON: {e}. Raw: {text[:500]}",
+            detail="LLM returned invalid JSON — see server logs for details",
         )
 
     raw_rules = data.get("rules", [])

@@ -33,7 +33,6 @@ def cr_settings_client(tmp_path, monkeypatch):
     monkeypatch.setattr("seeker_os.config.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr("seeker_os.config_writer.CONFIG_DIR", test_config)
     monkeypatch.setattr("seeker_os.api.company_research_settings.CONFIG_DIR", test_config)
-    monkeypatch.setattr("seeker_os.api.company_research_settings.PROJECT_ROOT", tmp_path)
 
     from seeker_os.api.app import app
     client = TestClient(app)

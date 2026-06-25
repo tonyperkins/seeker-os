@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 from seeker_os.api.schemas import ResumeParseResult, ContactInfoSchema, MessageResponse
 from seeker_os.database import get_connection
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
 
@@ -137,14 +139,16 @@ def parse_master_resume():
         try:
             from seeker_os.resume.extract import extract_docx_text
             resume_text = extract_docx_text(master_path)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to extract DOCX: {e}")
+        except Exception:
+            logger.exception("DOCX extraction failed")
+            raise HTTPException(status_code=500, detail="Failed to extract DOCX — see server logs for details")
     elif fmt == "pdf":
         try:
             from seeker_os.resume.extract import extract_pdf_text
             resume_text = extract_pdf_text(master_path)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to extract PDF: {e}")
+        except Exception:
+            logger.exception("PDF extraction failed")
+            raise HTTPException(status_code=500, detail="Failed to extract PDF — see server logs for details")
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported resume format: {fmt}")
 
@@ -211,10 +215,12 @@ Rules:
 
         return result
 
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"LLM returned invalid JSON: {e}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Resume parsing failed: {e}")
+    except json.JSONDecodeError:
+        logger.exception("LLM returned invalid JSON during resume parsing")
+        raise HTTPException(status_code=500, detail="LLM returned invalid JSON — see server logs for details")
+    except Exception:
+        logger.exception("Resume parsing failed")
+        raise HTTPException(status_code=500, detail="Resume parsing failed — see server logs for details")
 
 
 def _save_parsed_to_config(settings, result: ResumeParseResult) -> None:
@@ -438,8 +444,9 @@ def generate_resume(body: ResumeGenerateRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
+    except Exception:
+        logger.exception("Resume generation failed for job_id=%s", body.job_id)
+        raise HTTPException(status_code=500, detail="Generation failed — see server logs for details")
 
 
 @router.post("/{resume_id}/validate", response_model=dict)

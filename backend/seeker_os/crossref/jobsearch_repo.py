@@ -16,11 +16,21 @@ from seeker_os.dedup.normalize import normalize_company, normalize_title
 from seeker_os.models import CrossRefResult
 
 
+def _validate_git_repo(path: Path) -> bool:
+    """Check that a path is a git repository (has a .git entry)."""
+    git_dir = path / ".git"
+    return git_dir.exists()
+
+
 def sync_repo(repo_path: str) -> bool:
     """Git pull --rebase the job-search repo. Returns True on success."""
     path = Path(repo_path).expanduser()
     if not path.exists():
         print(f"  WARNING: Cross-reference repo not found at {path}")
+        return False
+
+    if not _validate_git_repo(path):
+        print(f"  WARNING: Cross-reference path is not a git repository: {path}")
         return False
 
     try:
@@ -153,6 +163,9 @@ def check_cross_reference(
     """
     path = Path(repo_path).expanduser()
     if not path.exists():
+        return CrossRefResult(matched=False, match_confidence="")
+
+    if not _validate_git_repo(path):
         return CrossRefResult(matched=False, match_confidence="")
 
     # Scan all directories
