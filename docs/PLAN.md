@@ -960,6 +960,8 @@ existing throttling patterns (1 req/sec).
 │   ├── queries.example.yml        # Template
 │   ├── filters.yml                # Filter thresholds
 │   ├── filters.example.yml        # Template
+│   ├── company_research.yml       # Company research config (retrieval, thresholds) (gitignored)
+│   ├── company_research.example.yml # Template
 │   ├── blacklist.txt              # Company blacklist (gitignored)
 │   └── blacklist.example.txt      # Template
 │
@@ -1000,13 +1002,30 @@ a ranked report. CLI-only.
 5. Basic analytics (funnel, response rate)
 
 ### Phase 3: Resume Generation
-**Goal:** Automated resume tailoring with accuracy enforcement.
+**Goal:** Automated resume tailoring with accuracy enforcement + company research with live retrieval.
 
 1. LLM integration (multi-provider: Anthropic, Ollama)
 2. Resume generation prompt + model routing
 3. Accuracy validation pass
 4. PDF/DOCX export
 5. Resume viewer in dashboard
+6. **Company research with pluggable retrieval adapter:**
+   - Pluggable retrieval adapter interface (`seeker_os/research/retrieval/base.py`)
+   - Tavily adapter as one implementation (`seeker_os/research/retrieval/tavily.py`)
+   - Registry pattern for adapter discovery (`seeker_os/research/retrieval/registry.py`)
+   - Retrieval snippets injected as sourced context into LLM dossier prompt with
+     anti-hallucination instructions (URLs must be attached to claims, no invented URLs)
+   - Config-driven query templates (`funding_query_template`, `sentiment_query_template`)
+     with `{company}` placeholder — defaults preserve behavior when absent
+   - Config-driven thresholds: `confidence_floor`, `staleness_months`, `source_trust_order`
+   - `source_trust_order` ranks retrieval sources and claim sources (stable sort,
+     subdomain-tolerant, case-insensitive) — ordering only, no filtering or inflation
+   - Staleness flags on sentiment themes older than `staleness_months`
+   - Confidence floor marks dossiers as `is_stub` when below threshold
+   - Graceful degradation: when no retrieval provider configured, behavior matches
+     pre-Phase-3 (Wikipedia + Wikidata + JD context only)
+   - On-demand only (2 paid retrieval calls per research request, no batch/cron)
+   - Config: `config/company_research.yml` (see `config/company_research.example.yml`)
 
 ### Phase 4: Manual Job Entry & Capture
 **Goal:** Let users add jobs from anywhere — not just hiring.cafe search. Capture

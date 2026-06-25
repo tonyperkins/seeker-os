@@ -24,3 +24,36 @@ llm_dossier:
   # Task name used for LLM routing (maps to tier in providers.yml)
   task: "company_dossier_generation"
   temperature: 0.3
+
+# Live Retrieval (Phase 3)
+# Pluggable web search adapter for funding signals and employee sentiment.
+# Provider choice and API key come from config/env — never hardcoded in .py.
+# When unconfigured or disabled, the research flow degrades cleanly to
+# Wikipedia + Wikidata + JD context only (pre-Phase-3 behavior).
+retrieval:
+  # Adapter type: 'tavily' (more can be registered in retrieval/registry.py)
+  type: ""              # e.g. "tavily" — empty string = no retrieval
+  # API key as env var reference (resolved by Settings at load time)
+  api_key: ${RETRIEVAL_API_KEY}
+  max_results: 5        # Max snippets per query
+  timeout_seconds: 15
+  # Query templates — {company} is replaced with the company name at runtime.
+  # If a template omits {company}, it is used as-is without crashing.
+  funding_query_template: "{company} funding round investors valuation"
+  sentiment_query_template: "{company} employee reviews sentiment glassdoor culture"
+
+# Thresholds (Phase 3)
+# confidence_floor: below this, the dashboard treats the dossier as a stub
+# staleness_months: sentiment signals older than this are flagged stale
+# source_trust_order: ordered list of preferred source domains (highest first)
+confidence_floor: 0.3
+staleness_months: 18
+source_trust_order:
+  - "crunchbase.com"
+  - "techcrunch.com"
+  - "sec.gov"
+  - "layoffs.fyi"
+  - "glassdoor.com"
+  - "levels.fyi"
+  - "reddit.com"
+

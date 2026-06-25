@@ -20,13 +20,15 @@ architecture is product-grade.
 - `docs/ACCURACY_RULES.md` — Resume accuracy rules reference (values; validator reads from YAML)
 - `docs/HIRINGCAFE_FIELDS.md` — hiring.cafe `__NEXT_DATA__` field reference
 - `docs/DEDUP_DESIGN.md` — Multi-layer dedup system design
+- `config/company_research.example.yml` — Company research config template (retrieval, thresholds)
 
 ## Critical Rules
 
 ### Product Design (MOST IMPORTANT)
 - **NO HARDCODED PERSONAL VALUES in Python code.** All user-specific config lives in
   YAML files: `profile.yml`, `scoring_rubric.yml`, `accuracy_rules.yml`, `identity_rules.yml`,
-  `channel_rules.yml`, `queries.yml`, `filters.yml`. Engines are generic; config makes them personal.
+  `channel_rules.yml`, `queries.yml`, `filters.yml`, `company_research.yml`. Engines are generic;
+  config makes them personal.
 - Ship `*.example.yml` templates with placeholder values. Real configs are `.gitignore`d.
 - Audit rule: grep `.py` files for personal values (names, comp numbers, company names,
   specific technologies in scoring logic) — if found, it's a bug.
@@ -92,6 +94,22 @@ architecture is product-grade.
 - API keys as env var references (`${VAR_NAME}`), never literal in config files.
 - `providers.yml` schema is defined in Phase 1; LLM calls begin in Phase 2.5+.
 - See `docs/LLM_ROUTING.md` for full details.
+
+### Company Research
+- Pluggable retrieval adapter interface (`seeker_os/research/retrieval/base.py`).
+  Tavily is one adapter (`tavily.py`); registry builds from config (`registry.py`).
+- Retrieval provider type and API key come from `config/company_research.yml`, not code.
+  API keys as env var references (`${RETRIEVAL_API_KEY}`), never literal.
+- Retrieval query templates (`funding_query_template`, `sentiment_query_template`) are
+  config-driven with `{company}` placeholder. Defaults preserve behavior when absent.
+- Retrieval snippets are injected into the LLM dossier prompt as sourced context with
+  anti-hallucination instructions: URLs must be attached to claims, no invented URLs.
+- Thresholds are config-driven: `confidence_floor` (marks stubs), `staleness_months`
+  (flags stale sentiment), `source_trust_order` (ranks sources — ordering only, no
+  filtering or inflation; stable sort, subdomain-tolerant, case-insensitive).
+- When no retrieval provider is configured, the research flow degrades cleanly to
+  Wikipedia + Wikidata + JD context only (pre-Phase-3 behavior).
+- Company research is on-demand only (2 paid retrieval calls per request, no batch/cron).
 
 ## Build Commands
 

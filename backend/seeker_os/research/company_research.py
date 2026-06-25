@@ -13,6 +13,7 @@ research_company().
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -29,6 +30,9 @@ from seeker_os.research.models import (
     VerdictFlags,
     WikipediaInfo,
 )
+from seeker_os.research.retrieval.models import RetrievalSnippet
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +316,7 @@ def fetch_llm_dossier(
     wikidata_founded: int | None = None,
     wikidata_headcount: int | None = None,
     jd_text: str = "",
+    retrieval_snippets: list[RetrievalSnippet] | None = None,
 ) -> CompanyResearchResult | None:
     """Generate a full company dossier using the configured LLM.
 
@@ -320,6 +325,9 @@ def fetch_llm_dossier(
     are configured, returns None.
 
     Context from Wikipedia/Wikidata is passed to the LLM to improve accuracy.
+    When retrieval_snippets are provided (Phase 3), they are injected as
+    sourced context with URLs, and the prompt instructs the model to attach
+    those URLs to claims.
     """
     try:
         from seeker_os.llm.router import ModelRouter
@@ -348,6 +356,30 @@ def fetch_llm_dossier(
         context_parts.append(f"Careers URL: {careers_url}")
     if jd_text:
         context_parts.append(f"## Job description (primary source — may name investors, stage, remote policy)\n---\n{jd_text}\n---")
+
+    # Phase 3: inject retrieval snippets as sourced context
+    retrieval_context = ""
+    if retrieval_snippets:
+        retrieval_lines = []
+        for i, snip in enumerate(retrieval_snippets, 1):
+            retrieval_lines.append(
+                f"[{i}] URL: {snip.url}\n"
+                f"    Source: {snip.source_domain}\n"
+                f"    Title: {snip.title}\n"
+                f"    Snippet: {snip.snippet}"
+            )
+        retrieval_context = (
+            "## Retrieved web search results (sourced — cite these URLs in claims)\n"
+            "---\n"
+            + "\n".join(retrieval_lines)
+            + "\n---\n"
+            "IMPORTANT: When using information from these results, you MUST attach the "
+            "corresponding URL to the claim in the sources array. Do not invent URLs. "
+            "If a claim cannot be sourced from these results or the context above, set "
+            "it to null and lower confidence."
+        )
+        context_parts.append(retrieval_context)
+
     context = "\n".join(context_parts) if context_parts else "No additional context available."
 
     user_prompt = f"""## Input
@@ -461,6 +493,127 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
 # Orchestrator
 # ---------------------------------------------------------------------------
 
+def _run_retrieval_queries(
+    adapter,
+    company: str,
+    funding_query_template: str = "{company} funding round investors valuation",
+    sentiment_query_template: str = "{company} employee reviews sentiment glassdoor culture",
+) -> list[RetrievalSnippet]:
+    """Run retrieval queries for funding signals and employee sentiment.
+
+    Returns a flat list of snippets from both query types. Each snippet
+    carries a URL so the LLM can attach it to claims.
+
+    Query templates come from config (company_research.yml → retrieval.*)
+    and use a {company} placeholder. If a template omits the placeholder,
+    it is used as-is without crashing.
+    """
+    if not adapter:
+        return []
+
+    all_snippets: list[RetrievalSnippet] = []
+
+    # Safe format: if {company} is not in the template, use it as-is
+    try:
+        funding_query = funding_query_template.format(company=company)
+    except (KeyError, IndexError):
+        funding_query = funding_query_template
+    try:
+        sentiment_query = sentiment_query_template.format(company=company)
+    except (KeyError, IndexError):
+        sentiment_query = sentiment_query_template
+
+    queries = [funding_query, sentiment_query]
+
+    for q in queries:
+        try:
+            snippets = adapter.search(q)
+            all_snippets.extend(snippets)
+        except Exception as e:
+            logger.warning("Retrieval query '%s' failed: %s", q, e)
+
+    return all_snippets
+
+
+def _apply_staleness_flags(
+    result: CompanyResearchResult,
+    staleness_months: int,
+) -> None:
+    """Flag sentiment themes older than staleness_months as stale.
+
+    Mutates result in place: sets staleness_warning on the sentiment dossier
+    if any theme's age_months exceeds the threshold.
+    """
+    if not result.sentiment:
+        return
+
+    stale_themes: list[str] = []
+    for theme in result.sentiment.positives + result.sentiment.negatives:
+        if theme.age_months is not None and theme.age_months > staleness_months:
+            stale_themes.append(theme.theme)
+
+    if stale_themes:
+        existing = result.sentiment.staleness_warning or ""
+        warning = (
+            f"Sentiment signals older than {staleness_months} months: "
+            + ", ".join(stale_themes)
+        )
+        result.sentiment.staleness_warning = (
+            f"{existing}; {warning}" if existing else warning
+        )
+
+
+def _apply_confidence_floor(
+    result: CompanyResearchResult,
+    confidence_floor: float,
+) -> None:
+    """Mark the dossier as a stub if overall_confidence is below the floor."""
+    if result.overall_confidence < confidence_floor:
+        result.is_stub = True
+
+
+def _domain_matches_trust_entry(url: str, trust_entry: str) -> bool:
+    """Check if a URL's domain matches a source_trust_order entry.
+
+    Match is case-insensitive and subdomain-tolerant: a URL on
+    "news.crunchbase.com" matches a trust entry "crunchbase.com".
+    """
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.lower()
+        if not host:
+            return False
+        entry = trust_entry.lower().strip()
+        if not entry:
+            return False
+        # Exact match or subdomain match (host ends with ".entry")
+        return host == entry or host.endswith("." + entry)
+    except Exception:
+        return False
+
+
+def _rank_sources_by_trust(
+    sources: list[SourceRef],
+    trust_order: list[str],
+) -> list[SourceRef]:
+    """Stable-sort sources by source_trust_order rank.
+
+    Sources whose domain matches an earlier entry in trust_order sort first.
+    Domains not in the list sort last, preserving their original relative
+    order (stable sort). Nothing is added or removed.
+    """
+    if not trust_order or not sources:
+        return sources
+
+    def trust_rank(src: SourceRef) -> int:
+        for i, entry in enumerate(trust_order):
+            if _domain_matches_trust_entry(src.url, entry):
+                return i
+        return len(trust_order)  # unlisted → after all known entries
+
+    return sorted(sources, key=trust_rank)
+
+
 def research_company(
     company: str,
     company_homepage: str | None = None,
@@ -487,6 +640,26 @@ def research_company(
         researched_at=now,
     )
 
+    # Load company_research config for thresholds and retrieval
+    cr_config = None
+    retrieval_adapter = None
+    try:
+        from seeker_os.config import Settings
+        settings = Settings()
+        cr_config = settings.company_research
+    except Exception:
+        pass
+
+    # Build retrieval adapter if configured
+    if cr_config and cr_config.retrieval and cr_config.retrieval.type:
+        try:
+            from seeker_os.research.retrieval.registry import build_retrieval_adapter
+            retrieval_adapter = build_retrieval_adapter(
+                cr_config.retrieval.model_dump()
+            )
+        except Exception as e:
+            logger.warning("Failed to build retrieval adapter: %s", e)
+
     # 1. Wikipedia (company description — context for LLM and display)
     wiki = fetch_wikipedia_info(company)
     if wiki:
@@ -505,6 +678,24 @@ def research_company(
         wikidata_headcount = wikidata.headcount
         result.sources_used.append("wikidata")
 
+    # 2b. Live retrieval (Phase 3) — funding + sentiment snippets with URLs
+    retrieval_snippets: list[RetrievalSnippet] = []
+    if retrieval_adapter:
+        funding_template = cr_config.retrieval.funding_query_template if cr_config else "{company} funding round investors valuation"
+        sentiment_template = cr_config.retrieval.sentiment_query_template if cr_config else "{company} employee reviews sentiment glassdoor culture"
+        retrieval_snippets = _run_retrieval_queries(
+            retrieval_adapter, company,
+            funding_query_template=funding_template,
+            sentiment_query_template=sentiment_template,
+        )
+        if retrieval_snippets:
+            result.retrieval_used = True
+            result.sources_used.append("retrieval")
+            result.retrieval_sources = [
+                SourceRef(url=snip.url, retrieved=now)
+                for snip in retrieval_snippets
+            ]
+
     # 3. LLM dossier generation (comprehensive: funding + sentiment + fit)
     if enable_llm:
         dossier = fetch_llm_dossier(
@@ -514,6 +705,7 @@ def research_company(
             wikidata_founded=wikidata_founded,
             wikidata_headcount=wikidata_headcount,
             jd_text=jd_text,
+            retrieval_snippets=retrieval_snippets or None,
         )
         if dossier:
             # Preserve Wikipedia info and merge sources
@@ -530,9 +722,39 @@ def research_company(
                     dossier.funding.headcount = wikidata_headcount
             elif wikidata and not dossier.funding:
                 dossier.funding = wikidata
+            # Preserve retrieval metadata from the pre-dossier result
+            dossier.retrieval_used = result.retrieval_used
+            dossier.retrieval_sources = result.retrieval_sources
+            if "retrieval" in result.sources_used and "retrieval" not in dossier.sources_used:
+                dossier.sources_used.append("retrieval")
             result = dossier
         elif wikidata:
             # LLM unavailable — use Wikidata as fallback funding data
             result.funding = wikidata
+
+    # 4. Apply Phase 3 thresholds
+    staleness_months = cr_config.staleness_months if cr_config else 18
+    confidence_floor = cr_config.confidence_floor if cr_config else 0.3
+    source_trust_order = cr_config.source_trust_order if cr_config else []
+    _apply_staleness_flags(result, staleness_months)
+    _apply_confidence_floor(result, confidence_floor)
+
+    # 5. Rank sources by trust order (ordering only — no filtering, no inflation)
+    if source_trust_order:
+        result.retrieval_sources = _rank_sources_by_trust(
+            result.retrieval_sources, source_trust_order,
+        )
+        if result.funding:
+            result.funding.sources = _rank_sources_by_trust(
+                result.funding.sources, source_trust_order,
+            )
+        if result.sentiment:
+            result.sentiment.sources = _rank_sources_by_trust(
+                result.sentiment.sources, source_trust_order,
+            )
+        if result.fit:
+            result.fit.sources = _rank_sources_by_trust(
+                result.fit.sources, source_trust_order,
+            )
 
     return result

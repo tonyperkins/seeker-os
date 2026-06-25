@@ -332,6 +332,50 @@ class ChannelRulesConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Company research config models
+# ---------------------------------------------------------------------------
+
+class WikipediaConfig(BaseModel):
+    enabled: bool = True
+    language: str = "en"
+    timeout_seconds: int = 10
+
+
+class WikidataConfig(BaseModel):
+    enabled: bool = True
+    timeout_seconds: int = 10
+
+
+class LLMDossierConfig(BaseModel):
+    enabled: bool = True
+    task: str = "company_dossier_generation"
+    temperature: float = 0.3
+
+
+class RetrievalProviderConfig(BaseModel):
+    """Retrieval adapter configuration — provider type and credentials."""
+    type: str = ""
+    api_key: str = ""
+    max_results: int = 5
+    timeout_seconds: int = 15
+    funding_query_template: str = "{company} funding round investors valuation"
+    sentiment_query_template: str = "{company} employee reviews sentiment glassdoor culture"
+
+
+class CompanyResearchConfig(BaseModel):
+    """Config for company_research.yml — controls research flow and thresholds."""
+    wikipedia: WikipediaConfig = WikipediaConfig()
+    wikidata: WikidataConfig = WikidataConfig()
+    llm_dossier: LLMDossierConfig = LLMDossierConfig()
+    retrieval: RetrievalProviderConfig = RetrievalProviderConfig()
+
+    # Thresholds (Phase 3)
+    confidence_floor: float = 0.3
+    staleness_months: int = 18
+    source_trust_order: list[str] = []
+
+
+# ---------------------------------------------------------------------------
 # Settings — top-level config container
 # ---------------------------------------------------------------------------
 
@@ -350,6 +394,7 @@ class Settings:
         self.providers: ProvidersConfig | None = None
         self.identity: IdentityConfig | None = None
         self.channel_rules: ChannelRulesConfig | None = None
+        self.company_research: CompanyResearchConfig | None = None
 
         self._load_all()
 
@@ -395,6 +440,11 @@ class Settings:
             data = self._load_yaml("channel_rules.yml")
             if data and "channels" in data:
                 self.channel_rules = ChannelRulesConfig(**data["channels"])
+
+        if (self.config_dir / "company_research.yml").exists():
+            data = self._load_yaml("company_research.yml")
+            if data:
+                self.company_research = CompanyResearchConfig(**data)
 
         # Cross-validate comp_floor between filters and profile
         if self.filters and self.profile:

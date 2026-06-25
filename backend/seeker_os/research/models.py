@@ -149,3 +149,8 @@ class CompanyResearchResult(BaseModel):
     researched_at: str = ""
     sources_used: list[str] = []
     errors: list[str] = []
+
+    # Phase 3: threshold flags
+    is_stub: bool = False  # True when overall_confidence < confidence_floor
+    retrieval_used: bool = False  # True when live retrieval contributed snippets
+    retrieval_sources: list[SourceRef] = []  # URLs from retrieval, for display

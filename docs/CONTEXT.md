@@ -1,7 +1,7 @@
 # Seeker OS — Context & Current State
 
-**Last updated:** 2026-06-23
-**Phase:** Phase 1 implementation — AI rules layer (identity, channel, per-application)
+**Last updated:** 2026-06-25
+**Phase:** Phase 3 — company research with live retrieval, config-driven thresholds
 
 ---
 
@@ -13,10 +13,13 @@ No personal values are hardcoded in code. All user-specific config (comp floor,
 blacklist, scoring weights, accuracy rules, resume path, location prefs) lives in
 YAML config files.
 
-The design is complete and documented. Phase 1 adds a three-tier AI rules layer:
-identity rules (`identity_rules.yml`), channel rules (`channel_rules.yml`), and
-per-application AI policy (`jobs.ai_policy` column). All hardcoded personal values
-have been removed from system prompts and the validator.
+The design is complete and documented. Phases 1–2 added the core pipeline, web
+dashboard, resume generation, AI-powered JD analysis, and a three-tier AI rules
+layer (identity rules, channel rules, per-application AI policy). Phase 3 adds
+company research with a pluggable retrieval adapter interface (Tavily as one
+adapter), live web search for funding signals and employee sentiment, config-driven
+thresholds (confidence floor, staleness, source trust ordering), and graceful
+degradation when no retrieval provider is configured.
 
 **Product mindset:** The engines (discovery, filtering, scoring, dedup, resume gen)
 are generic. The config files (`profile.yml`, `scoring_rubric.yml`, `accuracy_rules.yml`,
@@ -69,7 +72,8 @@ tracks everything in a dashboard.
 | `docs/PLAN.md` | Full architecture, data model, dashboard design, 4 implementation phases | Understanding the big picture |
 | `docs/PHASE1_SPEC.md` | Exact interfaces, function signatures, CLI contract, acceptance criteria for Phase 1 | Implementing Phase 1 |
 | `docs/SCORING_RUBRIC.md` | Scoring rubric reference (the *values* — the *engine* reads them from YAML) | Implementing the scoring engine |
-| `docs/ACCURACY_RULES.md` | Resume accuracy rules reference (the *values* — the *validator* reads them from YAML). Also documents the identity-rules and channel-rules layers. | Implementing resume generation (Phase 3) |
+| `docs/ACCURACY_RULES.md` | Resume accuracy rules reference (the *values* — the *validator* reads them from YAML). Also documents the identity-rules and channel-rules layers. | Implementing resume generation |
+| `config/company_research.example.yml` | Company research config template — retrieval provider, query templates, thresholds (confidence floor, staleness, source trust order) | Implementing company research (Phase 3) |
 | `docs/HIRINGCAFE_FIELDS.md` | `__NEXT_DATA__` field reference, source mapping, query counts | Implementing discovery + dedup |
 | `docs/DEDUP_DESIGN.md` | 4-layer dedup with normalization functions and code examples | Implementing dedup |
 | `AGENTS.md` | Project rules for AI agents | Always (auto-loaded by agent tools) |
@@ -91,11 +95,11 @@ User profile is configured in `config/profile.yml`. Key fields:
 
 | Phase | Goal | Status |
 |---|---|---|
-| 1 | Core pipeline (CLI): discover → filter → fetch JD → score → report. User configures profile, rubric, and rules via YAML. | Starting now |
-| 2 | Web dashboard: FastAPI + Next.js, all views | Pending Phase 1 |
-| 2.5 | Onboarding wizard (CLI first, path to dashboard): resume ingest → AI interview → freeform rules → AI synthesis → config review. Generates profile.yml, scoring_rubric.yml, accuracy_rules.yml for new users. | Pending Phase 2 |
-| 3 | Resume generation: LLM + accuracy enforcement + PDF export | Pending Phase 2.5 |
-| 4 | Polish: cron, analytics, historical import, Chrome extension | Pending Phase 3 |
+| 1 | Core pipeline (CLI): discover → filter → fetch JD → score → report. User configures profile, rubric, and rules via YAML. | Complete |
+| 2 | Web dashboard: FastAPI + Next.js, all views | Complete |
+| 2.5 | Onboarding wizard (CLI first, path to dashboard): resume ingest → AI interview → freeform rules → AI synthesis → config review. Generates profile.yml, scoring_rubric.yml, accuracy_rules.yml for new users. | Complete |
+| 3 | Resume generation: LLM + accuracy enforcement + PDF export. Company research with pluggable retrieval adapter, config-driven thresholds, live web search for funding/sentiment signals. | In progress |
+| 4 | Polish: cron, analytics, historical import, Chrome extension | Pending |
 
 ## LLM Configuration
 
