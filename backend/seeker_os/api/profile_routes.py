@@ -13,6 +13,7 @@ from seeker_os.api.schemas import (
 )
 from seeker_os.config import Settings, ProfileConfig, FiltersConfig, FilterConfig, TitleFilters, CONFIG_DIR
 from seeker_os.config_writer import write_profile, write_filters, write_accuracy_rules
+from seeker_os.validation import KNOWN_RULE_TYPES
 
 router = APIRouter(prefix="/api", tags=["profile"])
 
@@ -161,12 +162,11 @@ def get_accuracy_rules():
 def update_accuracy_rules(body: AccuracyRulesUpdate):
     """Replace all accuracy rules in accuracy_rules.yml."""
     # Validate rule types
-    valid_types = {"disallowed_phrases", "forbidden_technologies", "required_phrases", "experience_anchor", "education_omission"}
     for rule in body.rules:
-        if rule.type not in valid_types:
+        if rule.type not in KNOWN_RULE_TYPES:
             raise HTTPException(
                 status_code=422,
-                detail=f"Invalid rule type '{rule.type}' for rule '{rule.id}'. Valid types: {', '.join(sorted(valid_types))}",
+                detail=f"Invalid rule type '{rule.type}' for rule '{rule.id}'. Valid types: {', '.join(sorted(KNOWN_RULE_TYPES))}",
             )
         if rule.severity not in ("high", "medium"):
             raise HTTPException(
@@ -286,11 +286,10 @@ Output the JSON now:"""
         )
 
     raw_rules = data.get("rules", [])
-    valid_types = {"disallowed_phrases", "forbidden_technologies", "required_phrases", "experience_anchor", "education_omission"}
     rules = []
     for r in raw_rules:
         rule_type = r.get("type", "")
-        if rule_type not in valid_types:
+        if rule_type not in KNOWN_RULE_TYPES:
             continue
         rules.append(AccuracyRule(
             id=r.get("id", f"rule_{len(rules)}"),

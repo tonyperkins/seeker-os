@@ -64,3 +64,6 @@ tasks:
   accuracy_validation:          { tier: light }
   onboarding_interview:         { tier: moderate }
   resume_parsing:               { tier: moderate }
+  cover_letter_generation:      { tier: heavy }
+  application_answer_generation: { tier: heavy }
+  application_answer_critique:  { tier: moderate }

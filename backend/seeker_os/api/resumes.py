@@ -449,7 +449,7 @@ def generate_resume(body: ResumeGenerateRequest):
 def revalidate_resume(resume_id: int):
     """Re-run accuracy validation on a stored resume."""
     from seeker_os.config import Settings
-    from seeker_os.resume.validator import AccuracyValidator
+    from seeker_os.validation import AccuracyValidator
 
     settings = Settings()
     validator = AccuracyValidator(settings)

@@ -8,7 +8,7 @@ A structured, dashboard-driven job search pipeline.
 2. **Filters** aggressively using structured fields before fetching full JDs
 3. **Scores** survivors against a user-configured rubric
 4. **Analyzes** job fit with an AI agent that evaluates JD vs. profile, producing a verdict (APPLY/CONDITIONAL/MONITOR/SKIP) with named gaps, rubric breakdown, and tailoring guidance
-5. **Generates** tailored resumes with strict no-embellish accuracy enforcement
+5. **Generates** tailored resumes with strict no-embellish accuracy enforcement (deterministic deny-list checks + LLM-judged claim traceability against the master resume)
 6. **Tracks** the full application lifecycle through a web dashboard
 
 ## Why
@@ -30,8 +30,11 @@ queryable interface, no analytics, and no resume automation.
 
 ## Status
 
-**Phases 1-3 complete** — Core pipeline, web dashboard, resume generation, and AI-powered
-JD analysis are implemented. See [docs/PLAN.md](docs/PLAN.md) for the full roadmap.
+**Phases 1-3 complete, Phase 2 accuracy validation in progress** — Core pipeline, web
+dashboard, resume generation, and AI-powered JD analysis are implemented. Phase 2 adds
+artifact-agnostic accuracy validation (deterministic deny-list + LLM-judged claim
+traceability), cover letter and application answer generation with per-application AI
+policy enforcement. See [docs/PLAN.md](docs/PLAN.md) for the full roadmap.
 
 ## Tech Stack
 

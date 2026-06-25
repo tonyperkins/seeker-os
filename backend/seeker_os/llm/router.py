@@ -9,11 +9,14 @@ Resolution order:
 
 from __future__ import annotations
 
+import logging
 import os
 
 from seeker_os.config import Settings, ProviderConfig, ProvidersConfig
 from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth
 from seeker_os.llm.base import LLMProvider
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_env(value: str) -> str:
@@ -166,6 +169,14 @@ class ModelRouter:
             return "heavy"
         if "validation" in task or "extraction" in task or "check" in task:
             return "light"
+        if "critique" in task or "analysis" in task:
+            return "moderate"
+        logger.warning(
+            "Task '%s' has no explicit tier mapping and no keyword matched in _infer_tier — "
+            "silently falling back to 'moderate' tier. Register this task in providers.yml "
+            "to avoid silent mis-routing.",
+            task,
+        )
         return "moderate"
 
     def generate(

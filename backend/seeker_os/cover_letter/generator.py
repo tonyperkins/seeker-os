@@ -1,8 +1,8 @@
-"""Resume generator — tailors a master resume to a specific job description.
+"""Cover letter generator — tailors a cover letter for a specific job.
 
-Reads the master resume from the path in profile.yml, constructs a prompt
-that includes the JD and accuracy rules, calls the LLM via the model router,
-and stores the result.
+Uses the same master resume as the source of truth, the same accuracy
+validator (artifact_type='cover_letter'), and the same traceability checker.
+Enforces per-application ai_policy from the jobs table.
 """
 
 from __future__ import annotations
@@ -18,23 +18,23 @@ from seeker_os.validation import AccuracyValidator
 from seeker_os.validation.traceability import TraceabilityChecker
 
 
-SYSTEM_PROMPT = """You are an expert resume writer who tailors resumes for specific job descriptions.
+SYSTEM_PROMPT = """You are an expert cover letter writer who tailors cover letters for specific job descriptions.
 
-CRITICAL RULES — VIOLATIONS WILL CAUSE THE RESUME TO BE REJECTED:
+CRITICAL RULES — VIOLATIONS WILL CAUSE THE COVER LETTER TO BE REJECTED:
 1. NEVER invent skills, technologies, or experience not present in the master resume.
 2. NEVER inflate years of experience or claim depth beyond what the master resume states.
 3. NEVER use technologies listed as "forbidden" in the accuracy rules.
-4. NEVER mention education unless explicitly required by the JD (and even then, only state it factually).
-5. Every claim must be traceable to the master resume. You may reorganize, emphasize, or de-emphasize, but never fabricate.
-6. If the JD requires a technology not in the master resume, simply omit it — do not claim it. The gap is noted elsewhere.
+4. Every claim must be traceable to the master resume. You may reorganize, emphasize, or de-emphasize, but never fabricate.
+5. If the JD requires a technology not in the master resume, simply omit it — do not claim it.
 
 OUTPUT FORMAT:
-- Markdown format
-- Start with a professional summary (2-3 lines)
-- Skills/core competencies section
-- Professional experience (reverse chronological)
-- Keep it concise — 1-2 pages max
-- Use action verbs and quantified achievements where available in the master resume
+- Professional cover letter format
+- 3-4 paragraphs, concise (half to one page)
+- Address the hiring manager if a name is available, otherwise "Dear Hiring Manager"
+- Open with genuine interest referencing the role and company
+- Body paragraphs: connect specific experience from the master resume to JD requirements
+- Close with a call to action
+- Use the master resume as the sole source of factual claims
 """
 
 
@@ -51,9 +51,7 @@ def _build_user_prompt(
     if anchor_text:
         anchor_section = f"\n## EXPERIENCE ANCHOR\n{anchor_text}\n"
 
-    return f"""## MASTER RESUME
-Do not deviate from the facts in this resume. You may reorganize and emphasize, but never invent.
-
+    return f"""## MASTER RESUME (source of truth — do not deviate)
 ---
 {master_resume}
 ---
@@ -68,15 +66,16 @@ Company: {company}
 ---
 
 ## ACCURACY RULES (MUST FOLLOW)
-These rules are validated programmatically after generation. Violations will flag the resume for manual review.
 ---
 {accuracy_rules_text}
 ---
 {anchor_section}
 ## INSTRUCTIONS
-Tailor the master resume for this specific job. Emphasize relevant experience and skills. De-emphasize irrelevant parts. Do NOT add anything not in the master resume. Follow ALL accuracy rules above.
+Write a tailored cover letter for this specific job. Connect specific experience from the
+master resume to the job requirements. Do NOT add anything not in the master resume.
+Follow ALL accuracy rules above.
 
-Generate the tailored resume in Markdown format:"""
+Generate the cover letter:"""
 
 
 def _load_accuracy_rules_text(settings: Settings) -> str:
@@ -109,11 +108,7 @@ def _load_accuracy_rules_text(settings: Settings) -> str:
 
 
 def _load_identity_anchor_text(settings: Settings) -> str:
-    """Load the experience anchor from identity_rules.yml for the prompt.
-
-    Returns empty string if no identity or anchor is configured — the prompt
-    says nothing about an anchor in that case. No hardcoded fallback.
-    """
+    """Load the experience anchor from identity_rules.yml for the prompt."""
     identity = settings.identity
     if not identity or not identity.experience_anchor.phrase:
         return ""
@@ -124,14 +119,25 @@ def _load_identity_anchor_text(settings: Settings) -> str:
     return ", ".join(parts) + "."
 
 
-def generate_resume(
+def _get_ai_policy(job_row) -> str | None:
+    """Get per-application AI policy from job row, falling back to channel default."""
+    ai_policy = job_row["ai_policy"] if "ai_policy" in job_row.keys() else None
+    return ai_policy
+
+
+def generate_cover_letter(
     settings: Settings,
     job_id: int,
-    task: str = "resume_generation_standard",
+    task: str = "cover_letter_generation",
     temperature: float = 0.7,
-    max_tokens: int | None = 16000,
+    max_tokens: int | None = 4000,
 ) -> dict:
-    """Generate a tailored resume for a specific job.
+    """Generate a tailored cover letter for a specific job.
+
+    Enforces per-application ai_policy:
+    - 'forbidden': returns a refusal dict, does not generate.
+    - 'draft_only': generates but labels output as draft.
+    - 'allowed' or null: generates normally.
 
     Args:
         settings: App settings
@@ -141,7 +147,7 @@ def generate_resume(
         max_tokens: Max output tokens
 
     Returns:
-        Dict with resume metadata and validation results.
+        Dict with cover letter metadata and validation results.
     """
     # 1. Load the job from DB
     db = get_connection()
@@ -155,7 +161,19 @@ def generate_resume(
         db.close()
         raise ValueError(f"Job {job_id} has no JD fetched — run Tier 3 first")
 
-    # 2. Load master resume
+    # 2. Check ai_policy
+    ai_policy = _get_ai_policy(job)
+    if ai_policy == "forbidden":
+        db.close()
+        return {
+            "job_id": job_id,
+            "refused": True,
+            "refusal_reason": "ai_policy is 'forbidden' for this job — AI authoring is not permitted.",
+            "cover_letter_text": "",
+            "validation_passed": False,
+        }
+
+    # 3. Load master resume
     if not settings.profile or not settings.profile.resume:
         db.close()
         raise ValueError("No resume config in profile.yml")
@@ -167,7 +185,7 @@ def generate_resume(
 
     master_resume = master_path.read_text()
 
-    # 3. Build prompts
+    # 4. Build prompts
     accuracy_rules_text = _load_accuracy_rules_text(settings)
     anchor_text = _load_identity_anchor_text(settings)
     user_prompt = _build_user_prompt(
@@ -179,22 +197,23 @@ def generate_resume(
         anchor_text=anchor_text,
     )
 
-    # 4. Call LLM (inject user instructions and channel rules into system prompt)
+    # 5. Call LLM (inject channel rules into system prompt)
     system_prompt = SYSTEM_PROMPT
     channel_rules = settings.channel_rules
-    if channel_rules and channel_rules.resume:
-        resume_channel = channel_rules.resume
+    if channel_rules and channel_rules.cover_letter:
+        cl_channel = channel_rules.cover_letter
         channel_lines: list[str] = []
-        if resume_channel.require_visible_urls:
+        if cl_channel.require_visible_urls:
             channel_lines.append(
-                "Always include the full literal https:// URLs from the master resume as visible text (not just hyperlinks)."
+                "Always include the full literal https:// URLs from the master resume as visible text."
             )
-        if resume_channel.format_hints:
-            channel_lines.append(f"Format: {resume_channel.format_hints}")
+        if cl_channel.format_hints:
+            channel_lines.append(f"Format: {cl_channel.format_hints}")
         if channel_lines:
-            system_prompt += f"\n\n--- CHANNEL RULES (resume) ---\n" + "\n".join(channel_lines) + "\n--- END CHANNEL RULES ---\n"
+            system_prompt += f"\n\n--- CHANNEL RULES (cover_letter) ---\n" + "\n".join(channel_lines) + "\n--- END CHANNEL RULES ---\n"
     if settings.profile and settings.profile.instructions:
         system_prompt += f"\n\n--- USER INSTRUCTIONS ---\n{settings.profile.instructions}\n--- END USER INSTRUCTIONS ---\n"
+
     router = ModelRouter(settings)
     response = router.generate(
         task=task,
@@ -204,32 +223,53 @@ def generate_resume(
         max_tokens=max_tokens,
     )
 
-    # 5. Validate accuracy (deterministic deny-list + LLM-judged traceability)
-    validator = AccuracyValidator(settings)
-    validation = validator.validate(response.text, artifact_type="resume", master_resume=master_resume)
+    cover_letter_text = response.text
 
-    # 5b. Run traceability check (LLM-judged claim verification)
+    # draft_only: mark as draft but keep content clean — the notice is NOT
+    # concatenated into cover_letter_text. The is_draft flag and draft_notice
+    # string are returned separately so the frontend can render a banner above
+    # the copyable content.
+    is_draft = ai_policy == "draft_only"
+    draft_notice = (
+        "This content was AI-generated for your reference. "
+        "Please rewrite in your own words before submitting."
+        if is_draft else ""
+    )
+
+    # 6. Validate accuracy (on clean content, not the draft notice)
+    validator = AccuracyValidator(settings)
+    validation = validator.validate(
+        cover_letter_text, artifact_type="cover_letter", master_resume=master_resume,
+    )
+
+    # 6b. Run traceability check
     traceability = TraceabilityChecker(settings)
     if traceability.enabled:
-        trace_result = traceability.check(response.text, master_resume, artifact_type="resume")
+        trace_result = traceability.check(cover_letter_text, master_resume, artifact_type="cover_letter")
         trace_result.merge_into(validation)
 
-    # 6. Save to DB
+    # 7. Save to DB
     now = datetime.now(timezone.utc).isoformat()
     output_dir = Path(settings.profile.resume.output_dir or "data/resumes").expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save markdown file
     safe_company = (job["company"] or "unknown").replace(" ", "_").replace("/", "_")
-    safe_title = (job["title"] or "resume").replace(" ", "_").replace("/", "_")[:50]
-    md_filename = f"{safe_company}_{safe_title}_{job_id}_{now[:10]}.md"
+    safe_title = (job["title"] or "cover_letter").replace(" ", "_").replace("/", "_")[:50]
+    md_filename = f"cover_{safe_company}_{safe_title}_{job_id}_{now[:10]}.md"
     md_path = output_dir / md_filename
-    md_path.write_text(response.text)
+    # Write clean content to the markdown file. If draft_only, add an
+    # HTML comment header that is clearly out-of-band (not pasteable as
+    # cover letter text into a form).
+    if is_draft:
+        file_content = f"<!-- DRAFT: {draft_notice} -->\n\n{cover_letter_text}"
+    else:
+        file_content = cover_letter_text
+    md_path.write_text(file_content)
 
     cursor = db.execute(
         """
-        INSERT INTO resumes
-        (job_id, task, provider, model, resume_text, master_resume_path,
+        INSERT INTO cover_letters
+        (job_id, task, provider, model, cover_letter_text, master_resume_path,
          validation_passed, validation_violations, validation_checked_at,
          input_tokens, output_tokens, latency_ms, generated_at, updated_at,
          markdown_path)
@@ -237,7 +277,7 @@ def generate_resume(
         """,
         (
             job_id, task, response.provider, response.model,
-            response.text, str(master_path),
+            cover_letter_text, str(master_path),
             validation.passed,
             json.dumps(validation.to_dict()["violations"]),
             validation.checked_at,
@@ -245,18 +285,12 @@ def generate_resume(
             now, now, str(md_path),
         ),
     )
-    resume_id = cursor.lastrowid
-
-    # Update job status to 'interested' (resume generated = moving forward)
-    db.execute(
-        "UPDATE jobs SET status='interested', updated_at=? WHERE id=?",
-        (now, job_id),
-    )
+    cover_letter_id = cursor.lastrowid
     db.commit()
     db.close()
 
     return {
-        "resume_id": resume_id,
+        "cover_letter_id": cover_letter_id,
         "job_id": job_id,
         "task": task,
         "provider": response.provider,
@@ -267,76 +301,7 @@ def generate_resume(
         "validation_passed": validation.passed,
         "validation_violations": validation.violations,
         "markdown_path": str(md_path),
+        "is_draft": is_draft,
+        "draft_notice": draft_notice,
         "generated_at": now,
-    }
-
-
-def list_resumes(job_id: int | None = None, limit: int = 50) -> list[dict]:
-    """List generated resumes."""
-    db = get_connection()
-    if job_id:
-        rows = db.execute(
-            "SELECT * FROM resumes WHERE job_id = ? ORDER BY generated_at DESC LIMIT ?",
-            (job_id, limit),
-        ).fetchall()
-    else:
-        rows = db.execute(
-            "SELECT * FROM resumes ORDER BY generated_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    db.close()
-
-    results = []
-    for r in rows:
-        results.append({
-            "id": r["id"],
-            "job_id": r["job_id"],
-            "task": r["task"] or "",
-            "provider": r["provider"] or "",
-            "model": r["model"] or "",
-            "validation_passed": bool(r["validation_passed"]),
-            "validation_violations": json_decode(r["validation_violations"]) or [],
-            "input_tokens": r["input_tokens"] or 0,
-            "output_tokens": r["output_tokens"] or 0,
-            "latency_ms": r["latency_ms"] or 0,
-            "generated_at": r["generated_at"] or "",
-            "markdown_path": r["markdown_path"] or "",
-            "pdf_path": r["pdf_path"],
-            "docx_path": r["docx_path"],
-        })
-    return results
-
-
-def get_resume(resume_id: int) -> dict | None:
-    """Get a single resume by ID."""
-    db = get_connection()
-    row = db.execute("SELECT * FROM resumes WHERE id = ?", (resume_id,)).fetchone()
-    db.close()
-    if not row:
-        return None
-
-    # Also get the job info
-    db = get_connection()
-    job = db.execute("SELECT title, company FROM jobs WHERE id = ?", (row["job_id"],)).fetchone()
-    db.close()
-
-    return {
-        "id": row["id"],
-        "job_id": row["job_id"],
-        "job_title": job["title"] if job else "",
-        "job_company": job["company"] if job else "",
-        "task": row["task"] or "",
-        "provider": row["provider"] or "",
-        "model": row["model"] or "",
-        "resume_text": row["resume_text"] or "",
-        "validation_passed": bool(row["validation_passed"]),
-        "validation_violations": json_decode(row["validation_violations"]) or [],
-        "validation_checked_at": row["validation_checked_at"],
-        "input_tokens": row["input_tokens"] or 0,
-        "output_tokens": row["output_tokens"] or 0,
-        "latency_ms": row["latency_ms"] or 0,
-        "generated_at": row["generated_at"] or "",
-        "markdown_path": row["markdown_path"] or "",
-        "pdf_path": row["pdf_path"],
-        "docx_path": row["docx_path"],
     }

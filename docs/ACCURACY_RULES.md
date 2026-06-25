@@ -1,15 +1,17 @@
-# Resume Accuracy Rules — Seeker OS
+# Accuracy Rules — Seeker OS
 
 **Source:** User-configured (`config/accuracy_rules.yml`)
-**Purpose:** Config-driven constraints for resume generation. These are NOT just prompt
-instructions — they are validated programmatically after generation by a generic
-validator that reads the rules from YAML.
+**Purpose:** Config-driven constraints for AI-generated artifacts (resumes, cover letters,
+application answers). These are NOT just prompt instructions — they are validated
+programmatically after generation by an artifact-agnostic validator that reads the
+rules from YAML.
 
 ## Core Principle
 
-**NO EMBELLISHING.** Every claim in a generated resume must be traceable to the master
-resume. The generated resume may reorganize, emphasize, or de-emphasize content from the
-master resume to align with a specific JD, but it may never:
+**NO EMBELLISHING.** Every claim in a generated artifact (resume, cover letter, or
+application answer) must be traceable to the master resume. The generated artifact may
+reorganize, emphasize, or de-emphasize content from the master resume to align with a
+specific JD, but it may never:
 - Invent new skills not in the master resume
 - Inflate years of experience
 - Claim depth/expertise beyond what the master resume states
@@ -19,7 +21,7 @@ master resume to align with a specific JD, but it may never:
 ## Config-Driven Validation Rules
 
 Rules are defined in `config/accuracy_rules.yml` and checked programmatically after
-resume generation by a generic validator. The validator implements the mechanism (rule
+artifact generation by a generic validator. The validator implements the mechanism (rule
 dispatch, phrase matching, section parsing); the YAML provides the policy (which phrases
 are disallowed, which technologies are forbidden, etc.). Violations are flagged and the
 resume is held for manual review.
@@ -107,8 +109,12 @@ rules:
 
 ## Validation Implementation
 
-The validator (`backend/seeker_os/resume/validator.py`) reads rules from
-`config/accuracy_rules.yml` and dispatches by `type`:
+The validator (`backend/seeker_os/validation/__init__.py`) is artifact-agnostic —
+it validates resumes, cover letters, and application answers with the same
+deterministic deny-list checks. The old `resume/validator.py` is now a
+backward-compatible shim that re-exports from `seeker_os.validation`.
+
+The validator reads rules from `config/accuracy_rules.yml` and dispatches by `type`:
 
 - `disallowed_phrases` — case-insensitive substring match
 - `forbidden_technologies` — case-insensitive word-boundary regex match
@@ -117,8 +123,34 @@ The validator (`backend/seeker_os/resume/validator.py`) reads rules from
 - `education_omission` — regex match against `patterns` list
 
 Unknown rule types are logged as warnings at load time and ignored during
-validation. High-severity violations block the resume (flagged as failed);
+validation. High-severity violations block the artifact (flagged as failed);
 medium-severity violations are warnings only.
+
+## LLM-Judged Claim Traceability
+
+In addition to the deterministic deny-list checks above, a **traceability pass** runs
+after generation (default ON). This pass uses the light/validation tier LLM to:
+
+1. Extract every factual claim from the generated artifact.
+2. Judge each claim against the master resume: **supported**, **unsupported**, or
+   **overstated**.
+3. Flag any unsupported or overstated claim as a HIGH-severity violation that fails
+   validation.
+
+The judge prompt instructs: do not be charitable; a claim is unsupported unless the
+master resume substantiates it; rounding up a qualifier counts as overstated.
+
+### Configuration
+
+```yaml
+# In accuracy_rules.yml:
+traceability:
+  enabled: true              # default ON for single generations
+  task: "accuracy_validation" # LLM task name (routes to light tier)
+```
+
+Set `enabled: false` to disable for cost in bulk runs. The traceability checker
+lives in `backend/seeker_os/validation/traceability.py`.
 
 ```python
 # Simplified dispatch logic
@@ -137,14 +169,16 @@ for rule in rules:
     # else: warned at load time, ignored
 ```
 
-## Model Routing for Resume Tasks
+## Model Routing for Generation & Validation Tasks
 
 | Task | Model | Rationale |
 |---|---|---|
 | Resume generation (standard) | Moderate tier (e.g. Sonnet) | Good writing quality, reasonable cost |
 | Resume generation (high-value) | Heavy tier (e.g. Opus) | Best quality for top matches |
 | Accuracy validation | Light tier (e.g. Haiku) | Fast, cheap, just constraint checking |
-| Cover letter (optional) | Moderate tier | Good writing, moderate cost |
+| Cover letter generation | Heavy tier | Good writing quality, user-facing prose |
+| Application answer generation | Heavy tier | Good writing quality, user-facing prose |
+| Application answer critique | Moderate tier (e.g. Sonnet) | Review/feedback, not authoring — explicitly registered |
 | Company research | Light tier or local | Summarization, doesn't need expensive model |
 
 ## Identity Rules Layer
@@ -178,8 +212,8 @@ AI generation policy. Each channel controls how AI-generated content is produced
 | Channel | Consumed by | Key fields |
 |---|---|---|
 | `resume` | Resume generator | `require_visible_urls`, `format_hints` |
-| `cover_letter` | Phase 2 | `require_visible_urls`, `format_hints` |
-| `application_answer` | Phase 2 | `require_visible_urls`, `format_hints` |
+| `cover_letter` | Cover letter generator | `require_visible_urls`, `format_hints` |
+| `application_answer` | Application answer generator | `format_hints` |
 | `analysis` | Phase 2 | `format_hints` |
 
 ### Per-Application AI Policy
@@ -187,5 +221,23 @@ AI generation policy. Each channel controls how AI-generated content is produced
 In addition to channel-level defaults, each job can have a per-application AI
 policy override (`jobs.ai_policy` column, values: `allowed`, `draft_only`,
 `forbidden`, or null for channel default). This is set via the job detail page
-toggle and persists in the database. Phase 2 will consume this to gate AI
-authoring per posting.
+toggle and persists in the database.
+
+### AI Policy Enforcement (Phase 2 — implemented)
+
+The `ai_policy` value is now consumed by the cover letter and application answer
+generation paths:
+
+- **`forbidden`**: The generation path returns a refusal and does NOT call the LLM.
+  For application answers, the user may still submit their own draft for critique
+  (critique is allowed even when authoring is forbidden).
+- **`draft_only`**: The generation path produces clean content (no notice embedded).
+  The `is_draft` flag and `draft_notice` string are returned as separate fields in the
+  response. The DB content field (`answer_text` / `cover_letter_text`) contains only the
+  pure generated content. The markdown file has an HTML comment header (`<!-- DRAFT: ... -->`)
+  that is clearly out-of-band. The frontend renders the draft status as a visible banner
+  above the copyable content (via the `DraftBanner` component), not inside the text.
+- **`allowed`** or **null**: The generation path produces content normally.
+
+Resume generation does not currently check `ai_policy` (resumes are always
+user-reviewed); this may be added in a future phase.

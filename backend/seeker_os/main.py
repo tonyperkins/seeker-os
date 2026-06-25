@@ -356,7 +356,7 @@ def cmd_resume(args: argparse.Namespace) -> None:
         console.print(resume["resume_text"])
 
     elif args.resume_command == "validate":
-        from seeker_os.resume.validator import AccuracyValidator
+        from seeker_os.validation import AccuracyValidator
         validator = AccuracyValidator(settings)
         try:
             result = validator.revalidate(args.resume_id)

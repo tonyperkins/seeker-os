@@ -226,6 +226,51 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE jobs ADD COLUMN ai_policy TEXT;
     """,
+    # Migration 9: Cover letters and application answers tables
+    """
+    CREATE TABLE IF NOT EXISTS cover_letters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id),
+        task TEXT,
+        provider TEXT,
+        model TEXT,
+        cover_letter_text TEXT,
+        master_resume_path TEXT,
+        validation_passed BOOLEAN DEFAULT FALSE,
+        validation_violations TEXT,
+        validation_checked_at TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER DEFAULT 0,
+        generated_at TEXT,
+        updated_at TEXT,
+        markdown_path TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cover_letters_job_id ON cover_letters(job_id);
+
+    CREATE TABLE IF NOT EXISTS application_answers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id),
+        question TEXT,
+        task TEXT,
+        provider TEXT,
+        model TEXT,
+        answer_text TEXT,
+        master_resume_path TEXT,
+        validation_passed BOOLEAN DEFAULT FALSE,
+        validation_violations TEXT,
+        validation_checked_at TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER DEFAULT 0,
+        generated_at TEXT,
+        updated_at TEXT,
+        markdown_path TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_application_answers_job_id ON application_answers(job_id);
+    """,
 ]
 
 

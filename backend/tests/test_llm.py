@@ -161,3 +161,85 @@ class TestRouterResolution:
         router = ModelRouter(settings)
         with pytest.raises(RuntimeError, match="No providers configured"):
             router.resolve("any_task")
+
+    def test_critique_task_resolves_to_moderate_tier(self):
+        """Critique task must resolve to moderate tier deliberately, not via silent fallthrough."""
+        from seeker_os.config import Settings, ProvidersConfig, ProviderConfig, TierMapping, TaskOverride
+        from seeker_os.llm.router import ModelRouter
+
+        class MockProvider:
+            def __init__(self, pid):
+                self._id = pid
+            @property
+            def id(self): return self._id
+            @property
+            def type(self): return "mock"
+            def generate(self, request): return LLMResponse(text="mock", model=request.model, provider=self._id)
+            def list_models(self): return []
+            def test_connection(self): return ProviderHealth(provider_id=self._id, healthy=True)
+
+        settings = Settings.__new__(Settings)
+        settings.providers = ProvidersConfig(
+            providers=[
+                ProviderConfig(id="p1", type="anthropic", api_key="x", enabled=True),
+            ],
+            tiers={
+                "heavy": TierMapping(provider="p1", model="big-model"),
+                "moderate": TierMapping(provider="p1", model="mid-model"),
+                "light": TierMapping(provider="p1", model="small-model"),
+            },
+            tasks={
+                "application_answer_critique": TaskOverride(tier="moderate"),
+            },
+        )
+
+        router = ModelRouter(settings)
+        router._providers = {"p1": MockProvider("p1")}
+        router._provider_configs = {"p1": ProviderConfig(id="p1", type="anthropic", api_key="x")}
+        router._initialized = True
+
+        provider, model = router.resolve("application_answer_critique")
+        assert provider.id == "p1"
+        assert model == "mid-model"
+
+    def test_unrecognized_task_logs_warning(self, caplog):
+        """Unrecognized task name (no keyword match) must log a warning, not silently fall through."""
+        import logging
+        from seeker_os.config import Settings, ProvidersConfig, ProviderConfig, TierMapping
+        from seeker_os.llm.router import ModelRouter
+
+        class MockProvider:
+            def __init__(self, pid):
+                self._id = pid
+            @property
+            def id(self): return self._id
+            @property
+            def type(self): return "mock"
+            def generate(self, request): return LLMResponse(text="mock", model=request.model, provider=self._id)
+            def list_models(self): return []
+            def test_connection(self): return ProviderHealth(provider_id=self._id, healthy=True)
+
+        settings = Settings.__new__(Settings)
+        settings.providers = ProvidersConfig(
+            providers=[
+                ProviderConfig(id="p1", type="anthropic", api_key="x", enabled=True),
+            ],
+            tiers={
+                "moderate": TierMapping(provider="p1", model="mid-model"),
+            },
+            tasks={},
+        )
+
+        router = ModelRouter(settings)
+        router._providers = {"p1": MockProvider("p1")}
+        router._provider_configs = {"p1": ProviderConfig(id="p1", type="anthropic", api_key="x")}
+        router._initialized = True
+
+        with caplog.at_level(logging.WARNING, logger="seeker_os.llm.router"):
+            provider, model = router.resolve("totally_unknown_task_xyz")
+            assert model == "mid-model"
+
+        assert any(
+            "totally_unknown_task_xyz" in record.message and "silently" in record.message
+            for record in caplog.records
+        ), f"Expected warning about silent fallback, got: {[r.message for r in caplog.records]}"
