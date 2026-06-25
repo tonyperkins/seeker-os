@@ -59,6 +59,78 @@ def resolve_env_vars(value: Any) -> Any:
     return value
 
 
+# Credential-like field names that should only hold ${VAR} references
+_CREDENTIAL_FIELD_NAMES = {"api_key", "token", "secret", "password", "apikey"}
+# Safe field names that may hold a non-${VAR} value (e.g. a file path)
+_SAFE_CREDENTIAL_FIELDS = {"oauth_token_path", "token_path"}
+
+
+def _check_unresolved_env_refs(data: Any, filename: str) -> None:
+    """Warn about ${VAR} references that did not resolve (env var unset).
+
+    Does not fail; does not log any value. Only names the missing var
+    and the config file it appeared in.
+    """
+    import warnings
+
+    def _walk(obj: Any, path: str = "") -> None:
+        if isinstance(obj, str):
+            for m in _ENV_VAR_PATTERN.finditer(obj):
+                var_name = m.group(1)
+                if os.environ.get(var_name) is None:
+                    field_hint = path.split(".")[-1] if path else "value"
+                    warnings.warn(
+                        f"{var_name} unset — referenced in {filename}"
+                        f" (field: {field_hint})."
+                        f" Feature gated by this var will be disabled.",
+                        stacklevel=2,
+                    )
+        elif isinstance(obj, dict):
+            for k, v in obj.items():
+                _walk(v, f"{path}.{k}" if path else k)
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                _walk(v, f"{path}[{i}]")
+
+    _walk(data)
+
+
+def _check_literal_secrets(data: Any, filename: str) -> None:
+    """Warn if a credential-like field holds a literal value instead of a ${VAR} reference.
+
+    Catches hand-edit mistakes: a key/token/secret/password field that contains
+    a raw value instead of an env var reference. The UI path already does the
+    right thing; this guards against manual edits to committed configs.
+
+    Does not print the value. Does not fail.
+    """
+    import warnings
+
+    def _walk(obj: Any, path: str = "") -> None:
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                field_path = f"{path}.{k}" if path else k
+                if (
+                    k.lower() in _CREDENTIAL_FIELD_NAMES
+                    and field_path.split(".")[-1].lower() not in _SAFE_CREDENTIAL_FIELDS
+                    and isinstance(v, str)
+                    and v
+                    and not v.startswith("${")
+                ):
+                    warnings.warn(
+                        f"Literal value in credential field '{k}' in {filename}."
+                        f" Secrets in committed configs must be ${{VAR}} references."
+                        f" Put the literal in .env instead.",
+                        stacklevel=2,
+                    )
+                _walk(v, field_path)
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                _walk(v, f"{path}[{i}]")
+
+    _walk(data)
+
+
 # ---------------------------------------------------------------------------
 # Pydantic config models
 # ---------------------------------------------------------------------------
@@ -175,6 +247,14 @@ class FreshnessConfig(BaseModel):
     hard_filter_days: int = 30
 
 
+class ResearchModifierConfig(BaseModel):
+    """A single research-adjustment rule from scoring_rubric.yml."""
+    factor: str
+    delta: float
+    confidence_threshold: float = 0.5
+    source_section: str  # "funding" | "sentiment" | "fit"
+
+
 class ScoringConfig(BaseModel):
     post_threshold: float = 6.0
     per_company_cap: int = 3
@@ -184,6 +264,7 @@ class ScoringConfig(BaseModel):
     positive_modifiers: list[ModifierRule] = []
     negative_modifiers: list[ModifierRule] = []
     freshness: FreshnessConfig = FreshnessConfig()
+    research_modifiers: list[ResearchModifierConfig] = []
 
 
 class FilterConfig(BaseModel):
@@ -194,8 +275,8 @@ class FilterConfig(BaseModel):
     seniority_unknown_passes: bool = True
     # NEW: if title contains any of these, pass regardless of seniority_level tag
     seniority_title_override: list[str] = []
-    comp_floor: int = 150000
-    # NEW: percentage margin below comp_floor that still passes (e.g. 5 = 5% below is OK)
+    # comp_floor is NOT here — it lives in profile.comp.floor (canonical source).
+    # comp_floor_margin_pct applies a tolerance below profile.comp.floor.
     comp_floor_margin_pct: int = 0
     # NEW: if True, jobs with no comp data pass; if False, they're rejected
     comp_unknown_passes: bool = True
@@ -215,11 +296,6 @@ class TitleFilters(BaseModel):
 class FiltersConfig(BaseModel):
     filters: FilterConfig
     title_filters: TitleFilters
-
-    @model_validator(mode="after")
-    def _check_comp_floor(self) -> "FiltersConfig":
-        # This is checked against profile.comp.floor at load time in Settings
-        return self
 
 
 class SourceConfig(BaseModel):
@@ -369,10 +445,17 @@ class CompanyResearchConfig(BaseModel):
     llm_dossier: LLMDossierConfig = LLMDossierConfig()
     retrieval: RetrievalProviderConfig = RetrievalProviderConfig()
 
+    # HTTP User-Agent for Wikipedia/Wikidata requests (their robot policy requires one).
+    # No personal handles — use a generic product identifier.
+    user_agent: str = "SeekerOS/0.1 (product; contact: admin@example.com)"
+
     # Thresholds (Phase 3)
     confidence_floor: float = 0.3
     staleness_months: int = 18
     source_trust_order: list[str] = []
+
+    # Research TTL: reuse cached dossier within this many days (default ~30)
+    research_ttl_days: int = 30
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +487,12 @@ class Settings:
             return None
         with open(path) as f:
             data = yaml.safe_load(f)
+        if data is None:
+            return None
+        # Warn about unresolved ${VAR} refs before resolution (so we can see the refs)
+        _check_unresolved_env_refs(data, filename)
+        # Warn about literal secrets in credential-like fields
+        _check_literal_secrets(data, filename)
         return resolve_env_vars(data)
 
     def _load_all(self):
@@ -445,17 +534,6 @@ class Settings:
             data = self._load_yaml("company_research.yml")
             if data:
                 self.company_research = CompanyResearchConfig(**data)
-
-        # Cross-validate comp_floor between filters and profile
-        if self.filters and self.profile:
-            ff = self.filters.filters.comp_floor
-            pf = self.profile.comp.floor
-            if ff != pf:
-                import warnings
-                warnings.warn(
-                    f"filters.yml comp_floor ({ff}) != profile.yml comp.floor ({pf}). "
-                    "These should match. profile.comp.floor is canonical."
-                )
 
     def load_blacklist(self) -> list[str]:
         """Load blacklist.txt (flat list, one company per line)."""

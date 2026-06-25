@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -309,6 +311,12 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
         existing_env.update(env_updates)
         env_lines = [f"{k}={v}" for k, v in existing_env.items()]
         env_path.write_text("\n".join(env_lines) + "\n")
+
+        # Update the live environment so the new key takes effect immediately.
+        # load_dotenv uses override=False by default, so a key that already existed
+        # in os.environ at startup would NOT be refreshed by re-loading .env.
+        # This makes the UI the authoritative source on explicit save.
+        os.environ.update(env_updates)
 
     # Write providers.yml back
     with open(providers_yml_path, "w") as f:

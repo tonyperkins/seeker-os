@@ -200,9 +200,47 @@ class TestTraceabilityChecker:
         assert result.violations[0].severity == "high"
         assert result.violations[0].rule_id == "traceability_parse_error"
 
-    def test_empty_master_resume_skips_check(self, test_settings):
-        """Empty master resume → check skipped, no violations."""
+    def test_empty_master_fails_closed_when_enabled(self, test_settings):
+        """When traceability is ENABLED but master resume is empty, fail closed with a HIGH violation."""
         checker = TraceabilityChecker(test_settings)
+        assert checker.enabled is True
+        result = checker.check("Some text", "", "resume")
+        assert len(result.violations) == 1
+        assert result.violations[0].severity == "high"
+        assert result.violations[0].rule_id == "traceability_no_master"
+        assert len(result.claims) == 0
+
+    def test_empty_master_no_violation_when_disabled(self, tmp_path, monkeypatch):
+        """When traceability is DISABLED, empty master resume produces no violations."""
+        import shutil
+        test_config = tmp_path / "config"
+        test_config.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config / f.name)
+
+        (test_config / "accuracy_rules.yml").write_text(
+            yaml.dump({
+                "rules": [],
+                "traceability": {"enabled": False},
+            }, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
+        settings = Settings()
+        settings.config_dir = test_config
+
+        checker = TraceabilityChecker(settings)
+        assert checker.enabled is False
         result = checker.check("Some text", "", "resume")
         assert len(result.violations) == 0
         assert len(result.claims) == 0
+
+    def test_whitespace_master_fails_closed(self, test_settings):
+        """Master resume with only whitespace should also fail closed."""
+        checker = TraceabilityChecker(test_settings)
+        result = checker.check("Some text", "   \n  \t  ", "resume")
+        assert len(result.violations) == 1
+        assert result.violations[0].severity == "high"
+        assert result.violations[0].rule_id == "traceability_no_master"

@@ -1,0 +1,14 @@
+# Pre-commit hook configuration for Seeker OS
+# Install: pip install pre-commit && pre-commit install
+# Or use the standalone script: see scripts/check-secrets.sh and README.md
+
+repos:
+  - repo: local
+    hooks:
+      - id: seeker-os-secret-guard
+        name: Seeker OS secret guard
+        description: Blocks commits with gitignored files or literal secrets in YAML/Python
+        entry: scripts/check-secrets.sh
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]

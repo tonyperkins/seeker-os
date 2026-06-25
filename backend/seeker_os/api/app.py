@@ -21,6 +21,7 @@ from seeker_os.api.resumes import router as resumes_router
 from seeker_os.api.models import router as models_router
 from seeker_os.api.profile_routes import router as profile_router
 from seeker_os.api.company_research import router as company_research_router
+from seeker_os.api.company_research_settings import router as company_research_settings_router
 from seeker_os.api.jd_analysis import router as jd_analysis_router
 from seeker_os.database import run_migrations
 
@@ -58,6 +59,7 @@ app.add_middleware(
 app.include_router(jobs_router)
 app.include_router(pipeline_router)
 app.include_router(queries_router)
+app.include_router(company_research_settings_router)
 app.include_router(settings_router)
 app.include_router(analytics_router)
 app.include_router(resumes_router)

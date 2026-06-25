@@ -238,7 +238,7 @@ class TestResearchCompany:
         assert result.sentiment.overall_rating_estimate == 4.1
         assert result.fit is not None
         assert result.fit.remote_policy == "fully remote"
-        assert result.overall_confidence == 0.75
+        assert result.overall_confidence == (0.8 + 0.6 + 0.5) / 3  # capped to mean of section confidences
         assert "wikipedia" in result.sources_used
         assert "wikidata" in result.sources_used
         assert "llm_dossier" in result.sources_used
@@ -1023,3 +1023,142 @@ class TestQueryTemplatesFromConfig:
 
         first_call_args = mock_adapter.search.call_args_list[0]
         assert first_call_args.args[0] == "latest startup funding news"
+
+
+class TestUserAgent:
+    """Tests for de-personalized, configurable User-Agent (per-call, no global mutation)."""
+
+    def test_default_user_agent_has_no_personal_handle(self):
+        """The default User-Agent must not contain a personal GitHub handle."""
+        from seeker_os.research.company_research import _build_headers, _DEFAULT_USER_AGENT
+        ua = _build_headers(None)["User-Agent"]
+        assert ua == _DEFAULT_USER_AGENT
+        assert "example-user" not in ua.lower()
+        assert "github.com/example" not in ua.lower()
+
+    def test_config_user_agent_used_in_headers(self, tmp_path, monkeypatch):
+        """company_research.yml user_agent should appear in per-call headers."""
+        import shutil
+        import yaml
+        from seeker_os.config import CONFIG_DIR, CompanyResearchConfig
+
+        test_config = tmp_path / "config"
+        test_config.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config / f.name)
+
+        custom_ua = "MyProduct/1.0 (contact: ops@mycompany.com)"
+        (test_config / "company_research.yml").write_text(
+            yaml.dump({
+                "user_agent": custom_ua,
+                "confidence_floor": 0.3,
+                "staleness_months": 18,
+            }, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
+
+        from seeker_os.config import Settings
+        settings = Settings()
+        cr_config = settings.company_research
+
+        from seeker_os.research.company_research import _build_headers
+        headers = _build_headers(cr_config)
+        assert headers["User-Agent"] == custom_ua
+        assert "example-user" not in headers["User-Agent"].lower()
+
+    def test_config_model_default_has_no_personal_handle(self):
+        """CompanyResearchConfig default user_agent must not contain personal handles."""
+        from seeker_os.config import CompanyResearchConfig
+        cfg = CompanyResearchConfig()
+        assert "example-user" not in cfg.user_agent.lower()
+        assert "github.com/example" not in cfg.user_agent.lower()
+
+    def test_no_ua_leak_across_calls(self, tmp_path, monkeypatch):
+        """Two research_company calls with different configs must not leak UA.
+
+        Call 1: config with user_agent='UA-ONE' → Wikipedia request uses 'UA-ONE'.
+        Call 2: config with NO user_agent → Wikipedia request falls back to default,
+                NOT 'UA-ONE' leaking forward.
+        """
+        import shutil
+        import yaml
+        from seeker_os.config import CONFIG_DIR
+
+        # --- Config 1: custom user_agent ---
+        test_config_1 = tmp_path / "config1"
+        test_config_1.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config_1 / f.name)
+        (test_config_1 / "company_research.yml").write_text(
+            yaml.dump({
+                "user_agent": "UA-ONE",
+                "confidence_floor": 0.3,
+                "staleness_months": 18,
+            }, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        # --- Config 2: no user_agent (default) ---
+        test_config_2 = tmp_path / "config2"
+        test_config_2.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config_2 / f.name)
+        (test_config_2 / "company_research.yml").write_text(
+            yaml.dump({
+                "confidence_floor": 0.3,
+                "staleness_months": 18,
+            }, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        from seeker_os.research.company_research import (
+            research_company,
+            _DEFAULT_USER_AGENT,
+        )
+
+        # --- Call 1: config with UA-ONE ---
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config_1)
+        captured_headers_1: list[dict] = []
+
+        def capture_get_1(url, **kwargs):
+            captured_headers_1.append(kwargs.get("headers", {}))
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {"query": {"search": []}}
+            mock_resp.raise_for_status = MagicMock()
+            return mock_resp
+
+        with patch("seeker_os.research.company_research.httpx.get", side_effect=capture_get_1), \
+             patch("seeker_os.research.company_research.fetch_llm_dossier", return_value=None):
+            research_company("CompanyOne")
+
+        # --- Call 2: config with NO user_agent (default) ---
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config_2)
+        captured_headers_2: list[dict] = []
+
+        def capture_get_2(url, **kwargs):
+            captured_headers_2.append(kwargs.get("headers", {}))
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {"query": {"search": []}}
+            mock_resp.raise_for_status = MagicMock()
+            return mock_resp
+
+        with patch("seeker_os.research.company_research.httpx.get", side_effect=capture_get_2), \
+             patch("seeker_os.research.company_research.fetch_llm_dossier", return_value=None):
+            research_company("CompanyTwo")
+
+        # Assert call 1 used UA-ONE
+        assert any(h.get("User-Agent") == "UA-ONE" for h in captured_headers_1), \
+            f"Call 1 should use UA-ONE, got: {[h.get('User-Agent') for h in captured_headers_1]}"
+
+        # Assert call 2 fell back to default — NOT UA-ONE leaking forward
+        assert any(h.get("User-Agent") == _DEFAULT_USER_AGENT for h in captured_headers_2), \
+            f"Call 2 should use default UA, got: {[h.get('User-Agent') for h in captured_headers_2]}"
+        assert not any(h.get("User-Agent") == "UA-ONE" for h in captured_headers_2), \
+            "UA-ONE leaked forward into call 2 — global mutation bug!"

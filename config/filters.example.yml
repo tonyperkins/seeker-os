@@ -11,8 +11,9 @@ filters:
   seniority_reject: ["Mid Level", "Entry Level", "Junior", "Associate"]
   seniority_unknown_passes: true
 
-  # Comp floor: rejects if comp_max (ceiling) < this. Must match profile.comp.floor.
-  comp_floor: 150000
+  # Comp floor is NOT here — it lives in profile.comp.floor (canonical source).
+  # comp_floor_margin_pct applies a tolerance below profile.comp.floor.
+  # comp_unknown_passes controls whether jobs with no comp data pass or are rejected.
 
   freshness_days: 30
   commitment_required: "Full Time"

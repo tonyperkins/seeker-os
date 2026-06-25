@@ -28,10 +28,6 @@ export function FilterForm({
       initialized.current = true;
       setForm((prev) => ({
         ...prev,
-        filters: {
-          ...prev.filters,
-          comp_floor: parseResult.suggested_comp_floor ?? prev.filters.comp_floor,
-        },
         title_filters: {
           ...prev.title_filters,
           positive: parseResult.suggested_title_positive.length > 0
@@ -98,33 +94,23 @@ export function FilterForm({
         />
       </div>
 
-      {/* Comp Floor + Margin */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Comp Floor (USD)</Label>
-          <Input
-            type="number"
-            value={f.comp_floor}
-            onChange={(e) => updateFilters({ comp_floor: parseInt(e.target.value) || 0 })}
+      {/* Comp Floor Margin */}
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">Comp Floor Margin (%)</Label>
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={0}
+            max={20}
+            value={f.comp_floor_margin_pct}
+            onChange={(e) => updateFilters({ comp_floor_margin_pct: parseInt(e.target.value) })}
+            className="flex-1"
           />
+          <span className="font-mono text-sm w-10 text-right">{f.comp_floor_margin_pct}%</span>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Comp Floor Margin (%)</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={0}
-              max={20}
-              value={f.comp_floor_margin_pct}
-              onChange={(e) => updateFilters({ comp_floor_margin_pct: parseInt(e.target.value) })}
-              className="flex-1"
-            />
-            <span className="font-mono text-sm w-10 text-right">{f.comp_floor_margin_pct}%</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Effective floor: ${(f.comp_floor * (1 - f.comp_floor_margin_pct / 100)).toFixed(0)}
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Applied as tolerance below profile.comp.floor (set in Profile settings).
+        </p>
       </div>
 
       {/* Freshness + Commitment */}

@@ -175,8 +175,17 @@ class TraceabilityChecker:
             return TraceabilityResult(checked_at=datetime.now(timezone.utc).isoformat())
 
         if not master_resume.strip():
-            logger.warning("Traceability check skipped — no master resume provided")
-            return TraceabilityResult(checked_at=datetime.now(timezone.utc).isoformat())
+            logger.warning("Traceability check failed-closed — master resume is empty")
+            return TraceabilityResult(
+                violations=[Violation(
+                    rule_id="traceability_no_master",
+                    description="Cannot verify claims — master resume missing or empty",
+                    violation="Traceability check could not run: master resume is empty. "
+                              "Artifact flagged for manual review.",
+                    severity="high",
+                )],
+                checked_at=datetime.now(timezone.utc).isoformat(),
+            )
 
         from seeker_os.llm.router import ModelRouter
 

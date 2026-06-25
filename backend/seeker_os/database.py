@@ -271,6 +271,20 @@ MIGRATIONS: list[str] = [
 
     CREATE INDEX IF NOT EXISTS idx_application_answers_job_id ON application_answers(job_id);
     """,
+    # Migration 10: Persist retrieval snippets and sources for URL verification
+    """
+    ALTER TABLE company_research ADD COLUMN retrieval_sources TEXT;
+    ALTER TABLE company_research ADD COLUMN retrieval_snippets_data TEXT;
+    """,
+    # Migration 11: Company-keyed research caching + research-adjusted score columns
+    """
+    ALTER TABLE company_research ADD COLUMN company_norm TEXT;
+    CREATE INDEX IF NOT EXISTS idx_company_research_company_norm ON company_research(company_norm);
+
+    ALTER TABLE jobs ADD COLUMN research_adjusted_score REAL;
+    ALTER TABLE jobs ADD COLUMN research_delta REAL DEFAULT 0;
+    ALTER TABLE jobs ADD COLUMN research_breakdown TEXT;
+    """,
 ]
 
 

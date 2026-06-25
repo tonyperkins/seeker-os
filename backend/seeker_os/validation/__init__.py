@@ -145,7 +145,8 @@ class AccuracyValidator:
 
             if rule_type == "disallowed_phrases":
                 for phrase in rule.get("phrases", []):
-                    if phrase.lower() in text_lower:
+                    pattern = r'\b' + re.escape(phrase) + r'\b'
+                    if re.search(pattern, artifact_text, re.IGNORECASE):
                         violations.append(Violation(
                             rule_id=rule_id,
                             description=description,

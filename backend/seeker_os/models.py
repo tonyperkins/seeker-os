@@ -80,6 +80,10 @@ class ScoreResult(BaseModel):
     gaps: list[str] = []
     hard_reject: bool = False
     reject_reason: str | None = None
+    # Research-adjusted scoring (Phase 3.2)
+    research_adjusted_score: float | None = None
+    research_delta: float = 0.0
+    research_breakdown: list[dict] = []  # [{factor, delta, confidence, source_section}]
 
 
 class DedupResult(BaseModel):

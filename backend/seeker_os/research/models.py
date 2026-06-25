@@ -69,6 +69,7 @@ class FundingDossier(BaseModel):
     financial_health: str | None = None
     confidence: float = 0.0
     sources: list[SourceRef] = []
+    stripped_count: int = 0  # URLs removed by verification (model-invented)
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +96,7 @@ class SentimentDossier(BaseModel):
     staleness_warning: str | None = None
     confidence: float = 0.0
     sources: list[SourceRef] = []
+    stripped_count: int = 0  # URLs removed by verification (model-invented)
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +113,7 @@ class FitDossier(BaseModel):
     clearance_required: bool = False
     confidence: float = 0.0
     sources: list[SourceRef] = []
+    stripped_count: int = 0  # URLs removed by verification (model-invented)
 
 
 # ---------------------------------------------------------------------------
@@ -154,3 +157,4 @@ class CompanyResearchResult(BaseModel):
     is_stub: bool = False  # True when overall_confidence < confidence_floor
     retrieval_used: bool = False  # True when live retrieval contributed snippets
     retrieval_sources: list[SourceRef] = []  # URLs from retrieval, for display
+    retrieval_snippets: list[dict] = []  # Raw snippets: [{url, title, snippet, source_domain, score}]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Building2,
   Loader2,
@@ -17,6 +17,10 @@ import {
   MapPin,
   Heart,
   ShieldAlert,
+  Search,
+  Database,
+  Sparkles,
+  CheckCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +38,16 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   return (
     <Badge variant="outline" className={`text-xs ${color}`}>
       {pct}% confidence
+    </Badge>
+  );
+}
+
+function StrippedBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <Badge variant="outline" className="text-xs text-amber-600">
+      <ShieldAlert className="size-3 mr-1" />
+      {count} source{count > 1 ? "s" : ""} stripped
     </Badge>
   );
 }
@@ -60,10 +74,76 @@ function VerdictFlagRow({
   );
 }
 
+const RESEARCH_STEPS = [
+  { icon: Search, label: "Searching Wikipedia", duration: 2000 },
+  { icon: Database, label: "Querying Wikidata", duration: 2000 },
+  { icon: Globe, label: "Searching the web", duration: 3000 },
+  { icon: Sparkles, label: "Generating AI dossier", duration: 8000 },
+  { icon: CheckCircle, label: "Finalizing results", duration: 1000 },
+] as const;
+
+function ResearchProgress({ done }: { done: boolean }) {
+  const [currentStep, setCurrentStep] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (done) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setCurrentStep(RESEARCH_STEPS.length);
+      return;
+    }
+
+    if (currentStep >= RESEARCH_STEPS.length - 1) return;
+
+    timerRef.current = setTimeout(() => {
+      setCurrentStep((s) => Math.min(s + 1, RESEARCH_STEPS.length - 1));
+    }, RESEARCH_STEPS[currentStep].duration);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [currentStep, done]);
+
+  return (
+    <div className="flex flex-col gap-2 py-1">
+      {RESEARCH_STEPS.map((step, i) => {
+        const isDone = done || i < currentStep;
+        const isActive = !done && i === currentStep;
+        const isPending = !done && i > currentStep;
+        const StepIcon = step.icon;
+
+        return (
+          <div
+            key={i}
+            className={`flex items-center gap-2.5 text-sm transition-colors duration-300 ${
+              isPending ? "text-muted-foreground/40" : "text-foreground"
+            }`}
+          >
+            <div className="flex size-5 items-center justify-center shrink-0">
+              {isDone ? (
+                <CheckCircle2 className="size-4 text-emerald-600" />
+              ) : isActive ? (
+                <Loader2 className="size-4 animate-spin text-primary" />
+              ) : (
+                <StepIcon className="size-4" />
+              )}
+            </div>
+            <span className={isPending ? "" : isDone ? "text-emerald-600" : "font-medium"}>
+              {step.label}
+              {isActive && <span className="text-muted-foreground font-normal">…</span>}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CompanyResearch({ jobId }: { jobId: number }) {
   const [data, setData] = useState<CompanyResearchResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [researchDone, setResearchDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -88,16 +168,22 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
 
   async function runResearch() {
     setRunning(true);
+    setResearchDone(false);
     setError(null);
     setNotFound(false);
     try {
       const result = await api.jobs.companyResearch.run(jobId);
       setData(result);
       setNotFound(false);
+      setResearchDone(true);
+      setTimeout(() => {
+        setRunning(false);
+        setResearchDone(false);
+      }, 600);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Research failed");
-    } finally {
       setRunning(false);
+      setResearchDone(false);
     }
   }
 
@@ -151,10 +237,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
         )}
 
         {running && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Researching company… This may take a few seconds.
-          </div>
+          <ResearchProgress done={researchDone} />
         )}
 
         {data && !running && (
@@ -313,7 +396,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
                   </div>
                 )}
                 {data.funding.sources.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1 items-center">
                     {data.funding.sources.map((src, i) => (
                       <a
                         key={i}
@@ -325,7 +408,11 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
                         Source <ExternalLink className="size-3" />
                       </a>
                     ))}
+                    <StrippedBadge count={data.funding.stripped_count} />
                   </div>
+                )}
+                {data.funding.sources.length === 0 && data.funding.stripped_count > 0 && (
+                  <StrippedBadge count={data.funding.stripped_count} />
                 )}
               </div>
             )}
@@ -337,6 +424,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
                   <Users className="size-4 text-muted-foreground" />
                   Employee Sentiment
                   <ConfidenceBadge confidence={data.sentiment.confidence} />
+                  <StrippedBadge count={data.sentiment.stripped_count} />
                 </div>
                 {data.sentiment.overall_rating_estimate != null && (
                   <div className="flex items-center gap-3 rounded-md bg-muted p-2.5">
@@ -407,6 +495,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
                   <Briefcase className="size-4 text-muted-foreground" />
                   Fit Signals
                   <ConfidenceBadge confidence={data.fit.confidence} />
+                  <StrippedBadge count={data.fit.stripped_count} />
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {data.fit.remote_policy && (

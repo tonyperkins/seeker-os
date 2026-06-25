@@ -44,3 +44,38 @@ config-driven thresholds, and live web search for funding/sentiment signals. See
 - **Frontend:** Next.js + Tailwind CSS
 - **AI:** Multi-provider (Ollama local, Anthropic, OpenAI) with model routing
 - **Job sources:** Pluggable adapter architecture (currently supports hiring.cafe via `__NEXT_DATA__` JSON extraction)
+
+## Pre-commit Secret Guard
+
+A lightweight hook blocks commits that stage gitignored files (`.env`, real config
+YAMLs) or contain literal secrets in credential fields of YAML/Python files.
+
+**Install with pre-commit (recommended):**
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+**Or install as a plain git hook:**
+
+```bash
+cp scripts/check-secrets.sh .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+Bypass with `git commit --no-verify` (not recommended).
+
+## Settings UI
+
+The **Settings** page in the web dashboard provides a no-edit-config-files interface for:
+
+- **Company Research** — configure the retrieval provider (Tavily) and API key without
+  hand-editing `config/company_research.yml`. The API key is written to `.env` as a
+  literal under `RETRIEVAL_API_KEY`; the config file stores only the `${RETRIEVAL_API_KEY}`
+  reference. A "Test Connection" button verifies the key works before running research.
+  Advanced settings (max results, query templates, confidence floor, staleness months,
+  source trust order, User-Agent) are available in a collapsible section.
+- **Profile & Filters** — auto-extracted from your master resume, then editable.
+- **Accuracy Rules** — resume validation constraints (disallowed phrases, forbidden tech, etc.).
+- **LLM Providers** — model routing, tier assignments, and provider API keys.

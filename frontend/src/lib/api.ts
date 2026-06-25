@@ -232,7 +232,6 @@ export interface FiltersData {
     seniority_reject: string[];
     seniority_unknown_passes: boolean;
     seniority_title_override: string[];
-    comp_floor: number;
     comp_floor_margin_pct: number;
     comp_unknown_passes: boolean;
     freshness_days: number;
@@ -535,6 +534,20 @@ export const api = {
 
   // Health
   health: () => fetchAPI<{ status: string }>("/api/health"),
+
+  // Company Research Settings
+  companyResearchSettings: {
+    get: () => fetchAPI<RetrievalSettings>("/api/settings/company-research"),
+    update: (data: RetrievalSettingsUpdate) =>
+      fetchAPI<MessageResponse>("/api/settings/company-research", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    testConnection: () =>
+      fetchAPI<TestConnectionResult>("/api/settings/company-research/test-connection", {
+        method: "POST",
+      }),
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -582,6 +595,7 @@ export interface FundingDossier {
   financial_health: string | null;
   confidence: number;
   sources: SourceRef[];
+  stripped_count: number;
 }
 
 export interface SentimentTheme {
@@ -602,6 +616,7 @@ export interface SentimentDossier {
   staleness_warning: string | null;
   confidence: number;
   sources: SourceRef[];
+  stripped_count: number;
 }
 
 export interface FitDossier {
@@ -613,12 +628,21 @@ export interface FitDossier {
   clearance_required: boolean;
   confidence: number;
   sources: SourceRef[];
+  stripped_count: number;
 }
 
 export interface VerdictFlags {
   green: string[];
   red: string[];
   watch: string[];
+}
+
+export interface RetrievalSnippetData {
+  url: string;
+  title: string;
+  snippet: string;
+  source_domain: string;
+  score: number | null;
 }
 
 export interface CompanyResearchResult {
@@ -637,6 +661,44 @@ export interface CompanyResearchResult {
   sources_used: string[];
   errors: string[];
   researched_at: string;
+  retrieval_used: boolean;
+  retrieval_sources: SourceRef[];
+  retrieval_snippets: RetrievalSnippetData[];
+}
+
+// ---------------------------------------------------------------------------
+// Company Research Settings types
+// ---------------------------------------------------------------------------
+
+export interface RetrievalSettings {
+  provider_type: string;
+  api_key_configured: boolean;
+  max_results: number;
+  timeout_seconds: number;
+  funding_query_template: string;
+  sentiment_query_template: string;
+  confidence_floor: number;
+  staleness_months: number;
+  source_trust_order: string[];
+  user_agent: string;
+}
+
+export interface RetrievalSettingsUpdate {
+  provider_type?: string;
+  api_key?: string;
+  max_results?: number;
+  timeout_seconds?: number;
+  funding_query_template?: string;
+  sentiment_query_template?: string;
+  confidence_floor?: number;
+  staleness_months?: number;
+  source_trust_order?: string[];
+  user_agent?: string;
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  message: string;
 }
 
 // ---------------------------------------------------------------------------

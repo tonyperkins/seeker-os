@@ -266,16 +266,13 @@ def _save_parsed_to_config(settings, result: ResumeParseResult) -> None:
 
     write_profile(profile)
 
-    # Update filters with suggested title patterns and comp floor
+    # Update filters with suggested title patterns
     if filters_cfg:
         if result.suggested_title_positive:
             # Merge with existing positive patterns (avoid duplicates)
             existing = set(filters_cfg.title_filters.positive)
             merged = list(existing) + [t for t in result.suggested_title_positive if t not in existing]
             filters_cfg.title_filters.positive = merged
-
-        if result.suggested_comp_floor:
-            filters_cfg.filters.comp_floor = result.suggested_comp_floor
 
         write_filters(filters_cfg)
 

@@ -125,3 +125,87 @@ User profile is configured in `config/profile.yml`. Key fields:
 8. **Structured comp fields** (integers) bypass the regex comp-parser bug
 9. **Ship example configs** — `*.example.yml` templates with placeholder values.
    Real configs (`profile.yml`, etc.) are `.gitignore`d (contain personal data).
+
+## URL Verification (Phase 3)
+
+Company research retrieval snippets are now persisted to the `company_research`
+table (`retrieval_sources` and `retrieval_snippets_data` columns, Migration 10).
+This enables post-hoc verification of LLM-attached source URLs.
+
+**Enforcement gate:** After the LLM returns a dossier, every claim-attached source
+URL (funding.sources, sentiment.sources, fit.sources) is checked against the set
+of URLs actually returned by the retrieval adapter PLUS URLs from Wikipedia and
+Wikidata used in this run. URLs not in the verified set are stripped. Sections
+left with zero sources have confidence halved, a note added, and `overall_confidence`
+is recomputed (capped to the mean of section confidences) so the `confidence_floor`
+/ `is_stub` check reflects the lost grounding. `stripped_count` per section tracks
+how many URLs were removed.
+
+**URL normalization:** Comparison uses normalized URLs — lowercase host, trailing
+slash stripped, fragment stripped, and common tracking parameters (`utm_*`, `ref`,
+`source`, `fbclid`, `gclid`, etc.) removed. This prevents false-positive stripping
+when Tavily returns a URL with tracking params and the LLM cites the same page
+without them. Host + path matching remains strict — a guessed path on a
+legitimate domain does not match.
+
+**Correction (2026-06-25):** An earlier analysis identified `tamnoon.io/news/series-a-announcement`
+and `tamnoon.io/news/seed-funding-announcement` as "model-fabricated" URLs. A live
+re-run confirmed these URLs were genuinely returned by Tavily — they were not
+invented by the model. The original issue was unverifiable provenance (no persisted
+snippet set to cross-check against), which is now fixed by the persistence and
+verification gate.
+
+**Known limitation — section-level sources, not per-claim:**
+Sources are stored at the section level (e.g., `funding.sources` is a flat list
+shared by all funding claims). A specific figure (e.g., "$12M Series A") cannot
+be mapped to a specific URL. Per-claim source attribution is a future enhancement
+that would require the LLM output schema to carry a `source_url` field on each
+claim, and the verification gate to check each claim's URL individually.
+
+## Research-Adjusted Scoring (Phase 3.2)
+
+When company research has run for a job, the deterministic base score (from the
+rubric engine) is combined with confidence-gated modifiers derived from the
+dossier to produce a **research-adjusted score**. The base score is NEVER
+mutated — both `base_score` and `research_adjusted_score` are preserved.
+
+**How it works:**
+1. The rubric engine produces `base_score` (deterministic, JD-only).
+2. `compute_research_adjustment()` takes the base score + dossier + config rules.
+3. Each rule has a `factor`, `delta`, `confidence_threshold`, and `source_section`.
+4. A rule only applies if the relevant section's confidence ≥ threshold AND the
+   factor's condition is met (e.g., layoffs present, down round detected).
+5. The total delta is summed and clamped to `[min_score, max_score]`.
+6. A breakdown `[{factor, delta, confidence, source_section}]` is returned for UI.
+
+**No grounding, no rescore:** If the dossier `is_stub` or `retrieval_used` is False,
+NO adjustment is applied — `adjusted_score == base_score`, delta 0.
+
+**Modifier set** (configured in `scoring_rubric.yml` under `research_modifiers`):
+- `recent_layoffs` — penalty, if funding.confidence ≥ T
+- `down_round_runway_risk` — penalty, if funding.confidence ≥ T
+- `healthy_runway` — small bonus, if funding.confidence ≥ T
+- `remote_walkback_rto` — penalty, if fit.confidence ≥ T
+- `strong_negative_sentiment` — penalty, if sentiment.confidence ≥ T (only
+  high-frequency recurring themes, NOT thin-sample numeric ratings)
+
+**Thin-sample protection:** Sentiment modifiers require `frequency` of `med` or
+`high` on a `SentimentTheme`. A low-frequency complaint or a bare numeric rating
+from a small sample does NOT trigger the modifier.
+
+## Company-Keyed Research Caching (Phase 3.2)
+
+Company research is now cached **per company** (normalized name), not per job.
+N roles at the same company = 1 research run = 2 Tavily calls, not 2N.
+
+**TTL reuse:** A configurable `research_ttl_days` (default 30, in
+`company_research.yml`) controls freshness. On a research request, if a fresh
+(within TTL) dossier exists for the company, it is reused — no Tavily call.
+Re-research only on explicit `force_refresh=true` or when the dossier is older
+than the TTL.
+
+**Response fields:** `reused_from_cache` (bool) and `dossier_age_days` (int)
+indicate whether the dossier was freshly fetched or reused from cache.
+
+**Migration 11** adds `company_norm` to `company_research` (indexed) and
+`research_adjusted_score`, `research_delta`, `research_breakdown` to `jobs`.

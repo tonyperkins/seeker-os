@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { SettingsClient } from "@/components/settings-client";
 import { SettingsConfigCard } from "@/components/settings-config-card";
 import { AccuracyRulesCard } from "@/components/accuracy-rules-card";
+import { CompanyResearchSettingsCard } from "@/components/company-research-settings-card";
 import { api, type SettingsResponse, type ProfileData, type FiltersData, type AccuracyRule } from "@/lib/api";
 
 export default async function SettingsPage() {
@@ -124,6 +125,11 @@ export default async function SettingsPage() {
 
       {/* Accuracy Rules — editable resume validation constraints */}
       <AccuracyRulesCard initialRules={accuracyRules} />
+
+      <Separator />
+
+      {/* Company Research — retrieval provider and API key configuration */}
+      <CompanyResearchSettingsCard />
 
       <Separator />
 

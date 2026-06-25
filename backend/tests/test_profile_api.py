@@ -104,17 +104,17 @@ class TestFilters:
         data = r.json()
         assert "filters" in data
         assert "title_filters" in data
-        assert "comp_floor" in data["filters"]
+        assert "freshness_days" in data["filters"]
 
     def test_update_filters(self, client):
-        r = client.put("/api/filters", json={"filters": {"comp_floor": 160000}})
+        r = client.put("/api/filters", json={"filters": {"freshness_days": 45}})
         assert r.status_code == 200
         assert "saved" in r.json()["message"].lower()
 
         # Verify it persisted
         r2 = client.get("/api/filters")
         assert r2.status_code == 200
-        assert r2.json()["filters"]["comp_floor"] == 160000
+        assert r2.json()["filters"]["freshness_days"] == 45
 
 
 # ---------------------------------------------------------------------------

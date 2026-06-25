@@ -30,7 +30,6 @@ def _make_filters() -> FilterConfig:
         seniority_floor=["Senior Level"],
         seniority_reject=["Mid Level", "Entry Level", "Junior", "Associate"],
         seniority_unknown_passes=True,
-        comp_floor=150000,
         freshness_days=30,
         commitment_required="Full Time",
     )

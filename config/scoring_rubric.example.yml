@@ -97,3 +97,30 @@ scoring:
     neutral_days: 14        # neutral between boost and penalty
     penalty_days: 30        # slight ranking penalty after N days
     hard_filter_days: 30    # hard reject at Tier 2 if older than N days
+
+  # Research-adjusted scoring (Phase 3.2)
+  # Deterministic, confidence-gated modifiers derived from the company research dossier.
+  # A modifier only applies if the relevant dossier section's confidence ≥ confidence_threshold.
+  # If the dossier is a stub or retrieval didn't run, NO adjustment is applied.
+  # The base score is never mutated — both base_score and adjusted_score are preserved.
+  research_modifiers:
+    - factor: "recent_layoffs"
+      delta: -1.5
+      confidence_threshold: 0.5
+      source_section: "funding"
+    - factor: "down_round_runway_risk"
+      delta: -2.0
+      confidence_threshold: 0.5
+      source_section: "funding"
+    - factor: "healthy_runway"
+      delta: 0.5
+      confidence_threshold: 0.5
+      source_section: "funding"
+    - factor: "remote_walkback_rto"
+      delta: -1.5
+      confidence_threshold: 0.5
+      source_section: "fit"
+    - factor: "strong_negative_sentiment"
+      delta: -1.0
+      confidence_threshold: 0.6
+      source_section: "sentiment"

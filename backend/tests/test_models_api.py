@@ -162,6 +162,46 @@ class TestUpdateProvider:
         )
         assert r.status_code == 404
 
+    def test_api_key_rotation_updates_live_env(self, client, monkeypatch):
+        """Saving a new API key via the UI must update os.environ immediately.
+
+        Simulates: env var already set at startup (old key), user rotates via UI.
+        Without the os.environ.update fix, load_dotenv(override=False) would
+        keep the OLD key — a security-relevant bug.
+        """
+        import os
+        from seeker_os.config import PROJECT_ROOT as real_root
+
+        # Set an OLD key in os.environ before the update call
+        old_key = "sk-old-rotated-key-value"
+        new_key = "sk-new-rotated-key-value"
+        env_var = f"{PROVIDER_KILO.upper()}_API_KEY"
+        monkeypatch.setenv(env_var, old_key)
+
+        # Save the NEW key via the UI update path
+        r = client.put(
+            f"/api/models/providers/{PROVIDER_KILO}",
+            json={"api_key": new_key, "enabled": True},
+        )
+        assert r.status_code == 200
+
+        # The live os.environ must now hold the NEW key, not the old one
+        assert os.environ.get(env_var) == new_key
+        assert os.environ.get(env_var) != old_key
+
+        # A fresh Settings() must resolve the provider's api_key to the new value
+        from seeker_os.config import Settings
+        # Point Settings at the temp config dir used by the client fixture
+        import seeker_os.config as cfg
+        settings = Settings(config_dir=cfg.CONFIG_DIR)
+        kilo = next(
+            p for p in settings.providers.providers if p.id == PROVIDER_KILO
+        )
+        assert kilo.api_key == new_key
+
+        # Cleanup
+        monkeypatch.delenv(env_var, raising=False)
+
 
 # ---------------------------------------------------------------------------
 # Tier management — PUT /api/models/tiers/{tier}

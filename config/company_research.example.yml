@@ -46,8 +46,19 @@ retrieval:
 # confidence_floor: below this, the dashboard treats the dossier as a stub
 # staleness_months: sentiment signals older than this are flagged stale
 # source_trust_order: ordered list of preferred source domains (highest first)
+
+# HTTP User-Agent for Wikipedia/Wikidata requests (their robot policy requires one).
+# No personal handles — use a generic product identifier.
+user_agent: "SeekerOS/0.1 (product; contact: admin@example.com)"
+
 confidence_floor: 0.3
 staleness_months: 18
+
+# Research TTL: reuse a cached dossier within this many days instead of
+# hitting Tavily again. Company funding/headcount/sentiment don't change daily.
+# Re-research only on explicit user "refresh" or when older than the TTL.
+research_ttl_days: 30
+
 source_trust_order:
   - "crunchbase.com"
   - "techcrunch.com"

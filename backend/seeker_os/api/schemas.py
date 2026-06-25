@@ -388,6 +388,7 @@ class FundingDossierSchema(BaseModel):
     financial_health: str | None = None
     confidence: float = 0.0
     sources: list[SourceRefSchema] = []
+    stripped_count: int = 0
 
 
 class SentimentThemeSchema(BaseModel):
@@ -410,6 +411,7 @@ class SentimentDossierSchema(BaseModel):
     staleness_warning: str | None = None
     confidence: float = 0.0
     sources: list[SourceRefSchema] = []
+    stripped_count: int = 0
 
 
 class FitDossierSchema(BaseModel):
@@ -422,6 +424,7 @@ class FitDossierSchema(BaseModel):
     clearance_required: bool = False
     confidence: float = 0.0
     sources: list[SourceRefSchema] = []
+    stripped_count: int = 0
 
 
 class VerdictFlagsSchema(BaseModel):
@@ -448,6 +451,11 @@ class CompanyResearchResponse(BaseModel):
     sources_used: list[str] = []
     errors: list[str] = []
     researched_at: str = ""
+    retrieval_used: bool = False
+    retrieval_sources: list[SourceRefSchema] = []
+    retrieval_snippets: list[dict] = []
+    reused_from_cache: bool = False
+    dossier_age_days: int | None = None
 
 
 # ---------------------------------------------------------------------------

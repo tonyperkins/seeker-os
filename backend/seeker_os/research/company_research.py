@@ -43,12 +43,24 @@ WIKIPEDIA_SEARCH_URL = "https://en.wikipedia.org/w/api.php"
 WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 
 # Wikipedia requires a User-Agent header per their robot policy.
-HTTP_HEADERS = {
-    "User-Agent": "SeekerOS/0.1 (https://github.com/example/seeker-os)",
-}
+# Default is generic (no personal handles). Overridden per-call from company_research.yml.
+_DEFAULT_USER_AGENT = "SeekerOS/0.1 (product; contact: admin@example.com)"
 
 
-def _search_wikipedia(company: str, timeout: int = 10) -> str | None:
+def _build_headers(cr_config=None) -> dict:
+    """Build a fresh headers dict for this call's HTTP requests.
+
+    Uses the user_agent from company_research config if available,
+    otherwise falls back to the generic default. Returns a new dict
+    each call — never mutates shared state.
+    """
+    ua = _DEFAULT_USER_AGENT
+    if cr_config and cr_config.user_agent:
+        ua = cr_config.user_agent
+    return {"User-Agent": ua}
+
+
+def _search_wikipedia(company: str, timeout: int = 10, headers: dict | None = None) -> str | None:
     """Search Wikipedia for a company page title. Returns the best-matching title or None."""
     params = {
         "action": "query",
@@ -58,7 +70,7 @@ def _search_wikipedia(company: str, timeout: int = 10) -> str | None:
         "format": "json",
     }
     try:
-        resp = httpx.get(WIKIPEDIA_SEARCH_URL, params=params, headers=HTTP_HEADERS, timeout=timeout)
+        resp = httpx.get(WIKIPEDIA_SEARCH_URL, params=params, headers=headers or {}, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
         search_results = data.get("query", {}).get("search", [])
@@ -70,20 +82,20 @@ def _search_wikipedia(company: str, timeout: int = 10) -> str | None:
         return None
 
 
-def fetch_wikipedia_info(company: str, timeout: int = 10) -> WikipediaInfo | None:
+def fetch_wikipedia_info(company: str, timeout: int = 10, headers: dict | None = None) -> WikipediaInfo | None:
     """Fetch company information from Wikipedia.
 
     1. Search for the company page
     2. Fetch the page summary via REST API
     3. Return structured info
     """
-    title = _search_wikipedia(company, timeout=timeout)
+    title = _search_wikipedia(company, timeout=timeout, headers=headers)
     if not title:
         return None
 
     url = WIKIPEDIA_SUMMARY_URL.format(title=title.replace(" ", "_"))
     try:
-        resp = httpx.get(url, headers=HTTP_HEADERS, timeout=timeout)
+        resp = httpx.get(url, headers=headers or {}, timeout=timeout)
         if resp.status_code != 200:
             return None
         data = resp.json()
@@ -105,7 +117,7 @@ def fetch_wikipedia_info(company: str, timeout: int = 10) -> WikipediaInfo | Non
 WIKIDATA_ENTITY_URL = "https://www.wikidata.org/wiki/Special:EntityData/{item_id}.json"
 
 
-def _get_wikidata_item_id(title: str, timeout: int = 10) -> str | None:
+def _get_wikidata_item_id(title: str, timeout: int = 10, headers: dict | None = None) -> str | None:
     """Get the Wikidata item ID for a Wikipedia page title."""
     params = {
         "action": "query",
@@ -115,7 +127,7 @@ def _get_wikidata_item_id(title: str, timeout: int = 10) -> str | None:
         "format": "json",
     }
     try:
-        resp = httpx.get(WIKIPEDIA_SEARCH_URL, params=params, headers=HTTP_HEADERS, timeout=timeout)
+        resp = httpx.get(WIKIPEDIA_SEARCH_URL, params=params, headers=headers or {}, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
         pages = data.get("query", {}).get("pages", {})
@@ -150,6 +162,7 @@ def fetch_wikidata_info(
     company: str,
     wikipedia_title: str | None = None,
     timeout: int = 10,
+    headers: dict | None = None,
 ) -> FundingDossier | None:
     """Fetch structured company data from Wikidata.
 
@@ -158,18 +171,18 @@ def fetch_wikidata_info(
     call and as fallback when no LLM is configured.
     """
     if not wikipedia_title:
-        wikipedia_title = _search_wikipedia(company, timeout=timeout)
+        wikipedia_title = _search_wikipedia(company, timeout=timeout, headers=headers)
     if not wikipedia_title:
         return None
 
-    item_id = _get_wikidata_item_id(wikipedia_title, timeout=timeout)
+    item_id = _get_wikidata_item_id(wikipedia_title, timeout=timeout, headers=headers)
     if not item_id:
         return None
 
     try:
         resp = httpx.get(
             WIKIDATA_ENTITY_URL.format(item_id=item_id),
-            headers=HTTP_HEADERS,
+            headers=headers or {},
             timeout=timeout,
         )
         if resp.status_code != 200:
@@ -614,6 +627,127 @@ def _rank_sources_by_trust(
     return sorted(sources, key=trust_rank)
 
 
+# ---------------------------------------------------------------------------
+# URL verification — strip model-invented URLs not present in retrieval results
+# ---------------------------------------------------------------------------
+
+_TRACKING_PARAM_PREFIXES = ("utm_",)
+_TRACKING_PARAM_EXACT = frozenset({
+    "ref", "source", "fbclid", "gclid", "msclkid", "yclid",
+    "_hsenc", "_hsmi", "mc_cid", "mc_eid", "igshid",
+})
+
+
+def _strip_tracking_params(query: str) -> str:
+    """Remove known tracking parameters from a query string, keep meaningful ones."""
+    from urllib.parse import parse_qsl, urlencode
+
+    if not query:
+        return ""
+    pairs = parse_qsl(query, keep_blank_values=True)
+    kept = [
+        (k, v) for k, v in pairs
+        if not any(k.startswith(p) for p in _TRACKING_PARAM_PREFIXES)
+        and k.lower() not in _TRACKING_PARAM_EXACT
+    ]
+    return urlencode(kept)
+
+
+def _normalize_url(url: str) -> str:
+    """Normalize a URL for comparison: lowercase host, strip trailing slash, strip fragment, strip tracking params."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    if not url:
+        return ""
+    parts = urlsplit(url.strip())
+    host = (parts.netloc or "").lower()
+    path = parts.path.rstrip("/") or ""
+    query = _strip_tracking_params(parts.query)
+    return urlunsplit((parts.scheme.lower(), host, path, query, ""))
+
+
+def _verify_section_sources(
+    sources: list[SourceRef],
+    retrieved_urls: set[str],
+) -> tuple[list[SourceRef], int]:
+    """Filter source URLs against the retrieved set.
+
+    Returns (kept_sources, stripped_count).
+    URLs not in the retrieved set are model-invented and removed.
+    """
+    kept: list[SourceRef] = []
+    stripped = 0
+    for src in sources:
+        if _normalize_url(src.url) in retrieved_urls:
+            kept.append(src)
+        else:
+            stripped += 1
+    return kept, stripped
+
+
+def _verify_dossier_sources(
+    result: CompanyResearchResult,
+    retrieval_snippets: list[RetrievalSnippet],
+    extra_verified_urls: set[str] | None = None,
+) -> None:
+    """Enforce URL constraint: strip LLM-attached URLs not in the retrieved set.
+
+    Called after the LLM dossier is built and before persistence.
+    When retrieval did not run (no snippets), this is a no-op.
+    For each section (funding, sentiment, fit), filters sources to only
+    those URLs that were actually returned by the retrieval adapter or
+    from other legitimate sources (Wikipedia, Wikidata).
+    Sections left with zero sources have confidence halved and a note added.
+    """
+    if not retrieval_snippets:
+        return
+
+    retrieved_urls = {_normalize_url(s.url) for s in retrieval_snippets if s.url}
+    if extra_verified_urls:
+        retrieved_urls |= {_normalize_url(u) for u in extra_verified_urls if u}
+    if not retrieved_urls:
+        return
+
+    for section_name, section in [
+        ("funding", result.funding),
+        ("sentiment", result.sentiment),
+        ("fit", result.fit),
+    ]:
+        if section is None:
+            continue
+        kept, stripped = _verify_section_sources(section.sources, retrieved_urls)
+        section.sources = kept
+        section.stripped_count = stripped
+        if stripped > 0 and len(kept) == 0:
+            section.confidence = section.confidence * 0.5
+            if section_name == "funding" and not section.financial_health:
+                section.financial_health = "Sources unverified — LLM-attached URLs were not found in retrieval results."
+            elif section_name == "sentiment":
+                if not section.staleness_warning:
+                    section.staleness_warning = "Sources unverified — LLM-attached URLs were not found in retrieval results."
+                else:
+                    section.staleness_warning += " | Sources unverified — URLs stripped."
+            result.gaps.append(f"{section_name}: all sources stripped (model-invented URLs)")
+
+    # Also verify retrieval_sources on the top-level result
+    if result.retrieval_sources:
+        kept_rs, stripped_rs = _verify_section_sources(result.retrieval_sources, retrieved_urls)
+        result.retrieval_sources = kept_rs
+        # retrieval_sources stripped count is implicit — they should all match
+
+    # Recompute overall_confidence: cap to the mean of section confidences
+    # so that a halved section pulls down the overall, and the confidence_floor
+    # / is_stub check reflects the lost grounding.
+    section_confs = [
+        s.confidence for s in [result.funding, result.sentiment, result.fit]
+        if s is not None
+    ]
+    if section_confs:
+        mean_section = sum(section_confs) / len(section_confs)
+        if mean_section < result.overall_confidence:
+            result.overall_confidence = mean_section
+
+
 def research_company(
     company: str,
     company_homepage: str | None = None,
@@ -650,6 +784,9 @@ def research_company(
     except Exception:
         pass
 
+    # Build per-call headers from config (no shared mutable state)
+    headers = _build_headers(cr_config)
+
     # Build retrieval adapter if configured
     if cr_config and cr_config.retrieval and cr_config.retrieval.type:
         try:
@@ -661,7 +798,7 @@ def research_company(
             logger.warning("Failed to build retrieval adapter: %s", e)
 
     # 1. Wikipedia (company description — context for LLM and display)
-    wiki = fetch_wikipedia_info(company)
+    wiki = fetch_wikipedia_info(company, headers=headers)
     if wiki:
         result.wikipedia = wiki
         result.sources_used.append("wikipedia")
@@ -672,6 +809,7 @@ def research_company(
     wikidata = fetch_wikidata_info(
         company,
         wikipedia_title=wiki.title if wiki else None,
+        headers=headers,
     )
     if wikidata:
         wikidata_founded = wikidata.founded
@@ -694,6 +832,16 @@ def research_company(
             result.retrieval_sources = [
                 SourceRef(url=snip.url, retrieved=now)
                 for snip in retrieval_snippets
+            ]
+            result.retrieval_snippets = [
+                {
+                    "url": s.url,
+                    "title": s.title,
+                    "snippet": s.snippet,
+                    "source_domain": s.source_domain,
+                    "score": s.score,
+                }
+                for s in retrieval_snippets
             ]
 
     # 3. LLM dossier generation (comprehensive: funding + sentiment + fit)
@@ -725,12 +873,27 @@ def research_company(
             # Preserve retrieval metadata from the pre-dossier result
             dossier.retrieval_used = result.retrieval_used
             dossier.retrieval_sources = result.retrieval_sources
+            dossier.retrieval_snippets = result.retrieval_snippets
             if "retrieval" in result.sources_used and "retrieval" not in dossier.sources_used:
                 dossier.sources_used.append("retrieval")
             result = dossier
         elif wikidata:
             # LLM unavailable — use Wikidata as fallback funding data
             result.funding = wikidata
+
+    # 3b. Enforce URL constraint — strip model-invented URLs not in retrieval
+    # Build the verified URL set from all legitimate sources: Tavily snippets +
+    # Wikipedia/Wikidata URLs used in this run.
+    extra_verified: set[str] = set()
+    if wiki and wiki.url:
+        extra_verified.add(wiki.url)
+    # Wikidata doesn't carry a source URL, but if the LLM used Wikidata fallback
+    # funding (Wikidata is a FundingDossier), its sources may have URLs
+    if wikidata:
+        for src in wikidata.sources:
+            if src.url:
+                extra_verified.add(src.url)
+    _verify_dossier_sources(result, retrieval_snippets, extra_verified_urls=extra_verified)
 
     # 4. Apply Phase 3 thresholds
     staleness_months = cr_config.staleness_months if cr_config else 18

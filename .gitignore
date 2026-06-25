@@ -63,11 +63,14 @@ config/identity_rules.yml
 config/channel_rules.yml
 config/queries.yml
 config/providers.yml
+config/filters.yml
+config/company_research.yml
 config/blacklist.txt
 
 # Environment
 .env
 .env.*
+!.env.example
 
 # Logs
 *.log

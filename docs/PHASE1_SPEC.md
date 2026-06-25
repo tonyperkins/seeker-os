@@ -251,10 +251,8 @@ filters:
   # If comp_max >= floor but comp_min < floor, job passes and scoring
   # applies a comp_marginal penalty.
   # If comp is null (not listed), job passes (unknown comp isn't a hard reject).
-  # NOTE: comp_floor here should match profile.comp.floor. On startup, config.py
-  # validates they're equal and warns if they diverge. profile.comp.floor is the
-  # canonical source — this field is kept in filters.yml for explicitness.
-  comp_floor: 150000          # USD ceiling floor, must match profile.comp.floor
+  # comp_floor is NOT in filters.yml — it lives in profile.comp.floor (canonical).
+  # comp_floor_margin_pct applies a tolerance below profile.comp.floor.
   freshness_days: 30          # reject if older than N days
   commitment_required: "Full Time"  # must contain this
 

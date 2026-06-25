@@ -121,6 +121,46 @@ class TestValidator:
         helm_violations = [v for v in result.violations if "Helm" in v.matched_text]
         assert len(helm_violations) == 0
 
+    def test_disallowed_phrase_word_boundary(self, tmp_path, monkeypatch):
+        """A short disallowed phrase must not match inside a longer word.
+
+        'aws expert' should NOT match 'sawsexpert' (no word boundary).
+        'aws expert' SHOULD match 'I am an aws expert' (word-bounded).
+        Multi-word phrases must still match across spaces.
+        """
+        import shutil
+        from seeker_os.config import CONFIG_DIR
+
+        test_config = tmp_path / "config"
+        test_config.mkdir()
+        for f in CONFIG_DIR.iterdir():
+            if f.is_file():
+                shutil.copy(f, test_config / f.name)
+
+        (test_config / "accuracy_rules.yml").write_text(
+            yaml.dump({"rules": [
+                {"id": "aws_short", "description": "No claiming aws expert",
+                 "type": "disallowed_phrases", "phrases": ["aws expert"], "severity": "high"},
+            ]}, default_flow_style=False),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
+        monkeypatch.setattr("seeker_os.config_writer.CONFIG_DIR", test_config)
+        settings = Settings()
+        settings.config_dir = test_config
+        v = AccuracyValidator(settings)
+
+        # Should NOT match inside a longer word (no word boundary)
+        result_neg = v.validate("Sawsexpert at work\nhttps://example.com | https://linkedin.com/in/test")
+        aws_violations = [x for x in result_neg.violations if x.rule_id == "aws_short"]
+        assert len(aws_violations) == 0
+
+        # SHOULD match as a whole phrase
+        result_pos = v.validate("I am an aws expert\nhttps://example.com | https://linkedin.com/in/test")
+        aws_violations = [x for x in result_pos.violations if x.rule_id == "aws_short"]
+        assert len(aws_violations) == 1
+
     def test_high_severity_blocks_pass(self, validator):
         text = "Deep AWS expertise.\nhttps://example.com | https://linkedin.com/in/test"
         result = validator.validate(text)
