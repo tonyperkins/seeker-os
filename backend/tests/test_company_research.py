@@ -1033,8 +1033,7 @@ class TestUserAgent:
         from seeker_os.research.company_research import _build_headers, _DEFAULT_USER_AGENT
         ua = _build_headers(None)["User-Agent"]
         assert ua == _DEFAULT_USER_AGENT
-        assert "example-user" not in ua.lower()
-        assert "github.com/example" not in ua.lower()
+        assert "github.com/" not in ua.lower()
 
     def test_config_user_agent_used_in_headers(self, tmp_path, monkeypatch):
         """company_research.yml user_agent should appear in per-call headers."""
@@ -1067,14 +1066,13 @@ class TestUserAgent:
         from seeker_os.research.company_research import _build_headers
         headers = _build_headers(cr_config)
         assert headers["User-Agent"] == custom_ua
-        assert "example-user" not in headers["User-Agent"].lower()
+        assert "github.com/" not in headers["User-Agent"].lower()
 
     def test_config_model_default_has_no_personal_handle(self):
         """CompanyResearchConfig default user_agent must not contain personal handles."""
         from seeker_os.config import CompanyResearchConfig
         cfg = CompanyResearchConfig()
-        assert "example-user" not in cfg.user_agent.lower()
-        assert "github.com/example" not in cfg.user_agent.lower()
+        assert "github.com/" not in cfg.user_agent.lower()
 
     def test_no_ua_leak_across_calls(self, tmp_path, monkeypatch):
         """Two research_company calls with different configs must not leak UA.
