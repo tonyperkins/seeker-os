@@ -3,6 +3,11 @@
 {master_resume}
 ---
 
+## ACCURACY RULES (check the draft against these)
+---
+{accuracy_rules_text}
+---
+
 ## APPLICATION QUESTION
 {question}
 
@@ -12,4 +17,5 @@
 ---
 
 Review the draft answer against the master resume. Flag any unsupported or overstated
-claims. Suggest improvements. Do NOT rewrite the answer.
+claims. Check for forbidden technologies or disallowed phrases from the accuracy rules.
+Suggest improvements. Do NOT rewrite the answer.

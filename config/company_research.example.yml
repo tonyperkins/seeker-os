@@ -72,3 +72,14 @@ source_trust_order:
   - "levels.fyi"
   - "reddit.com"
 
+# Fit preferences — personal company preferences injected into the LLM dossier
+# prompt so the "fit" section is tailored to the candidate. All fields optional;
+# empty strings = the LLM reports raw signals without judgment.
+fit_preferences:
+  preferred_size_bucket: ""    # e.g. "200-500" or "50-200"
+  preferred_stage: ""          # e.g. "Series A through E" or "bootstrapped"
+  remote_policy: ""            # e.g. "fully remote only" or "remote-first, hybrid ok"
+  ic_vs_mgmt: ""               # e.g. "IC-respected, hands-on" or "IC track preferred"
+  clearance_ok: true           # false = flag clearance/citizenship requirements as red
+  notes: ""                    # free-text, e.g. "No defense/government contractors"
+

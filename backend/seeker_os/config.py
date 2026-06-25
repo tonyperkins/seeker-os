@@ -439,6 +439,21 @@ class RetrievalProviderConfig(BaseModel):
     retrieval_cache_ttl_days: int = 7
 
 
+class FitPreferencesConfig(BaseModel):
+    """User-configurable fit preferences injected into the company dossier prompt.
+
+    These are personal preferences, not product behavior. They tell the LLM
+    what company characteristics the candidate is looking for so the fit
+    section of the dossier is tailored to the individual.
+    """
+    preferred_size_bucket: str = ""
+    preferred_stage: str = ""
+    remote_policy: str = ""
+    ic_vs_mgmt: str = ""
+    clearance_ok: bool = True
+    notes: str = ""
+
+
 class CompanyResearchConfig(BaseModel):
     """Config for company_research.yml — controls research flow and thresholds."""
     wikipedia: WikipediaConfig = WikipediaConfig()
@@ -457,6 +472,9 @@ class CompanyResearchConfig(BaseModel):
 
     # Research TTL: reuse cached dossier within this many days (default ~30)
     research_ttl_days: int = 30
+
+    # User-configurable fit preferences (injected into dossier prompt)
+    fit_preferences: FitPreferencesConfig = FitPreferencesConfig()
 
 
 # ---------------------------------------------------------------------------

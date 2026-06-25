@@ -41,10 +41,11 @@ burnout/work-life, comp competitiveness, glue-work/management-heavy culture vs
 hands-on IC respect.
 
 ## Fit signals (priority 2 — tailored to my search)
-Flag against my constraints: remote policy (fully remote / hybrid / onsite — and any
-walkback of remote), company size bucket (favor 200–500, Series E and below),
-IC-vs-management culture, comp banding if discoverable, and any
-clearance/citizenship requirements.
+Flag against the candidate's fit preferences (injected in the user prompt as
+FIT_PREFERENCES). Evaluate: remote policy (and any walkback of remote), company
+size bucket, IC-vs-management culture, comp banding if discoverable, and any
+clearance/citizenship requirements. If no fit preferences are provided, report
+the raw signals without judgment.
 
 ## Output schema
 {

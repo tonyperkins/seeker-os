@@ -52,12 +52,14 @@ def _build_critique_prompt(
     master_resume: str,
     question: str,
     user_draft: str,
+    accuracy_rules_text: str = "",
 ) -> str:
     """Build the user prompt for critiquing a user-supplied draft."""
     return _CRITIQUE_USER_TEMPLATE.format(
         master_resume=master_resume,
         question=question,
         user_draft=user_draft,
+        accuracy_rules_text=accuracy_rules_text,
     )
 
 
@@ -310,14 +312,18 @@ def critique_application_answer(
 
     master_resume = master_path.read_text()
 
-    # 3. Build prompt
+    # 3. Load accuracy rules for the critique prompt
+    accuracy_rules_text = _load_accuracy_rules_text(settings)
+
+    # 4. Build prompt
     user_prompt = _build_critique_prompt(
         master_resume=master_resume,
         question=question,
         user_draft=user_draft,
+        accuracy_rules_text=accuracy_rules_text,
     )
 
-    # 4. Call LLM
+    # 5. Call LLM
     router = ModelRouter(settings)
     response = router.generate(
         task=task,

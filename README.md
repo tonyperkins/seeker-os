@@ -2,6 +2,30 @@
 
 A structured, dashboard-driven job search pipeline.
 
+## Screenshots
+
+### Dashboard — pipeline funnel, recent runs, top matches
+
+![Dashboard (light)](docs/screenshots/dashboard-light.png)
+
+### Jobs — filterable list with scoring and status badges
+
+![Jobs (light)](docs/screenshots/jobs-light.png)
+
+### Job Detail — score breakdown, analysis, and actions (expanded)
+
+![Job Detail (light)](docs/screenshots/job-detail-expanded-light.png)
+
+### Kanban — application lifecycle tracking
+
+![Kanban (light)](docs/screenshots/kanban-light.png)
+
+### Settings — profile, filters, accuracy rules, and provider config
+
+![Settings (light)](docs/screenshots/settings-expanded-light.png)
+
+---
+
 ## What It Does
 
 1. **Discovers** jobs from supported sources (currently hiring.cafe; pluggable adapter architecture for adding more)

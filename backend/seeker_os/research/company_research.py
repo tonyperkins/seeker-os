@@ -254,6 +254,7 @@ def fetch_llm_dossier(
     wikidata_headcount: int | None = None,
     jd_text: str = "",
     retrieval_snippets: list[RetrievalSnippet] | None = None,
+    fit_preferences_text: str = "",
 ) -> CompanyResearchResult | None:
     """Generate a full company dossier using the configured LLM.
 
@@ -319,13 +320,17 @@ def fetch_llm_dossier(
 
     context = "\n".join(context_parts) if context_parts else "No additional context available."
 
+    fit_prefs_section = ""
+    if fit_preferences_text:
+        fit_prefs_section = f"\n\n## FIT_PREFERENCES (candidate's company preferences)\n{fit_preferences_text}"
+
     user_prompt = f"""## Input
 - company_name: {company}
 - company_domain: {company_domain or "N/A"}
 - careers_url: {careers_url or "N/A"}
 
 ## Additional context gathered from free sources
-{context}
+{context}{fit_prefs_section}
 
 Produce the dossier now. Return ONLY valid JSON matching the output schema."""
 
@@ -430,6 +435,32 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
+
+def _build_fit_preferences_text(cr_config) -> str:
+    """Build a human-readable fit preferences block from company_research config.
+
+    Returns empty string if no fit preferences are configured, so the prompt
+    section is omitted entirely and the LLM reports raw signals without judgment.
+    """
+    if not cr_config or not cr_config.fit_preferences:
+        return ""
+
+    fp = cr_config.fit_preferences
+    lines: list[str] = []
+    if fp.preferred_size_bucket:
+        lines.append(f"- Preferred company size: {fp.preferred_size_bucket}")
+    if fp.preferred_stage:
+        lines.append(f"- Preferred funding stage: {fp.preferred_stage}")
+    if fp.remote_policy:
+        lines.append(f"- Remote policy preference: {fp.remote_policy}")
+    if fp.ic_vs_mgmt:
+        lines.append(f"- IC vs management culture: {fp.ic_vs_mgmt}")
+    if not fp.clearance_ok:
+        lines.append("- Clearance/citizenship requirements: NOT acceptable")
+    if fp.notes:
+        lines.append(f"- Additional notes: {fp.notes}")
+
+    return "\n".join(lines) if lines else ""
 
 def _run_retrieval_queries(
     adapter,
@@ -808,6 +839,7 @@ def research_company(
 
     # 3. LLM dossier generation (comprehensive: funding + sentiment + fit)
     if enable_llm:
+        fit_prefs_text = _build_fit_preferences_text(cr_config)
         dossier = fetch_llm_dossier(
             company=company,
             company_domain=company_homepage,
@@ -816,6 +848,7 @@ def research_company(
             wikidata_headcount=wikidata_headcount,
             jd_text=jd_text,
             retrieval_snippets=retrieval_snippets or None,
+            fit_preferences_text=fit_prefs_text,
         )
         if dossier:
             # Preserve Wikipedia info and merge sources
