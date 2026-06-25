@@ -17,6 +17,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
@@ -499,6 +500,7 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
             sources_used=["llm_dossier"],
         )
     except Exception:
+        logger.exception("LLM dossier generation failed for company='%s'", company)
         return None
 
 
@@ -511,6 +513,8 @@ def _run_retrieval_queries(
     company: str,
     funding_query_template: str = "{company} funding round investors valuation",
     sentiment_query_template: str = "{company} employee reviews sentiment glassdoor culture",
+    cache_ttl_days: int = 7,
+    force_refresh: bool = False,
 ) -> list[RetrievalSnippet]:
     """Run retrieval queries for funding signals and employee sentiment.
 
@@ -520,9 +524,19 @@ def _run_retrieval_queries(
     Query templates come from config (company_research.yml → retrieval.*)
     and use a {company} placeholder. If a template omits the placeholder,
     it is used as-is without crashing.
+
+    Results are cached on disk (keyed by query string) to avoid redundant
+    paid Tavily API calls. Set force_refresh=True to bypass the cache.
     """
     if not adapter:
         return []
+
+    from seeker_os.discovery.cache import DiskCache
+
+    cache = DiskCache(
+        cache_dir=Path("data/retrieval_cache"),
+        ttl_hours=cache_ttl_days * 24,
+    )
 
     all_snippets: list[RetrievalSnippet] = []
 
@@ -539,9 +553,28 @@ def _run_retrieval_queries(
     queries = [funding_query, sentiment_query]
 
     for q in queries:
+        # Check disk cache first (unless force_refresh)
+        if not force_refresh:
+            cached = cache.get(q)
+            if cached is not None:
+                try:
+                    raw = json.loads(cached)
+                    snippets = [RetrievalSnippet(**item) for item in raw]
+                    all_snippets.extend(snippets)
+                    logger.debug("Retrieval cache hit for query '%s'", q)
+                    continue
+                except Exception:
+                    logger.debug("Retrieval cache parse failed for '%s' — re-fetching", q)
+
+        # Cache miss or force_refresh — call the adapter
         try:
             snippets = adapter.search(q)
             all_snippets.extend(snippets)
+            # Cache the results as JSON
+            try:
+                cache.set(q, json.dumps([s.model_dump() for s in snippets]))
+            except Exception:
+                logger.debug("Failed to cache retrieval results for '%s'", q)
         except Exception as e:
             logger.warning("Retrieval query '%s' failed: %s", q, e)
 
@@ -753,6 +786,7 @@ def research_company(
     company_homepage: str | None = None,
     enable_llm: bool = True,
     jd_text: str = "",
+    force_refresh: bool = False,
 ) -> CompanyResearchResult:
     """Research a company by aggregating data from multiple sources.
 
@@ -763,6 +797,8 @@ def research_company(
         jd_text: Optional job description text — fed to the LLM as a primary
             source. The JD frequently names funding stage, investors, and remote
             policy that the model otherwise cannot source.
+        force_refresh: If True, bypass the on-disk retrieval cache for paid
+            Tavily queries and re-fetch from the API.
 
     Returns:
         CompanyResearchResult with whatever data could be gathered.
@@ -821,10 +857,13 @@ def research_company(
     if retrieval_adapter:
         funding_template = cr_config.retrieval.funding_query_template if cr_config else "{company} funding round investors valuation"
         sentiment_template = cr_config.retrieval.sentiment_query_template if cr_config else "{company} employee reviews sentiment glassdoor culture"
+        cache_ttl_days = cr_config.retrieval.retrieval_cache_ttl_days if cr_config else 7
         retrieval_snippets = _run_retrieval_queries(
             retrieval_adapter, company,
             funding_query_template=funding_template,
             sentiment_query_template=sentiment_template,
+            cache_ttl_days=cache_ttl_days,
+            force_refresh=force_refresh,
         )
         if retrieval_snippets:
             result.retrieval_used = True

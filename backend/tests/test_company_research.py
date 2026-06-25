@@ -16,6 +16,7 @@ from seeker_os.research.models import (
     VerdictFlags,
     WikipediaInfo,
 )
+from seeker_os.research.retrieval.models import RetrievalSnippet
 from seeker_os.research.company_research import (
     fetch_wikipedia_info,
     fetch_wikidata_info,
@@ -678,7 +679,10 @@ class TestPhase3RetrievalAndThresholds:
         with patch(
             "seeker_os.research.retrieval.registry.build_retrieval_adapter",
             return_value=mock_adapter,
-        ):
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
             result = research_company("Stripe")
 
         # Retrieval was used
@@ -896,7 +900,10 @@ class TestSourceTrustOrderRanking:
         with patch(
             "seeker_os.research.retrieval.registry.build_retrieval_adapter",
             return_value=mock_adapter,
-        ):
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
             result = research_company("Stripe")
 
         # Mock returns 3 snippets per call, 2 calls = 6 total (duplicates)
@@ -951,7 +958,10 @@ class TestQueryTemplatesFromConfig:
         with patch(
             "seeker_os.research.retrieval.registry.build_retrieval_adapter",
             return_value=mock_adapter,
-        ):
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
             research_company("Rally")
 
         # The first search call should use the custom funding template
@@ -995,7 +1005,10 @@ class TestQueryTemplatesFromConfig:
         with patch(
             "seeker_os.research.retrieval.registry.build_retrieval_adapter",
             return_value=mock_adapter,
-        ):
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
             research_company("Stripe")
 
         first_call_args = mock_adapter.search.call_args_list[0]
@@ -1014,12 +1027,16 @@ class TestQueryTemplatesFromConfig:
         mock_adapter = MagicMock()
         mock_adapter.search.return_value = []
 
-        _run_retrieval_queries(
-            mock_adapter,
-            company="Rally",
-            funding_query_template="latest startup funding news",
-            sentiment_query_template="startup employee sentiment",
-        )
+        with patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
+            _run_retrieval_queries(
+                mock_adapter,
+                company="Rally",
+                funding_query_template="latest startup funding news",
+                sentiment_query_template="startup employee sentiment",
+            )
 
         first_call_args = mock_adapter.search.call_args_list[0]
         assert first_call_args.args[0] == "latest startup funding news"
@@ -1160,3 +1177,105 @@ class TestUserAgent:
             f"Call 2 should use default UA, got: {[h.get('User-Agent') for h in captured_headers_2]}"
         assert not any(h.get("User-Agent") == "UA-ONE" for h in captured_headers_2), \
             "UA-ONE leaked forward into call 2 — global mutation bug!"
+
+
+class TestRetrievalQueryCaching:
+    """Tests for disk caching of Tavily retrieval queries."""
+
+    def test_cache_hit_avoids_adapter_call(self, tmp_path):
+        """When a cached result exists, the adapter is not called."""
+        from seeker_os.research.company_research import _run_retrieval_queries
+        from seeker_os.research.retrieval.models import RetrievalSnippet
+
+        # Pre-populate the cache with a known query result
+        from seeker_os.discovery.cache import DiskCache
+        cache = DiskCache(cache_dir=tmp_path / "retrieval_cache", ttl_hours=168)
+
+        funding_query = "Stripe funding round investors valuation"
+        sentiment_query = "Stripe employee reviews sentiment glassdoor culture"
+        cached_snippets = [
+            {"title": "Cached", "url": "https://example.com/cached",
+             "snippet": "Cached snippet", "source_domain": "example.com", "score": 0.9},
+        ]
+        cache.set(funding_query, json.dumps(cached_snippets))
+        cache.set(sentiment_query, json.dumps(cached_snippets))
+
+        mock_adapter = MagicMock()
+        mock_adapter.search.return_value = []
+
+        with patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache_cls.return_value = cache
+            result = _run_retrieval_queries(
+                mock_adapter, "Stripe",
+                cache_ttl_days=7,
+                force_refresh=False,
+            )
+
+        # Adapter should NOT have been called — cache hit
+        mock_adapter.search.assert_not_called()
+        # Cached snippets should be returned
+        assert len(result) == 2
+        assert result[0].url == "https://example.com/cached"
+
+    def test_force_refresh_bypasses_cache(self, tmp_path):
+        """When force_refresh=True, the adapter is called even if cache exists."""
+        from seeker_os.research.company_research import _run_retrieval_queries
+        from seeker_os.discovery.cache import DiskCache
+
+        cache = DiskCache(cache_dir=tmp_path / "retrieval_cache", ttl_hours=168)
+
+        funding_query = "Stripe funding round investors valuation"
+        sentiment_query = "Stripe employee reviews sentiment glassdoor culture"
+        cache.set(funding_query, json.dumps([{"title": "Old", "url": "https://old.com",
+                  "snippet": "Old", "source_domain": "old.com", "score": 0.5}]))
+
+        fresh_snippet = RetrievalSnippet(
+            title="Fresh", url="https://fresh.com",
+            snippet="Fresh result", source_domain="fresh.com", score=0.95,
+        )
+        mock_adapter = MagicMock()
+        mock_adapter.search.return_value = [fresh_snippet]
+
+        with patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache_cls.return_value = cache
+            result = _run_retrieval_queries(
+                mock_adapter, "Stripe",
+                cache_ttl_days=7,
+                force_refresh=True,
+            )
+
+        # Adapter SHOULD have been called — force_refresh bypasses cache
+        assert mock_adapter.search.call_count == 2
+        # Fresh results returned, not cached
+        assert all(r.url == "https://fresh.com" for r in result)
+
+    def test_cache_miss_calls_adapter_and_stores(self, tmp_path):
+        """When no cached result exists, the adapter is called and results are cached."""
+        from seeker_os.research.company_research import _run_retrieval_queries
+        from seeker_os.discovery.cache import DiskCache
+
+        cache = DiskCache(cache_dir=tmp_path / "retrieval_cache", ttl_hours=168)
+
+        fresh_snippet = RetrievalSnippet(
+            title="Fresh", url="https://fresh.com",
+            snippet="Fresh result", source_domain="fresh.com", score=0.95,
+        )
+        mock_adapter = MagicMock()
+        mock_adapter.search.return_value = [fresh_snippet]
+
+        with patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache_cls.return_value = cache
+            _run_retrieval_queries(
+                mock_adapter, "Stripe",
+                cache_ttl_days=7,
+                force_refresh=False,
+            )
+
+        # Adapter was called for both queries
+        assert mock_adapter.search.call_count == 2
+        # Results should now be in the cache
+        funding_query = "Stripe funding round investors valuation"
+        cached = cache.get(funding_query)
+        assert cached is not None
+        cached_data = json.loads(cached)
+        assert cached_data[0]["url"] == "https://fresh.com"

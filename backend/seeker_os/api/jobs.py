@@ -78,6 +78,8 @@ def _row_to_detail(row) -> JobDetail:
         cross_ref_score=row["cross_ref_score"],
         is_pinned=bool(row["is_pinned"]),
         ai_policy=row["ai_policy"] if "ai_policy" in row.keys() else None,
+        research_adjusted_score=row["research_adjusted_score"] if "research_adjusted_score" in row.keys() else None,
+        research_delta=row["research_delta"] if "research_delta" in row.keys() else 0.0,
     )
 
 

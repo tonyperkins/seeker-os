@@ -82,6 +82,8 @@ export interface JobDetail extends JobSummary {
   cross_ref_date: string | null;
   cross_ref_score: number | null;
   ai_policy: string | null;
+  research_adjusted_score: number | null;
+  research_delta: number;
 }
 
 export interface PipelineRunSummary {
@@ -375,7 +377,8 @@ export const api = {
     crossRef: (id: number) => fetchAPI<Record<string, unknown>>(`/api/jobs/${id}/cross-ref`),
     companyResearch: {
       get: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`),
-      run: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`, { method: "POST" }),
+      run: (id: number, forceRefresh?: boolean) =>
+        fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research?force_refresh=${forceRefresh ?? false}`, { method: "POST" }),
     },
     analysis: {
       get: (id: number) => fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`),
@@ -664,6 +667,17 @@ export interface CompanyResearchResult {
   retrieval_used: boolean;
   retrieval_sources: SourceRef[];
   retrieval_snippets: RetrievalSnippetData[];
+  research_adjusted_score: number | null;
+  research_delta: number;
+  research_breakdown: ResearchBreakdownItem[];
+  research_adjustment_applied: boolean;
+}
+
+export interface ResearchBreakdownItem {
+  factor: string;
+  delta: number;
+  confidence: number;
+  source_section: string;
 }
 
 // ---------------------------------------------------------------------------

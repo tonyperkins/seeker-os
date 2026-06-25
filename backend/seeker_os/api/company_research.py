@@ -10,11 +10,26 @@ from seeker_os.api.schemas import CompanyResearchResponse, SourceRefSchema
 from seeker_os.database import get_connection, json_decode, json_encode
 from seeker_os.dedup.normalize import normalize_company
 from seeker_os.research.company_research import research_company
+from seeker_os.research.models import (
+    CompanyResearchResult,
+    FundingDossier,
+    SentimentDossier,
+    FitDossier,
+)
+from seeker_os.scoring.research_adjustment import (
+    ResearchModifierRule,
+    compute_research_adjustment,
+)
 
 router = APIRouter(prefix="/api/jobs", tags=["company-research"])
 
 
-def _row_to_response(row, reused_from_cache: bool = False, dossier_age_days: int | None = None) -> CompanyResearchResponse:
+def _row_to_response(
+    row,
+    reused_from_cache: bool = False,
+    dossier_age_days: int | None = None,
+    adjustment: dict | None = None,
+) -> CompanyResearchResponse:
     """Convert a DB row to CompanyResearchResponse."""
     from seeker_os.api.schemas import (
         WikipediaInfoSchema,
@@ -47,6 +62,7 @@ def _row_to_response(row, reused_from_cache: bool = False, dossier_age_days: int
         else []
     )
 
+    adj = adjustment or {}
     return CompanyResearchResponse(
         id=row["id"],
         job_id=row["job_id"],
@@ -68,7 +84,117 @@ def _row_to_response(row, reused_from_cache: bool = False, dossier_age_days: int
         retrieval_snippets=retrieval_snippets_data,
         reused_from_cache=reused_from_cache,
         dossier_age_days=dossier_age_days,
+        research_adjusted_score=adj.get("research_adjusted_score"),
+        research_delta=adj.get("research_delta", 0.0),
+        research_breakdown=adj.get("research_breakdown", []),
+        research_adjustment_applied=adj.get("research_adjustment_applied", False),
     )
+
+
+def _reconstruct_dossier_from_row(row, confidence_floor: float = 0.3) -> CompanyResearchResult:
+    """Reconstruct a minimal CompanyResearchResult from a DB row for adjustment computation."""
+    funding = None
+    sentiment = None
+    fit = None
+
+    funding_data = json_decode(row["funding_data"]) if row["funding_data"] else None
+    if funding_data:
+        funding = FundingDossier(**funding_data)
+
+    sentiment_data = json_decode(row["sentiment_data"]) if row["sentiment_data"] else None
+    if sentiment_data:
+        sentiment = SentimentDossier(**sentiment_data)
+
+    fit_data = json_decode(row["fit_data"]) if "fit_data" in row.keys() and row["fit_data"] else None
+    if fit_data:
+        fit = FitDossier(**fit_data)
+
+    overall_confidence = row["overall_confidence"] if "overall_confidence" in row.keys() else 0.0
+    retrieval_sources_data = (
+        json_decode(row["retrieval_sources"])
+        if "retrieval_sources" in row.keys() and row["retrieval_sources"]
+        else []
+    )
+
+    return CompanyResearchResult(
+        company_name=row["company_name"] or "",
+        overall_confidence=overall_confidence,
+        funding=funding,
+        sentiment=sentiment,
+        fit=fit,
+        is_stub=overall_confidence < confidence_floor,
+        retrieval_used=bool(retrieval_sources_data),
+    )
+
+
+def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) -> dict | None:
+    """Compute research-adjusted score and persist to the jobs table.
+
+    Returns a dict with research_adjusted_score, research_delta,
+    research_breakdown, research_adjustment_applied — or None if the
+    job hasn't been scored yet (no base score to adjust).
+    """
+    job = db.execute("SELECT score FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    if not job or job["score"] is None:
+        return None
+
+    base_score = float(job["score"])
+
+    try:
+        from seeker_os.config import Settings
+        settings = Settings()
+        scoring = settings.scoring
+    except Exception:
+        return None
+
+    if not scoring or not scoring.research_modifiers:
+        return None
+
+    rules = [
+        ResearchModifierRule(
+            factor=rm.factor,
+            delta=rm.delta,
+            confidence_threshold=rm.confidence_threshold,
+            source_section=rm.source_section,
+        )
+        for rm in scoring.research_modifiers
+    ]
+
+    result = compute_research_adjustment(
+        base_score=base_score,
+        dossier=dossier,
+        rules=rules,
+        max_score=scoring.max_score,
+        min_score=scoring.min_score,
+    )
+
+    breakdown_json = json_encode([
+        item.model_dump() for item in result.breakdown
+    ])
+
+    db.execute(
+        """UPDATE jobs
+           SET research_adjusted_score = ?,
+               research_delta = ?,
+               research_breakdown = ?,
+               updated_at = ?
+           WHERE id = ?""",
+        (
+            result.adjusted_score,
+            result.research_delta,
+            breakdown_json,
+            datetime.now(timezone.utc).isoformat(),
+            job_id,
+        ),
+    )
+    db.commit()
+
+    return {
+        "research_adjusted_score": result.adjusted_score,
+        "research_delta": result.research_delta,
+        "research_breakdown": [item.model_dump() for item in result.breakdown],
+        "research_adjustment_applied": result.applied,
+    }
 
 
 def _find_fresh_dossier(db, company_norm: str, ttl_days: int):
@@ -131,7 +257,21 @@ def get_company_research(job_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="No company research found for this job")
 
-        return _row_to_response(row, reused_from_cache=reused, dossier_age_days=age_days)
+        # Read existing adjusted score from jobs table (persisted by POST endpoint)
+        adjustment = None
+        job_row = db.execute(
+            "SELECT research_adjusted_score, research_delta, research_breakdown FROM jobs WHERE id = ?",
+            (job_id,),
+        ).fetchone()
+        if job_row and job_row["research_adjusted_score"] is not None:
+            adjustment = {
+                "research_adjusted_score": job_row["research_adjusted_score"],
+                "research_delta": job_row["research_delta"] if "research_delta" in job_row.keys() else 0.0,
+                "research_breakdown": json_decode(job_row["research_breakdown"]) if "research_breakdown" in job_row.keys() and job_row["research_breakdown"] else [],
+                "research_adjustment_applied": True,
+            }
+
+        return _row_to_response(row, reused_from_cache=reused, dossier_age_days=age_days, adjustment=adjustment)
     finally:
         db.close()
 
@@ -170,8 +310,20 @@ def run_company_research(job_id: int, force_refresh: bool = False):
         if not force_refresh:
             cached_row, age_days = _find_fresh_dossier(db, company_norm, ttl_days)
             if cached_row:
+                # Compute and persist research-adjusted score from cached dossier
+                confidence_floor = 0.3
+                try:
+                    from seeker_os.config import Settings
+                    s = Settings()
+                    if s.company_research:
+                        confidence_floor = s.company_research.confidence_floor
+                except Exception:
+                    pass
+                dossier = _reconstruct_dossier_from_row(cached_row, confidence_floor)
+                adjustment = _apply_research_adjustment(db, job_id, dossier)
                 return _row_to_response(
                     cached_row, reused_from_cache=True, dossier_age_days=age_days,
+                    adjustment=adjustment,
                 )
 
         # Run fresh research
@@ -179,7 +331,21 @@ def run_company_research(job_id: int, force_refresh: bool = False):
             company=company,
             company_homepage=company_homepage,
             jd_text=jd_full or "",
+            force_refresh=force_refresh,
         )
+
+        # Guard: don't persist a completely empty dossier (LLM failure with
+        # no fallback data). This would shadow any previous good research row
+        # since GET returns the most recent by job_id.
+        if (result.overall_confidence == 0.0
+                and result.funding is None
+                and result.sentiment is None
+                and result.fit is None
+                and not result.summary):
+            raise HTTPException(
+                status_code=502,
+                detail="Research completed but produced no usable data — LLM dossier generation may have failed. Check server logs.",
+            )
 
         now = datetime.now(timezone.utc).isoformat()
 
@@ -224,6 +390,9 @@ def run_company_research(job_id: int, force_refresh: bool = False):
             "SELECT * FROM company_research WHERE id = ?", (research_id,)
         ).fetchone()
 
-        return _row_to_response(row, reused_from_cache=False, dossier_age_days=0)
+        # Compute and persist research-adjusted score from fresh dossier
+        adjustment = _apply_research_adjustment(db, job_id, result)
+
+        return _row_to_response(row, reused_from_cache=False, dossier_age_days=0, adjustment=adjustment)
     finally:
         db.close()

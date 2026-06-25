@@ -91,6 +91,10 @@ class JobDetail(BaseModel):
     is_pinned: bool = False
     ai_policy: str | None = None
 
+    # Research-adjusted scoring (Phase 3.2)
+    research_adjusted_score: float | None = None
+    research_delta: float = 0.0
+
 
 class JobUpdate(BaseModel):
     """PATCH /api/jobs/{id} — partial update."""
@@ -456,6 +460,11 @@ class CompanyResearchResponse(BaseModel):
     retrieval_snippets: list[dict] = []
     reused_from_cache: bool = False
     dossier_age_days: int | None = None
+    # Research-adjusted scoring (Phase 3.2)
+    research_adjusted_score: float | None = None
+    research_delta: float = 0.0
+    research_breakdown: list[dict] = []
+    research_adjustment_applied: bool = False
 
 
 # ---------------------------------------------------------------------------

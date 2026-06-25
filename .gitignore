@@ -45,12 +45,14 @@ Thumbs.db
 # Seeker OS — Data (runtime, not committed)
 data/seeker.db
 data/cache/
+data/retrieval_cache/
 data/checkpoint.json
 data/resumes/
 data/master_resume.*
 data/.anthropic_oauth.json
 **/data/seeker.db
 **/data/cache/
+**/data/retrieval_cache/
 **/data/checkpoint.json
 **/data/resumes/
 

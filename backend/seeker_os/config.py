@@ -436,6 +436,7 @@ class RetrievalProviderConfig(BaseModel):
     timeout_seconds: int = 15
     funding_query_template: str = "{company} funding round investors valuation"
     sentiment_query_template: str = "{company} employee reviews sentiment glassdoor culture"
+    retrieval_cache_ttl_days: int = 7
 
 
 class CompanyResearchConfig(BaseModel):

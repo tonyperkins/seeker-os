@@ -172,10 +172,11 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
     setError(null);
     setNotFound(false);
     try {
-      const result = await api.jobs.companyResearch.run(jobId);
+      const result = await api.jobs.companyResearch.run(jobId, !!data);
       setData(result);
       setNotFound(false);
       setResearchDone(true);
+      window.dispatchEvent(new Event("company-research-complete"));
       setTimeout(() => {
         setRunning(false);
         setResearchDone(false);
@@ -260,6 +261,53 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
                 <div className="flex items-center gap-2">
                   <ConfidenceBadge confidence={data.overall_confidence} />
                 </div>
+              </div>
+            )}
+
+            {/* Research-adjusted score */}
+            {data.research_adjusted_score != null && data.research_adjustment_applied && (
+              <div className="flex flex-col gap-2 border-t border-border pt-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <TrendingUp className="size-4 text-muted-foreground" />
+                  Research-Adjusted Score
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-bold tabular-nums">
+                      {data.research_adjusted_score.toFixed(1)}
+                    </span>
+                    {data.research_delta !== 0 && (
+                      <span className={`text-sm font-medium ${data.research_delta > 0 ? "text-emerald-600" : "text-destructive"}`}>
+                        ({data.research_delta > 0 ? "+" : ""}{data.research_delta.toFixed(1)})
+                      </span>
+                    )}
+                  </div>
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    base {data.research_adjusted_score - data.research_delta !== 0 ? (data.research_adjusted_score - data.research_delta).toFixed(1) : "—"}
+                  </Badge>
+                </div>
+                {data.research_breakdown.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    {data.research_breakdown.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        {item.delta > 0 ? (
+                          <CheckCircle2 className="size-3 shrink-0 text-emerald-600" />
+                        ) : (
+                          <XCircle className="size-3 shrink-0 text-destructive" />
+                        )}
+                        <span className="font-medium capitalize">
+                          {item.factor.replace(/_/g, " ")}
+                        </span>
+                        <span className={item.delta > 0 ? "text-emerald-600" : "text-destructive"}>
+                          {item.delta > 0 ? "+" : ""}{item.delta.toFixed(1)}
+                        </span>
+                        <Badge variant="outline" className="text-xs text-muted-foreground ml-auto">
+                          {Math.round(item.confidence * 100)}% · {item.source_section}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

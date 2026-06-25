@@ -134,6 +134,11 @@ class HiringCafeAdapter:
         # Build detail URL from the slug extracted from HTML
         detail_url = f"{self.base_url}/job/{detail_slug}" if detail_slug else None
 
+        # Normalize homepage URL — ensure it has a scheme
+        homepage = enriched.get("homepage_uri") or ""
+        if homepage and not homepage.startswith(("http://", "https://")):
+            homepage = f"https://{homepage}"
+
         return JobCard(
             source_id=self._id,
             source_job_id=raw_id,
@@ -144,7 +149,7 @@ class HiringCafeAdapter:
             title=title,
             core_title=core_title,
             company=company,
-            company_homepage=enriched.get("homepage_uri"),
+            company_homepage=homepage or None,
             location=v5.get("formatted_workplace_location", ""),
             workplace_type=v5.get("workplace_type", ""),
             workplace_countries=v5.get("workplace_countries", []),

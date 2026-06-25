@@ -32,6 +32,7 @@ import { AIPolicyToggle } from "@/components/ai-policy-toggle";
 import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { JDRenderer } from "@/components/jd-renderer";
 import { CompanyResearch } from "@/components/company-research";
+import { ScoreBadges } from "@/components/score-badges";
 import { JobAnalysis } from "@/components/job-analysis";
 import { api, type JobDetail } from "@/lib/api";
 import { formatDate } from "@/lib/date";
@@ -44,6 +45,12 @@ function formatComp(job: JobDetail): string {
   }
   if (job.comp_min != null) return `${fmt(job.comp_min)}+`;
   return `≤${fmt(job.comp_max as number)}`;
+}
+
+function normalizeUrl(url: string): string {
+  if (!url) return url;
+  if (!/^https?:\/\//i.test(url)) return `https://${url}`;
+  return url;
 }
 
 function InfoRow({
@@ -113,7 +120,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
               <span>{job.company}</span>
               {job.company_homepage && (
                 <a
-                  href={job.company_homepage}
+                  href={normalizeUrl(job.company_homepage)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-primary hover:underline"
@@ -123,12 +130,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{job.status}</Badge>
-            {job.score != null && (
-              <Badge variant="default" className="text-base">Score: {job.score}</Badge>
-            )}
-          </div>
+          <ScoreBadges initialJob={job} />
         </div>
       </div>
 

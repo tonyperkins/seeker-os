@@ -41,6 +41,10 @@ retrieval:
   # If a template omits {company}, it is used as-is without crashing.
   funding_query_template: "{company} funding round investors valuation"
   sentiment_query_template: "{company} employee reviews sentiment glassdoor culture"
+  # Cache TTL for retrieval query results (in days). Tavily charges per
+  # search, so results are cached on disk keyed by query string. Set
+  # force_refresh=true on the API to bypass this cache.
+  retrieval_cache_ttl_days: 7
 
 # Thresholds (Phase 3)
 # confidence_floor: below this, the dashboard treats the dossier as a stub

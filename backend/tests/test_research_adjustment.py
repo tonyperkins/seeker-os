@@ -485,3 +485,240 @@ class TestCompanyKeyedCaching:
         db.close()
         os.unlink(db_path)
         os.rmdir(tmpdir)
+
+
+class TestEndpointAdjustmentWiring:
+    """Tests that the POST /company-research endpoint computes and persists
+    the research-adjusted score alongside the base score."""
+
+    def test_fresh_research_persists_adjusted_score(self, monkeypatch):
+        """POST endpoint with fresh research: adjusted score is computed,
+        persisted to jobs table, and returned in the response."""
+        import tempfile, os
+        from seeker_os.api import company_research as cr_api
+        from seeker_os.database import get_connection, run_migrations
+        from seeker_os.config import ScoringConfig, ResearchModifierConfig
+
+        tmpdir = tempfile.mkdtemp()
+        db_path = os.path.join(tmpdir, "test.db")
+        run_migrations(db_path)
+        db = get_connection(db_path)
+
+        # Insert a job that has already been scored (base score = 7.0)
+        db.execute(
+            "INSERT INTO jobs (id, title, company, status, score) VALUES (?, ?, ?, ?, ?)",
+            (1, "SRE", "TestCo", "ready", 7.0),
+        )
+        db.commit()
+
+        # Mock research_company to return a dossier with layoff data
+        def mock_research_company(company, **kwargs):
+            return CompanyResearchResult(
+                company_name=company,
+                overall_confidence=0.8,
+                summary="Test dossier with layoffs",
+                researched_at=datetime.now(timezone.utc).isoformat(),
+                sources_used=["wikipedia"],
+                retrieval_used=True,
+                funding=FundingDossier(
+                    confidence=0.8,
+                    layoffs=[LayoffEvent(date="2024-01-15", pct=10.0, count=50)],
+                ),
+            )
+
+        # Mock Settings to return scoring config with research_modifiers
+        class MockSettings:
+            scoring = ScoringConfig(
+                max_score=10,
+                min_score=0,
+                research_modifiers=[
+                    ResearchModifierConfig(
+                        factor="recent_layoffs",
+                        delta=-1.5,
+                        confidence_threshold=0.5,
+                        source_section="funding",
+                    ),
+                ],
+            )
+            company_research = None
+
+        monkeypatch.setattr(cr_api, "research_company", mock_research_company)
+        monkeypatch.setattr(cr_api, "get_connection", lambda: get_connection(db_path))
+        monkeypatch.setattr("seeker_os.config.Settings", lambda: MockSettings())
+
+        response = cr_api.run_company_research(job_id=1)
+
+        # Response includes adjusted score fields
+        assert response.research_adjusted_score is not None
+        assert response.research_adjusted_score == 5.5  # 7.0 - 1.5
+        assert response.research_delta == -1.5
+        assert response.research_adjustment_applied is True
+        assert len(response.research_breakdown) == 1
+        assert response.research_breakdown[0]["factor"] == "recent_layoffs"
+
+        # Jobs table has the adjusted score persisted
+        job_row = db.execute(
+            "SELECT score, research_adjusted_score, research_delta FROM jobs WHERE id = 1"
+        ).fetchone()
+        assert job_row["score"] == 7.0  # base score unchanged
+        assert job_row["research_adjusted_score"] == 5.5
+        assert job_row["research_delta"] == -1.5
+
+        db.close()
+        os.unlink(db_path)
+        os.rmdir(tmpdir)
+
+    def test_unscored_job_returns_none_adjustment(self, monkeypatch):
+        """POST endpoint for a job with no base score: adjustment is None,
+        response has null adjusted score."""
+        import tempfile, os
+        from seeker_os.api import company_research as cr_api
+        from seeker_os.database import get_connection, run_migrations
+        from seeker_os.config import ScoringConfig, ResearchModifierConfig
+
+        tmpdir = tempfile.mkdtemp()
+        db_path = os.path.join(tmpdir, "test.db")
+        run_migrations(db_path)
+        db = get_connection(db_path)
+
+        # Insert a job with NO score yet
+        db.execute(
+            "INSERT INTO jobs (id, title, company, status) VALUES (?, ?, ?, ?)",
+            (1, "SRE", "TestCo", "discovered"),
+        )
+        db.commit()
+
+        def mock_research_company(company, **kwargs):
+            return CompanyResearchResult(
+                company_name=company,
+                overall_confidence=0.8,
+                summary="Test",
+                researched_at=datetime.now(timezone.utc).isoformat(),
+                sources_used=["wikipedia"],
+                retrieval_used=True,
+                funding=FundingDossier(confidence=0.8),
+            )
+
+        class MockSettings:
+            scoring = ScoringConfig(
+                research_modifiers=[
+                    ResearchModifierConfig(
+                        factor="recent_layoffs",
+                        delta=-1.5,
+                        confidence_threshold=0.5,
+                        source_section="funding",
+                    ),
+                ],
+            )
+            company_research = None
+
+        monkeypatch.setattr(cr_api, "research_company", mock_research_company)
+        monkeypatch.setattr(cr_api, "get_connection", lambda: get_connection(db_path))
+        monkeypatch.setattr("seeker_os.config.Settings", lambda: MockSettings())
+
+        response = cr_api.run_company_research(job_id=1)
+
+        # No base score → no adjustment
+        assert response.research_adjusted_score is None
+        assert response.research_adjustment_applied is False
+
+        db.close()
+        os.unlink(db_path)
+        os.rmdir(tmpdir)
+
+    def test_cached_dossier_computes_adjustment(self, monkeypatch):
+        """POST endpoint with cached dossier: adjusted score is still computed
+        and persisted from the cached research data."""
+        import tempfile, os
+        from seeker_os.api import company_research as cr_api
+        from seeker_os.database import get_connection, json_encode, run_migrations
+        from seeker_os.config import ScoringConfig, ResearchModifierConfig
+
+        tmpdir = tempfile.mkdtemp()
+        db_path = os.path.join(tmpdir, "test.db")
+        run_migrations(db_path)
+        db = get_connection(db_path)
+
+        # Insert two jobs at the same company, both scored
+        db.execute(
+            "INSERT INTO jobs (id, title, company, status, score) VALUES (?, ?, ?, ?, ?)",
+            (1, "SRE", "TestCo", "ready", 7.0),
+        )
+        db.execute(
+            "INSERT INTO jobs (id, title, company, status, score) VALUES (?, ?, ?, ?, ?)",
+            (2, "DevOps", "TestCo", "ready", 6.0),
+        )
+        db.commit()
+
+        # Insert a company_research record for job 1 with layoff data
+        now = datetime.now(timezone.utc).isoformat()
+        funding_json = json_encode(
+            FundingDossier(
+                confidence=0.8,
+                layoffs=[LayoffEvent(date="2024-01-15", pct=10.0, count=50)],
+            ).model_dump()
+        )
+        from seeker_os.dedup.normalize import normalize_company
+        company_norm = normalize_company("TestCo")
+        db.execute(
+            """INSERT INTO company_research (
+                job_id, company_name, overall_confidence, summary,
+                funding_data, sources_used, errors, researched_at, created_at,
+                company_norm, retrieval_sources
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (1, "TestCo", 0.8, "Test", funding_json, "[]", "[]", now, now,
+             company_norm, json_encode([{"url": "https://example.com", "title": "test", "domain": "example.com"}])),
+        )
+        db.commit()
+
+        class MockSettings:
+            scoring = ScoringConfig(
+                max_score=10,
+                min_score=0,
+                research_modifiers=[
+                    ResearchModifierConfig(
+                        factor="recent_layoffs",
+                        delta=-1.5,
+                        confidence_threshold=0.5,
+                        source_section="funding",
+                    ),
+                ],
+            )
+            company_research = None
+
+        # Patch get_connection and Settings, but NOT research_company
+        # (it should NOT be called because the dossier is cached)
+        call_count = 0
+        original_research = cr_api.research_company
+
+        def mock_research_company(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return original_research(*args, **kwargs)
+
+        monkeypatch.setattr(cr_api, "research_company", mock_research_company)
+        monkeypatch.setattr(cr_api, "get_connection", lambda: get_connection(db_path))
+        monkeypatch.setattr("seeker_os.config.Settings", lambda: MockSettings())
+
+        # Call for job 2 — should reuse cached dossier from job 1
+        response = cr_api.run_company_research(job_id=2)
+
+        assert response.reused_from_cache is True
+        assert call_count == 0  # research_company NOT called
+
+        # Adjusted score computed from cached dossier
+        assert response.research_adjusted_score is not None
+        assert response.research_adjusted_score == 4.5  # 6.0 - 1.5
+        assert response.research_delta == -1.5
+        assert response.research_adjustment_applied is True
+
+        # Persisted to jobs table for job 2
+        job_row = db.execute(
+            "SELECT score, research_adjusted_score, research_delta FROM jobs WHERE id = 2"
+        ).fetchone()
+        assert job_row["score"] == 6.0  # base score unchanged
+        assert job_row["research_adjusted_score"] == 4.5
+
+        db.close()
+        os.unlink(db_path)
+        os.rmdir(tmpdir)
