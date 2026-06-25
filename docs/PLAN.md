@@ -2,7 +2,6 @@
 
 **Status:** Planning (awaiting approval before implementation)
 **Date:** 2026-06-23
-**Owner:** Tony Perkins
 **Repo:** `~/projects/seeker-os`
 
 ---
@@ -10,10 +9,10 @@
 ## 1. Executive Summary
 
 Seeker OS is a structured, dashboard-driven job search pipeline that replaces the
-current scattered-markdown-files approach (Hermes/Clawford) with a unified system.
+current scattered-markdown-files approach with a unified system.
 It sources jobs from hiring.cafe's regular search API (no browser required), applies
 tiered filtering to narrow the funnel before fetching full JDs, scores survivors
-against Tony's profile, generates tailored resumes locally, and tracks the full
+against the user's configured profile, generates tailored resumes locally, and tracks the full
 application lifecycle through a web UI.
 
 **Core principles:**
@@ -49,7 +48,7 @@ than leveraging their AI search?
    integers, not text), `technical_tools`, `requirements_summary`, `source` (ATS),
    `apply_url`, `estimated_publish_date`, `role_type`, `commitment`. Their AI search
    uses these same fields but we can apply our own multi-tier filtering logic that's
-   tuned to Tony's specific constraints (comp floor, blacklist, remote-only, etc.).
+   tuned to the user's specific constraints (comp floor, blacklist, remote-only, etc.).
 
 4. **No browser dependency for the main pipeline.** The AI search requires an
    authenticated browser session (client-side rendering). The regular search works
@@ -113,7 +112,7 @@ than leveraging their AI search?
 **Why not adopt an existing tool?** (see §10 — Existing Tools Analysis)
 The existing tools (CareerPulse, JobSync, Jobs Optima, etc.) are close but:
 - None use hiring.cafe as a source (they scrape LinkedIn/Indeed/etc.)
-- None have Tony's specific scoring rubric and accuracy constraints
+- None have the user's specific scoring rubric and accuracy constraints
 - Most are designed for general use, not tuned to a specific senior IC profile
 - Several have heavy dependencies (MongoDB, Redis, .NET) that are overkill for single-user
 
@@ -226,7 +225,7 @@ CREATE TABLE resumes (
 CREATE TABLE search_queries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_id TEXT,                -- which adapter to use (e.g. 'hiring_cafe')
-    query_slug TEXT,               -- URL slug: senior-sre-remote
+    query_slug TEXT,               -- URL slug: senior-engineer-remote
     label TEXT,                    -- human label
     commitment_filter TEXT,        -- full_time, contract, both
     max_pages INTEGER DEFAULT 1,
@@ -343,14 +342,9 @@ Deeper pagination is explicit opt-in per query.
 
 | Query slug | Label | Commitment | Max pages |
 |---|---|---|---|
-| `senior-sre-remote` | Senior SRE Remote | full_time | 1 |
-| `staff-sre-remote` | Staff SRE Remote | full_time | 1 |
-| `principal-sre-remote` | Principal SRE Remote | full_time | 1 |
-| `senior-site-reliability-engineer-remote` | Senior Site Reliability Engineer | full_time | 1 |
-| `staff-platform-engineer-remote` | Staff Platform Engineer | full_time | 1 |
-| `principal-devops-engineer-remote` | Principal DevOps | full_time | 1 |
-| `senior-devops-engineer-remote-us` | Senior DevOps US | full_time | 1 |
-| `senior-infrastructure-engineer-remote` | Senior Infrastructure | full_time | 1 |
+| `senior-engineer-remote` | Senior Engineer Remote | full_time | 1 |
+| `staff-engineer-remote` | Staff Engineer Remote | full_time | 1 |
+| `principal-engineer-remote` | Principal Engineer Remote | full_time | 1 |
 
 **Pagination note:** `/jobs/*?page=*` is disallowed in robots.txt. All queries default
 to page 0 only. Deeper pagination (`max_pages: 2+`) is explicit opt-in per query and
@@ -409,12 +403,12 @@ skip scoring, surface in dashboard for manual review.
 
 ### Tier 4: Scoring
 
-Run the scoring rubric on the full JD text. **Same rubric as Clawford** — hard filters,
+Run the scoring rubric on the full JD text. Hard filters,
 base score, modifiers, penalties, clamp 1-10. The rubric is config-driven
 (`config/scoring_rubric.yml`) and evaluated by the generic engine in
 `seeker_os/scoring/engine.py`. The engine implements the mechanism (pattern matching,
 score aggregation, clamping); the YAML provides the policy (weights, patterns,
-thresholds). This is the single source of truth (break from Hermes version, per decision).
+thresholds). This is the single source of truth.
 
 **Structured-field inputs:** For hiring.cafe jobs, feed the rubric with structured comp
 data (integer, not regex-parsed) and structured workplace_type. The rubric logic stays
@@ -442,11 +436,11 @@ each result with prior status if found.
 
 ## 6. Dedup System (Robust, Multi-Layer)
 
-The current Hermes system uses simple `source:slug:jobid` string keys. This catches
+The current legacy system uses simple `source:slug:jobid` string keys. This catches
 exact duplicates but misses:
 - Same job reposted with a new ID
 - Same job across different ATS sources (Greenhouse vs hiring.cafe's re-index)
-- Same job with slightly different titles ("Sr SRE" vs "Senior Site Reliability Engineer")
+- Same job with slightly different titles ("Sr Engineer" vs "Senior Engineer")
 - Same company, different name variants ("TREX Solutions" vs "TREX Solutions LLC")
 
 ### Multi-Layer Dedup Architecture
@@ -475,7 +469,7 @@ Layer 4: Fuzzy match (normalized title + company similarity)
        - Company similarity > 85 (after normalization)
        - Same commitment type
     → Catches: ~5% of duplicates (fuzzy)
-    → False positive risk: low — two genuinely different "Senior SRE" roles at the
+    → False positive risk: low — two genuinely different "Senior Engineer" roles at the
       same company would have different JD content, caught by Layer 3
 
 Layer 5 (optional, future): Semantic embedding similarity
@@ -496,10 +490,8 @@ Layer 5 (optional, future): Semantic embedding similarity
 # See docs/DEDUP_DESIGN.md for the canonical implementation.
 # Key points (don't repeat the bugs from earlier drafts):
 # - normalize_title uses \b word-boundary regex, NOT bare substring replace
-# - No bidirectional pairs (devops↔dev ops self-cancel with dict iteration)
+# - No bidirectional pairs (e.g. devops↔dev ops self-cancel with dict iteration)
 # - normalize_company uses slicing (c[:-len(suffix)]), NOT rstrip (strips char set)
-
-def normalize_title(title: str) -> str:
     """Normalize job title for fuzzy matching. See DEDUP_DESIGN.md."""
     ...  # full implementation in DEDUP_DESIGN.md
 
@@ -542,7 +534,7 @@ and surfaced in the dashboard for manual confirmation. This prevents false merge
 
 ### Current State
 
-Tony manually posts JDs to Claude Opus/Sonnet to get custom-tailored resumes. This is
+The user manually posts JDs to an LLM to get custom-tailored resumes. This is
 token-expensive and manual. Seeker OS automates this with strict accuracy enforcement.
 
 ### Architecture
@@ -550,7 +542,7 @@ token-expensive and manual. Seeker OS automates this with strict accuracy enforc
 ```
 Job (scored, user clicks "Generate Resume")
     │
-    ├─ Load master resume (resume/Tony_Perkins_Master_Resume.md)
+    ├─ Load master resume (user-configured path in profile.yml)
     │   └─ Includes "Accuracy Notes" section with never-claim constraints
     │
     ├─ Load job JD (full text from Tier 3)
@@ -588,19 +580,18 @@ programmatically by a generic validator — not just prompt instructions:
 2. **Azure:** Production project experience with AI assistance. Don't claim deep
    independent expertise.
 3. **GCP:** Minimal only — never claim production depth.
-4. **PowerShell:** May list as scripting language (Accelya bullets), never claim
+4. **PowerShell:** May list as scripting language, never claim
    depth/mastery/strong proficiency.
-5. **Ansible:** Never claim as current competency. Fidelity bullet is dated historical.
-6. **Kubernetes:** Honest self-rating 1-3 currently. Re-ramping. Don't claim cluster
+5. **Ansible:** Never claim as current competency.
+6. **Kubernetes:** Honest self-rating. Don't claim cluster
    administration depth.
 7. **Go:** Familiar, growing — not a primary language.
 8. **Spinnaker:** Source-of-builds consumer, not operational depth.
-9. **Experience anchor:** "25+ years" only, attached to overall engineering career.
-10. **Education:** Omit entirely (DeVry EET — no value add).
-11. **AI assistance:** Claims should reflect what Tony can do WITH AI assistance,
+9. **Experience anchor:** Use the anchor from your profile, attached to overall engineering career.
+10. **Education:** Omit unless explicitly required.
+11. **AI assistance:** Claims should reflect what you can do WITH AI assistance,
     not deep independent expertise.
-12. **Technologies NOT on resume:** ArgoCD, Helm, Kargo, Consul, Vault (production),
-    Rust, Temporal, Ansible (as current competency).
+12. **Technologies NOT on resume:** Configure in `accuracy_rules.yml`.
 
 ### Model Routing
 
@@ -642,9 +633,9 @@ All model selection is configurable via settings table / dashboard.
 │          │  │                                               │ │
 │          │  │ Score Title                        Company    │ │
 │          │  │ ───────────────────────────────────────────── │ │
-│          │  │ 9.5   Staff SRE                    Kong       │ │
-│          │  │ 8.0   Sr DevOps Engineer           Stellar    │ │
-│          │  │ 7.5   Sr Platform Engineer         Tango      │ │
+│          │  │ 9.5   Staff Engineer              Acme Corp   │ │
+│          │  │ 8.0   Sr Engineer                  Globex      │ │
+│          │  │ 7.5   Sr Platform Engineer         Initech     │ │
 │          │  │  ...                                          │ │
 │          │  │              [Open in Kanban]                 │ │
 │          │  └─────────────────────────────────────────────┘ │
@@ -749,12 +740,12 @@ GET    /api/analytics/response-rate # response rate by source/time
 
 ## 9. Cross-Reference with Existing job-search Repo
 
-**Source:** `~/projects/job-search` (local git clone of the Hermes/Clawford repo)
+**Source:** `~/projects/job-search` (local git clone of the legacy repo)
 
 **Protocol:**
 1. **Always `git pull --rebase` first** before reading any data
 2. Scan these directories for prior interactions:
-   - `applied/` — jobs Tony has applied to (subdirs with `status.md`, `jd.md`, `notes.md`, resume)
+   - `applied/` — jobs the user has applied to (subdirs with `status.md`, `jd.md`, `notes.md`, resume)
    - `rejected/` — jobs scored but rejected (markdown files with score + reason)
    - `closed/` — jobs that went through the full cycle and closed
    - `opportunities/` — jobs marked as "pursue" but not yet applied
@@ -797,11 +788,11 @@ GET    /api/analytics/response-rate # response rate by source/time
 
 - **hiring.cafe as primary source** (no existing tool does this)
 - **Tiered funnel** (no existing tool narrows before JD fetch — they all fetch everything)
-- **Tony's specific scoring rubric** with accuracy constraints from master resume
+- **User-configured scoring rubric** with accuracy constraints from master resume
 - **Strict no-embellish enforcement** (other tools optimize for ATS gaming; we optimize
   for honest representation)
 - **SQLite, not PostgreSQL/MongoDB** (single-user, zero-config, portable)
-- **Structured data, not markdown files** (the core problem with the current Hermes system)
+- **Structured data, not markdown files** (the core problem with the legacy system)
 
 ---
 
@@ -828,7 +819,7 @@ GET    /api/analytics/response-rate # response rate by source/time
 ### ATS APIs (Greenhouse, Ashby, Lever)
 
 These are public APIs with no auth required. Standard rate limiting applies. We use
-existing throttling patterns from the Hermes pipeline (1 req/sec).
+existing throttling patterns (1 req/sec).
 
 ### apply_url HTML Fetches (Workday, iCIMS, etc.)
 
@@ -846,7 +837,7 @@ existing throttling patterns from the Hermes pipeline (1 req/sec).
 > See `docs/PHASE1_SPEC.md` for the Phase 1-specific subtree.
 
 ```
-~/projects/seeker-os/
+/home/user/projects/seeker-os/
 ├── docs/
 │   ├── PLAN.md                    # This document
 │   ├── PRODUCT_DESIGN.md          # Config-driven architecture (read first)
@@ -1124,8 +1115,8 @@ URL. Make it frictionless to get a job into the pipeline for scoring and resume 
 | 2 | Page depth | Configurable per query (max_pages). Default 1, opt-in for 2+. |
 | 3 | Freshness | Hard filter at Tier 2 (default 30 days, configurable). Also minor factor in scoring. |
 | 4 | Contract search | Commitment filter per query (full_time/contract/both). |
-| 5 | Shared scoring | Break from Hermes. New `scoring/engine.py` in Seeker OS. |
-| 6 | Cross-reference | Local `~/projects/job-search` repo (git pull first). No SSH to Hermes. |
+| 5 | Shared scoring | New `scoring/engine.py` in Seeker OS. |
+| 6 | Cross-reference | Local `~/projects/job-search` repo (git pull first). |
 | 7 | AI search | Use regular search + our own AI. AI search is v2 optional. |
 | 8 | Cron | On-demand first. Reconsider cron after manual validation. |
 | 9 | Resume gen | Build locally with strict no-embellish enforcement. Model routing. |
@@ -1146,17 +1137,17 @@ URL. Make it frictionless to get a job into the pipeline for scoring and resume 
 | Resume accuracy violations | HIGH | Two-pass validation (generation + accuracy check). Flagged for review if violations found. Config-driven constraints (`accuracy_rules.yml`), not just prompt instructions. |
 | LLM cost runaway | MEDIUM | Model routing (cheap models for bulk, expensive only for resume gen). Ollama for local inference. Configurable per task. |
 | Scope creep (dashboard complexity) | MEDIUM | Phase 1 is CLI-only. UI is Phase 2. Resist adding features before core pipeline works. |
-| job-search repo git conflicts on pull | LOW | `git pull --rebase` (not stash+pull, per Hermes lessons). Read-only access. |
+| job-search repo git conflicts on pull | LOW | `git pull --rebase` (not stash+pull). Read-only access. |
 
 ---
 
 ## 16. References
 
-- **Hermes job-scanner skill:** `~/.hermes/skills/research/job-scanner/SKILL.md` (on 192.168.50.195)
+- **Legacy job-scanner skill:** `~/.hermes/skills/research/job-scanner/SKILL.md`
 - **hiring.cafe feasibility spike:** `~/job-search/spikes/hiring-cafe-feasibility.md` (on 192.168.50.195)
 - **hiring.cafe probe notes:** `~/.hermes/skills/research/job-scanner/references/hiringcafe-probe-jun2026.md` (on 192.168.50.195)
 - **Existing scoring rubric:** `~/projects/job-search/ARCHITECTURE.md`
-- **Master resume:** `~/projects/job-search/resume/Tony_Perkins_Master_Resume.md`
+- **Master resume:** User-configured path in `profile.yml`
 - **Targets config:** `~/projects/job-search/targets.yml`
 - **Existing tools researched:** CareerPulse, JobSync, Jobs Optima, jermsmit/job-tracker, career-ops, hireforge, applypilot, OSApplyTrack
 - **Dedup research:** pg_trgm fuzzy matching, multi-layer dedup patterns, embedding-based job dedup (MDPI paper)

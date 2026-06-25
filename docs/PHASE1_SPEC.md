@@ -145,41 +145,38 @@ Ship `*.example.yml` templates with placeholder values. Users copy to active con
 **`config/profile.yml`:** (see `docs/PRODUCT_DESIGN.md` for full schema)
 ```yaml
 # User identity, compensation, location, employment preferences
-# This is what makes Seeker OS "Tony's" vs "anyone else's"
+# This is what makes Seeker OS yours vs anyone else's
 user:
-  name: "Tony Perkins"
-  email: "REDACTED@example.com"
-  location: "Leander, TX"
+  name: "Your Name"
+  email: "you@example.com"
+  location: "Your City, ST"
 location:
   remote_only: true
-  accepted_cities: [austin, leander, cedar park, round rock, georgetown, pflugerville, taylor]
-  accepted_states: [tx, texas]
+  accepted_cities: [your_city]
+  accepted_states: [your_state]
 comp:
   floor: 150000
   target: 165000
   stretch: 220000
 experience:
-  years: 25
-  anchor_phrase: "25+ years"
+  years: 20
+  anchor_phrase: "20+ years"
 employment:
   commitment: "Full Time"
   role_type: "Individual Contributor"
 blacklist:
-  - avidxchange
-  - fidelity
-  - fidelity investments
-  - marriott
-  - zapcom
+  - example-company-1
+  - example-company-2
 resume:
-  master_path: "~/projects/job-search/resume/Tony_Perkins_Master_Resume.md"
+  master_path: "~/path/to/your/master_resume.md"
   accuracy_rules_path: "config/accuracy_rules.yml"
   output_dir: "data/resumes"
 cross_reference:
   repo_path: "~/projects/job-search"
   auto_pull: true
 hard_rejects:
-  - reason: "FedRAMP/clearance required"
-    pattern: "fedramp|security clearance|active clearance|ts/sci|top secret"
+  - reason: "Clearance required"
+    pattern: "security clearance|active clearance|ts/sci|top secret"
   - reason: "Customer-facing/solutions role"
     pattern: "pre.?sales|solutions architect|customer success|technical account manager"
   # ... (see PRODUCT_DESIGN.md for full list)
@@ -193,9 +190,9 @@ scoring:
   per_company_cap: 3
   max_score: 10
   base_scores:
-    - pattern: "(principal|staff).*(sre|site reliability|platform|infra|devops)"
+    - pattern: "(principal|staff).*engineer"
       score: 4.5
-      label: "Principal/Staff SRE/Platform/Infra"
+      label: "Principal/Staff Engineer"
     # ... (see PRODUCT_DESIGN.md for full list)
   positive_modifiers:
     - signal: "aws"
@@ -220,50 +217,20 @@ scoring:
 # the robots.txt pagination line. Use sparingly with conservative request timing.
 queries:
   - source_id: hiring_cafe       # which source adapter to use (see sources.yml)
-    slug: senior-sre-remote
-    label: "Senior SRE Remote"
+    slug: senior-engineer-remote
+    label: "Senior Engineer Remote"
     commitment: full_time
     max_pages: 1
     enabled: true
   - source_id: hiring_cafe
-    slug: staff-sre-remote
-    label: "Staff SRE Remote"
+    slug: staff-engineer-remote
+    label: "Staff Engineer Remote"
     commitment: full_time
     max_pages: 1
     enabled: true
   - source_id: hiring_cafe
-    slug: principal-sre-remote
-    label: "Principal SRE Remote"
-    commitment: full_time
-    max_pages: 1
-    enabled: true
-  - source_id: hiring_cafe
-    slug: senior-site-reliability-engineer-remote
-    label: "Senior Site Reliability Engineer"
-    commitment: full_time
-    max_pages: 1
-    enabled: true
-  - source_id: hiring_cafe
-    slug: staff-platform-engineer-remote
-    label: "Staff Platform Engineer"
-    commitment: full_time
-    max_pages: 1
-    enabled: true
-  - source_id: hiring_cafe
-    slug: principal-devops-engineer-remote
-    label: "Principal DevOps"
-    commitment: full_time
-    max_pages: 1
-    enabled: true
-  - source_id: hiring_cafe
-    slug: senior-devops-engineer-remote-us
-    label: "Senior DevOps US"
-    commitment: full_time
-    max_pages: 1
-    enabled: true
-  - source_id: hiring_cafe
-    slug: senior-infrastructure-engineer-remote
-    label: "Senior Infrastructure"
+    slug: principal-engineer-remote
+    label: "Principal Engineer Remote"
     commitment: full_time
     max_pages: 1
     enabled: true
@@ -293,17 +260,9 @@ filters:
 
 title_filters:
   positive:
-    - devops
-    - sre
-    - site reliability
-    - platform engineer
-    - infrastructure engineer
-    - cloud engineer
+    - senior engineer
     - staff engineer
     - principal engineer
-    - release engineer
-    - build engineer
-    - reliability engineer
   negative:
     - manager
     - director
@@ -313,18 +272,6 @@ title_filters:
     - recruiter
     - sales
     - marketing
-    - data scientist
-    - frontend developer
-    - backend developer
-    - mobile
-    - android
-    - ios
-    - qa engineer
-    - test engineer
-    - business analyst
-    - scrum master
-    - product manager
-    - solutions engineer
 
 # NOTE: request_settings (delay, retries, cache, timeout) are owned by
 # sources.yml, NOT this file. filters.yml owns only Tier 2 hard filter thresholds.
@@ -338,11 +285,8 @@ title_filters:
 
 **`config/blacklist.txt`:**
 ```
-avidxchange
-fidelity
-fidelity investments
-marriott
-zapcom
+example-company-1
+example-company-2
 ```
 
 **Blacklist loading:** `config.py` loads `blacklist.txt` (one company per line) and
@@ -838,7 +782,7 @@ def run_pipeline(
 # Commands:
 python -m seeker_os.main run                          # full pipeline
 python -m seeker_os.main run --tiers 1,2              # only tiers 1-2
-python -m seeker_os.main run --queries senior-sre-remote  # single query
+python -m seeker_os.main run --queries senior-engineer-remote  # single query
 python -m seeker_os.main run --dry-run                # no DB writes, just report
 python -m seeker_os.main report                       # re-generate report from DB
 python -m seeker_os.main report --top 30              # top 30
@@ -873,9 +817,9 @@ python -m seeker_os.main models test --provider kilo  # test provider connection
 ╰─────────────────────────────────────────────────────────────╯
 
 Tier 1: Discovery
-  Query: senior-sre-remote (page 0) ........... 20 cards
-  Query: senior-sre-remote (page 1) ........... 20 cards
-  Query: staff-sre-remote (page 0) ........... 19 cards
+  Query: senior-engineer-remote (page 0) ........... 20 cards
+  Query: senior-engineer-remote (page 1) ........... 20 cards
+  Query: staff-engineer-remote (page 0) ........... 19 cards
   ...
   Total fetched: 156 cards
   New (after dedup): 142
@@ -963,7 +907,7 @@ Phase 1 is complete when ALL of the following pass:
 
 ### 5.0 Product Design (No Hardcoded Values)
 - [ ] No personal values in `.py` files (names, comp numbers, company names, specific technologies in scoring logic)
-- [ ] `grep -ri "tony\|perkins\|leander\|150000\|165000\|avidxchange\|fidelity\|marriott" backend/seeker_os/**/*.py` returns 0 hits (checks ALL .py files recursively, not just top-level)
+- [ ] `grep -ri "personal_name\|personal_email\|your_city\|specific_company" backend/seeker_os/**/*.py` returns 0 hits (checks ALL .py files recursively, not just top-level)
 - [ ] All scoring weights/patterns read from `config/scoring_rubric.yml`
 - [ ] All filter thresholds read from `config/profile.yml` and `config/filters.yml`
 - [ ] All hard rejects read from `config/profile.yml`
@@ -973,7 +917,7 @@ Phase 1 is complete when ALL of the following pass:
 - [ ] Config validation runs on startup and reports errors clearly
 
 ### 5.1 Discovery
-- [ ] `fetch_query("senior-sre-remote", page=0)` returns ~20 JobCard objects
+- [ ] `fetch_query("senior-engineer-remote", page=0)` returns ~20 JobCard objects
 - [ ] Pinned jobs are filtered out (no `is_hc_pinned=true` in results)
 - [ ] Disk cache prevents re-fetching within TTL
 - [ ] 3-second delay between requests is enforced

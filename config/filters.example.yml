@@ -18,40 +18,16 @@ filters:
   commitment_required: "Full Time"
 
 title_filters:
+  # Customize these for your target role(s)
   positive:
-    - devops
-    - sre
-    - site reliability
-    - platform engineer
-    - infrastructure engineer
-    - cloud engineer
+    - senior engineer
     - staff engineer
     - principal engineer
-    - release engineer
   negative:
     - manager
     - director
     - head of
     - vp
     - vice president
-    - frontend
-    - front-end
-    - backend
-    - back-end
-    - full stack
-    - full-stack
-    - mobile
-    - ios
-    - android
-    - data scientist
-    - data analyst
-    - product manager
-    - project manager
-    - sales
-    - marketing
-    - recruiter
-    - talent
-    - people ops
-    - hr
-    - security engineer
-    - compliance
+    - intern
+    - junior

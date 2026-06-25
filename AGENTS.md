@@ -5,8 +5,7 @@
 Seeker OS is a **reusable product** — a structured job search pipeline with a web
 dashboard. It sources jobs from hiring.cafe, applies tiered filtering, scores against
 a user-configured rubric, generates tailored resumes with accuracy enforcement, and
-tracks the application lifecycle. It happens to be built for Tony Perkins' needs but
-the architecture is product-grade.
+tracks the application lifecycle. The architecture is product-grade.
 
 ## Key Files
 
@@ -113,5 +112,5 @@ pytest tests/
 - **Next.js frontend** — mature ecosystem, SSR if needed, shadcn/ui components.
 - **Multi-provider LLM** — model routing (cheap for bulk, expensive for resume gen).
 - **On-demand first** — cron is a future opt-in, not the default.
-- **Break from Hermes** — Seeker OS is the future of the job search project. The Hermes
-  skill and markdown-file system are the past.
+- **Break from legacy** — Seeker OS replaces scattered markdown-file approaches with
+  a structured, queryable system.

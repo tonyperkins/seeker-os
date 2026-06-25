@@ -1,6 +1,6 @@
 # hiring.cafe `__NEXT_DATA__` Field Reference
 
-**Source:** Empirical probe (2026-06-18, Hermes agent) + verification (2026-06-23)
+**Source:** Empirical probe (2026-06-18) + verification (2026-06-23)
 **Access:** `curl -s "https://hiring.cafe/jobs/{query-slug}"` → extract `<script id="__NEXT_DATA__">` JSON
 
 ## Top-Level Structure

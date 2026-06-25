@@ -6,20 +6,22 @@ A structured, dashboard-driven job search pipeline.
 
 1. **Discovers** jobs from hiring.cafe's search API (no browser required)
 2. **Filters** aggressively using structured fields before fetching full JDs
-3. **Scores** survivors against a tuned SRE/Platform/DevOps rubric
-4. **Generates** tailored resumes with strict no-embellish accuracy enforcement
-5. **Tracks** the full application lifecycle through a web dashboard
+3. **Scores** survivors against a user-configured rubric
+4. **Analyzes** job fit with an AI agent that evaluates JD vs. profile, producing a verdict (APPLY/CONDITIONAL/MONITOR/SKIP) with named gaps, rubric breakdown, and tailoring guidance
+5. **Generates** tailored resumes with strict no-embellish accuracy enforcement
+6. **Tracks** the full application lifecycle through a web dashboard
 
 ## Why
 
-Replaces the scattered-markdown-files approach (Hermes/Clawford) with a unified,
-structured system. The old system works but is messy — hundreds of markdown files
-spread across folders with no queryable interface, no analytics, and no resume
-automation.
+Replaces scattered-markdown-files approaches with a unified, structured system. The old
+way works but is messy — hundreds of markdown files spread across folders with no
+queryable interface, no analytics, and no resume automation.
 
 ## Documentation
 
+- [Product Design](docs/PRODUCT_DESIGN.md) — Config-driven architecture (read first)
 - [Plan & Architecture](docs/PLAN.md)
+- [LLM Routing](docs/LLM_ROUTING.md) — Multi-provider model routing
 - [Scoring Rubric](docs/SCORING_RUBRIC.md)
 - [Resume Accuracy Rules](docs/ACCURACY_RULES.md)
 - [hiring.cafe Field Reference](docs/HIRINGCAFE_FIELDS.md)
@@ -27,9 +29,8 @@ automation.
 
 ## Status
 
-**Phases 1-3 complete** — Core pipeline, web dashboard, and resume generation are
-fully implemented. Phase 4 (manual job entry & capture) is planned. See [docs/PLAN.md](docs/PLAN.md)
-for the full roadmap.
+**Phases 1-3 complete** — Core pipeline, web dashboard, resume generation, and AI-powered
+JD analysis are implemented. See [docs/PLAN.md](docs/PLAN.md) for the full roadmap.
 
 ## Tech Stack
 

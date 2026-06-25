@@ -1,6 +1,6 @@
 # Seeker OS — Product Design Framework
 
-**Principle:** Seeker OS is a reusable product. Tony's specific values (comp floor,
+**Principle:** Seeker OS is a reusable product. User-specific values (comp floor,
 blacklist, scoring weights, accuracy rules, resume path) are configuration, not code.
 The engines are generic; the config makes them personal.
 
@@ -106,29 +106,23 @@ tasks:
 
 ### `config/profile.yml` — User Profile ("Who am I")
 
-Everything personal to the user. This is the file that makes Seeker OS "Tony's"
-vs "anyone else's."
+Everything personal to the user. This is the file that makes Seeker OS yours
+vs anyone else's.
 
 ```yaml
 # User identity
 user:
-  name: "Tony Perkins"
-  email: "REDACTED@example.com"
-  location: "Leander, TX"
+  name: "Your Name"
+  email: "you@example.com"
+  location: "Your City, ST"
 
 # Location preferences
 location:
   remote_only: true
   accepted_cities:
-    - austin
-    - leander
-    - cedar park
-    - round rock
-    - georgetown
-    - pflugerville
-    - taylor
-  accepted_states: [tx, texas]
-  rejected_cities: [new york, san francisco, seattle, chicago, boston, denver]
+    - your_city
+  accepted_states: [your_state]
+  rejected_cities: [new york, san francisco, seattle]
 
 # Compensation
 comp:
@@ -138,8 +132,8 @@ comp:
 
 # Experience
 experience:
-  years: 25
-  anchor_phrase: "25+ years"  # the only acceptable experience claim
+  years: 20
+  anchor_phrase: "20+ years"  # the only acceptable experience claim
 
 # Employment preferences
 employment:
@@ -151,21 +145,18 @@ employment:
 # Company blacklist (also in blacklist.txt for simple list)
 # This is the structured version — blacklist.txt is the flat list
 blacklist:
-  - avidxchange
-  - fidelity
-  - fidelity investments
-  - marriott
-  - zapcom
+  - company_one
+  - company_two
 
 # Resume
 resume:
-  master_path: "~/projects/job-search/resume/Tony_Perkins_Master_Resume.md"
+  master_path: "~/path/to/your/master_resume.md"
   accuracy_rules_path: "config/accuracy_rules.yml"
   output_dir: "data/resumes"
   contact_urls:
-    - "https://example.com"
-    - "https://linkedin.com/in/example"
-    - "https://github.com/example"
+    - "https://your-portfolio.com"
+    - "https://linkedin.com/in/yourprofile"
+    - "https://github.com/yourusername"
 
 # Cross-reference
 cross_reference:
@@ -174,19 +165,14 @@ cross_reference:
 
 # Hard rejects (role-level — not scoring, just "never show me these")
 hard_rejects:
-  - reason: "FedRAMP/clearance required"
-    pattern: "fedramp|security clearance|active clearance|ts/sci|top secret"
+  - reason: "Clearance required"
+    pattern: "security clearance|active clearance|ts/sci|top secret"
   - reason: "Customer-facing/solutions role"
     pattern: "pre.?sales|solutions architect|customer success|technical account manager"
   - reason: "Early career/junior"
     pattern: "early.?career|entry.?level|new.?grad|junior|intern|associate"
-  - reason: "Defense/ITAR"
-    pattern: "defense contractor|itar|classified"
   - reason: "Relocation required"
     pattern: "relocation required"
-  - reason: "AI/ML Engineer (non-infra)"
-    pattern: "ai/ml engineer|machine learning engineer"
-    unless_pattern: "ml infra|ml platform|gpu infra|model serving|mlops"
 ```
 
 ### `config/scoring_rubric.yml` — Scoring Configuration ("How to score")
@@ -202,87 +188,41 @@ scoring:
   min_score: 0
 
   # Base score — first matching pattern wins
+  # Customize these patterns for your target role(s)
   base_scores:
-    - pattern: "(principal|staff).*(sre|site reliability|platform|infra|devops)"
+    - pattern: "(principal|staff).*engineer"
       score: 4.5
-      label: "Principal/Staff SRE/Platform/Infra"
-    - pattern: "senior.*(sre|site reliability|platform|infra)"
-      score: 4.0
-      label: "Senior SRE/Platform/Infra"
-    - pattern: "senior.*(devops|cloud.?engineer)"
+      label: "Principal/Staff Engineer"
+    - pattern: "(senior|sr\\.?).*engineer"
       score: 3.5
-      label: "Senior DevOps/Cloud"
-    - pattern: "senior.*(release|build)"
-      score: 3.0
-      label: "Senior Release/Build"
-    - pattern: "(sre|site reliability|platform.?engineer|infrastructure.?engineer|devops|cloud.?engineer)"
+      label: "Senior Engineer"
+    - pattern: "engineer"
       score: 2.0
-      label: "Infrastructure title match"
-    - pattern: "software.?engineer.*(infra|platform|cloud|sre)"
-      score: 2.0
-      label: "SE on infra/platform team"
-    - pattern: "(infra|cloud|security.*cloud).*engineer"
-      score: 2.0
-      label: "Infra/Cloud Security Engineer"
-    - check: "jd_infra_role"
-      score: 2.0
-      label: "JD matches infrastructure role (no title match)"
+      label: "Engineer title match"
     - score: 0
-      label: "No title/JD match"
+      label: "No title match"
 
   # Positive modifiers — all matching patterns are summed
   positive_modifiers:
-    - signal: "austin_area"
-      pattern: "austin|leander|cedar park|round rock|georgetown|pflugerville|taylor|texas|tx"
+    - signal: "your_city"
+      pattern: "your_city|your_state"
       points: 1.5
-      check: "location_or_jd"    # check both location field and JD text
-    - signal: "aws"
-      pattern: "aws|amazon web services"
-      points: 1.0
-      check: "jd"
-    - signal: "terraform"
-      pattern: "terraform"
+      check: "location_or_jd"
+    - signal: "key_skill_1"
+      pattern: "your_key_skill"
       points: 1.0
       check: "jd"
     - signal: "remote_us"
       pattern: "remote"
       points: 1.0
       check: "jd"
-      requires: "united states|us.?based|within the us"  # must also match this
+      requires: "united states|us.?based|within the us"
     - signal: "comp_target"
       points: 1.0
-      check: "structured_comp"   # use structured comp_min field, not regex
+      check: "structured_comp"
       threshold: 165000
-    - signal: "you_build_it"
-      pattern: "you build it.*you run it|build it.*run it|own.*production"
-      points: 1.0
-      check: "jd"
-    - signal: "kubernetes"
-      pattern: "kubernetes|k8s"
-      points: 0.5
-      check: "jd"
-    - signal: "cicd"
-      pattern: "ci/cd|cicd|continuous integration|pipeline"
-      points: 0.5
-      check: "jd"
-    - signal: "observability"
-      pattern: "prometheus|grafana|datadog|observability|elk|splunk"
-      points: 0.5
-      check: "jd"
-    - signal: "docker"
-      pattern: "docker"
-      points: 0.5
-      check: "jd"
-    - signal: "platform_devex"
-      pattern: "platform|developer experience|devex|golden path"
-      points: 0.5
-      check: "jd"
     - signal: "small_company"
       pattern: "small team|startup|series [abc]"
-      points: 0.5
-      check: "jd"
-    - signal: "ai_infra"
-      pattern: "ml platform|gpu infra|model serving|inference infra"
       points: 0.5
       check: "jd"
 
@@ -296,88 +236,23 @@ scoring:
       pattern: "hybrid"
       points: -3.0
       check: "jd"
-      unless: "austin|leander|cedar park|remote"  # don't penalize if local or remote
-    - signal: "city_only_no_remote"
-      points: -2.0
-      check: "location_only"   # location is a city, JD has no "remote"
+      unless: "your_city|remote"
     - signal: "comp_below_floor"
       points: -3.0
       check: "structured_comp"
-      threshold_max: 140000    # comp_max below this
-    - signal: "comp_marginal"
-      points: -1.5
-      check: "structured_comp"
-      threshold_min: 140000
-      threshold_max: 165000
+      threshold_max: 140000
     - signal: "people_management"
       pattern: "performance review|headcount|hiring decision|manage.*team of"
       points: -2.0
-      check: "jd"
-    - signal: "follow_the_sun"
-      pattern: "follow.?the.?sun|24.?7 global|offices? in \\d+ countries"
-      points: -1.5
       check: "jd"
     - signal: "large_enterprise"
       pattern: "fortune\\s*(?:500|100|50)|\\b\\d{2,3},000\\+?\\s*employees"
       points: -1.5
       check: "jd"
-    - signal: "known_large_enterprise"
-      pattern: "cvs|walgreens|bank of america|wells fargo|jpmorgan|chase|citibank"
-      points: -1.5
-      check: "jd"
     - signal: "staffing_agency"
-      pattern: "jobs? via dice|robert half|akkodis|jobgether|intellisoft|manpower|randstad|adecco|insight global|tek systems|staffing|consulting llc"
+      pattern: "staffing|consulting llc|recruiting agency"
       points: -1.5
       check: "jd"
-    - signal: "extreme_oncall"
-      pattern: "(?:12.?hour|24.?hour).{0,30}(?:on.?call|shift|rotation)|7\\s*days?.{0,30}(?:on.?call|rotation)"
-      points: -2.5
-      check: "jd"
-    - signal: "oncall_low_comp"
-      pattern: "on.?call|on-call rotation"
-      points: -1.0
-      check: "jd"
-      requires_comp_below: 200000
-    - signal: "oncall_high_comp"
-      pattern: "on.?call|on-call rotation"
-      points: -0.5
-      check: "jd"
-      requires_comp_at_least: 200000   # partially offsets on-call burden
-    - signal: "k8s_5yr_primary"
-      pattern: "5\\+.*years.*kubernetes"
-      points: -1.0
-      check: "jd"
-    - signal: "first_line_support"
-      pattern: "first.?line.*support|first.?line.*response|first.*escalation point"
-      points: -1.0
-      check: "jd"
-    - signal: "gcp_primary"
-      pattern: "\\bgcp\\b|\\bgoogle cloud\\b"
-      points: -0.5
-      check: "jd"
-    - signal: "azure_primary_no_aws"
-      pattern: "\\bazure\\b"
-      points: -0.5
-      check: "jd"
-      unless: "aws"   # don't penalize if AWS also mentioned
-    - signal: "compliance_heavy"
-      pattern: "pci.?dss|sox\\b|hipaa|iso.?27001"
-      points: -0.5
-      check: "jd"
-    - signal: "high_experience_bar"
-      pattern: "10\\+.*years|15\\+.*years"
-      points: -0.5
-      check: "jd"
-    - signal: "mts_no_seniority"
-      pattern: "\\bmember of technical staff\\b"
-      points: -1.0
-      check: "title"
-      unless: "senior|staff|principal"
-    - signal: "generic_swe_title"
-      pattern: "^software engineer$"
-      points: -2.0
-      check: "title"
-      unless: "infrastructure|platform|sre|devops|cloud|release|security|data"
     - signal: "missing_location"
       points: -1.5
       check: "no_location_no_remote"
@@ -397,118 +272,46 @@ The accuracy validation engine reads these rules. No rules are hardcoded in Pyth
 ```yaml
 # Resume accuracy rules — validated after generation
 # Each rule is checked programmatically. Violations are flagged.
+# Customize these for your own resume and constraints.
 
 rules:
   # --- Skill depth constraints ---
-  - id: aws_depth
-    description: "Never claim deep AWS expertise or year count"
+  - id: no_expert_claims
+    description: "Avoid claiming 'expert' or 'mastery' — show via impact, not adjectives"
     type: disallowed_phrases
-    phrases: ["deep aws expertise", "aws expert", "since aws launch"]
-    severity: high
-
-  - id: azure_depth
-    description: "Never claim deep independent Azure expertise"
-    type: disallowed_phrases
-    phrases: ["azure expert", "deep azure"]
-    severity: high
-
-  - id: gcp_depth
-    description: "Never claim production GCP depth"
-    type: disallowed_phrases
-    phrases: ["gcp experience", "google cloud production", "gcp expertise"]
-    severity: high
-
-  - id: powershell_depth
-    description: "Never claim PowerShell depth/mastery"
-    type: disallowed_phrases
-    phrases: ["powershell expert", "powershell mastery", "strong powershell"]
-    severity: high
-
-  - id: ansible_current
-    description: "Never claim Ansible as current competency"
-    type: disallowed_in_section
-    phrases: ["ansible"]
-    section: "competencies"   # only check in competency/skills sections
-    severity: high
-
-  - id: kubernetes_depth
-    description: "Never claim cluster administration depth"
-    type: disallowed_phrases
-    phrases: ["kubernetes admin", "kubernetes expert", "deep k8s", "cluster administration", "k8s architect"]
-    severity: high
-
-  - id: go_primary
-    description: "Never claim Go as primary language"
-    type: disallowed_phrases
-    phrases: ["go expert", "go primary language", "deep go", "go proficiency"]
+    phrases: ["expert in", "mastery of", "deep expertise", "world-class", "ninja", "rockstar", "guru"]
     severity: medium
 
-  - id: spinnaker_depth
-    description: "Never claim Spinnaker operational depth"
+  - id: no_year_inflation
+    description: "Don't inflate years of experience beyond what's in the master resume"
     type: disallowed_phrases
-    phrases: ["spinnaker expertise", "operated spinnaker", "spinnaker administration"]
-    severity: medium
+    phrases: ["20+ years", "30+ years"]
+    severity: high
 
   # --- Forbidden technologies ---
+  # Add technologies you don't know or don't want associated with your profile.
   - id: forbidden_technologies
     description: "These technologies must never appear in generated resumes"
     type: forbidden_technologies
-    technologies:
-      - argocd
-      - helm
-      - kargo
-      - consul
-      - vault          # production vault
-      - rust
-      - temporal
-      - ansible        # as current competency
+    technologies: []
     severity: high
 
   # --- Experience anchor ---
   - id: experience_anchor
-    description: "Must use '25+ years' only, attached to overall career not cloud"
+    description: "Use the standard experience anchor from your profile"
     type: experience_anchor
-    required_phrase: "25+ years"
-    disallowed_phrases: ["20+ years", "30+ years", "25+ years in cloud", "25+ years in devops"]
+    required_phrase: "N+ years"
+    disallowed_phrases: ["inflated year counts"]
     severity: medium
-
-  # --- Education ---
-  - id: education_omission
-    description: "Omit education entirely"
-    type: disallowed_phrases
-    phrases: ["devry", "electronics engineering technology"]
-    severity: medium
-
-  # --- AI assistance framing ---
-  - id: ai_assistance
-    description: "Claims should reflect AI-assisted capability, not deep independent expertise"
-    type: disallowed_phrases
-    phrases: ["deep independent expertise"]
-    severity: low
 
   # --- Contact URLs ---
   - id: contact_urls
     description: "Full literal https:// URLs must be visible text"
     type: required_urls
     urls:
-      - "https://example.com"
-      - "https://linkedin.com/in/example"
-      - "https://github.com/example"
-    severity: medium
-
-  # --- Role-specific constraints ---
-  - id: marriott_honest
-    description: "Marriott role: honest 3-bullet version only"
-    type: role_constraint
-    company: "marriott"
-    max_bullets: 3
-    severity: medium
-
-  - id: hilton_location
-    description: "Hilton: Collierville TN, primarily onsite — do not frame as remote"
-    type: role_constraint
-    company: "hilton"
-    disallowed_phrases: ["hilton (remote)", "remote at hilton"]
+      - "https://your-portfolio.com"
+      - "https://linkedin.com/in/yourprofile"
+      - "https://github.com/yourusername"
     severity: medium
 ```
 
@@ -545,18 +348,18 @@ whatever rubric it's given.
 
 ### 4. Accuracy Rules Are User-Defined
 
-The resume accuracy rules in `accuracy_rules.yml` are specific to Tony's master
+The resume accuracy rules in `accuracy_rules.yml` are specific to the user's master
 resume. A different user defines their own constraints. The validation engine is
 generic; the rules are data.
 
-### 5. No Tony-Specific Values in Code
+### 5. No User-Specific Values in Code
 
 Audit rule: grep the codebase for any of these — if found in `.py` files (not
 `.yml`), it's a bug:
-- "tony", "perkins", "leander", "austin" (in logic, not tests)
-- "165000", "150000", "220000" (comp thresholds)
-- "avidxchange", "fidelity", "marriott", "zapcom" (blacklist)
-- "25+ years" (experience anchor)
+- Personal names, emails, locations
+- Specific comp threshold numbers in logic
+- Specific company names in blacklist logic
+- Specific experience year counts
 - Specific technology names in scoring logic
 
 ## Config Validation
@@ -583,7 +386,7 @@ def validate_config(config_dir: str) -> list[ConfigError]:
 
 Seeker OS ships with:
 - `config/profile.example.yml` — template with placeholder values
-- `config/scoring_rubric.example.yml` — a generic SRE/DevOps rubric
+- `config/scoring_rubric.example.yml` — a generic example rubric
 - `config/accuracy_rules.example.yml` — template with example rules
 - `config/queries.example.yml` — example queries
 - `config/filters.example.yml` — example filter thresholds
@@ -624,11 +427,11 @@ take effect on next startup — not be silently overwritten by stale DB values.
 Phase 1 uses a single profile and single resume. Future: support multiple profiles
 and resumes. The architecture doesn't prevent this:
 
-**Multi-profile** (e.g., searching for both SRE and frontend roles):
+**Multi-profile** (e.g., searching for both backend and frontend roles):
 - `--profile` CLI flag + `profiles/` directory
 - Each profile has its own `scoring_rubric.yml`, `queries.yml`, `filters.yml`
 
-**Multi-resume** (e.g., SRE resume + Platform resume):
+**Multi-resume** (e.g., backend resume + platform resume):
 - `resume:` (single) or `resumes:` (list) in `profile.yml`
 - Config loader accepts either; code always works with a list internally
 - Per-resume `model_tier` field routes to different LLM tiers

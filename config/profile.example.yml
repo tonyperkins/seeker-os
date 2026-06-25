@@ -9,15 +9,9 @@ user:
 location:
   remote_only: true
   accepted_cities:
-    - austin
-    - leander
-    - cedar park
-    - round rock
-    - georgetown
-    - pflugerville
-    - taylor
-  accepted_states: [tx, texas]
-  rejected_cities: [new york, san francisco, seattle, chicago, boston, denver]
+    - your_city
+  accepted_states: [your_state]
+  rejected_cities: [new york, san francisco, seattle]
 
 comp:
   floor: 150000              # hard reject if comp_max < this (ceiling below floor)
@@ -25,8 +19,8 @@ comp:
   stretch: 220000            # ranking/display context only
 
 experience:
-  years: 25
-  anchor_phrase: "25+ years"  # the only acceptable experience claim
+  years: 20
+  anchor_phrase: "20+ years"  # the only acceptable experience claim
 
 employment:
   commitment: "Full Time"     # required commitment type
@@ -52,16 +46,11 @@ cross_reference:
   auto_pull: true
 
 hard_rejects:
-  - reason: "FedRAMP/clearance required"
-    pattern: "fedramp|security clearance|active clearance|ts/sci|top secret"
+  - reason: "Clearance required"
+    pattern: "security clearance|active clearance|ts/sci|top secret"
   - reason: "Customer-facing/solutions role"
     pattern: "pre.?sales|solutions architect|customer success|technical account manager"
   - reason: "Early career/junior"
     pattern: "early.?career|entry.?level|new.?grad|\\bjunior\\b|\\bintern\\b|\\binternship\\b|\\bassociate\\b"
-  - reason: "Defense/ITAR"
-    pattern: "defense contractor|itar|classified"
   - reason: "Relocation required"
     pattern: "relocation required"
-  - reason: "AI/ML Engineer (non-infra)"
-    pattern: "ai/ml engineer|machine learning engineer"
-    unless_pattern: "ml infra|ml platform|gpu infra|model serving|mlops"

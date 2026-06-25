@@ -8,10 +8,10 @@
 ## You Are Here
 
 Seeker OS is a **reusable product** — a job search pipeline with a web dashboard.
-It happens to be built for Tony Perkins' current needs (replacing his Hermes/Clawford
-system of scattered markdown files), but the architecture is product-grade: no
-personal values are hardcoded in code. All user-specific config (comp floor, blacklist,
-scoring weights, accuracy rules, resume path, location prefs) lives in YAML config files.
+It is built to replace scattered-markdown-files approaches with a structured system.
+No personal values are hardcoded in code. All user-specific config (comp floor,
+blacklist, scoring weights, accuracy rules, resume path, location prefs) lives in
+YAML config files.
 
 The design is complete and documented. No code has been written yet.
 
@@ -22,12 +22,12 @@ pipeline — without touching Python code. See `docs/PRODUCT_DESIGN.md`.
 
 ## The Problem Being Solved
 
-Tony's current job search process (Hermes/Clawford) runs daily cron scans of
-Greenhouse/Lever/Ashby/Workday/LinkedIn, scores jobs against his SRE/Platform profile,
-and writes results as markdown files to `~/projects/job-search/`. It works but is messy:
-- 832 rejected files, 27 applied dirs, 13 closed dirs — no queryable interface
+The current job search process (scattered markdown files) runs daily cron scans of
+Greenhouse/Lever/Ashby/Workday/LinkedIn, scores jobs against the user's profile,
+and writes results as markdown files. It works but is messy:
+- Hundreds of rejected files, dozens of applied dirs — no queryable interface
 - No analytics, no dashboard, no resume automation
-- Manual resume tailoring by pasting JDs into Claude (token-expensive, manual)
+- Manual resume tailoring by pasting JDs into an LLM (token-expensive, manual)
 - hiring.cafe (a job aggregator indexing ~2.8M listings from ~46 ATS platforms) is
   not yet integrated despite a completed feasibility spike
 
@@ -49,7 +49,7 @@ tracks everything in a dashboard.
 | Frontend | Next.js + Tailwind (Phase 2) |
 | Scoring | Port rubric from Hermes, break from that codebase. Single source of truth in Seeker OS. |
 | Dedup | 4-layer: URL hash → composite key → content hash → fuzzy match (rapidfuzz) |
-| Resume gen | Automated with 15 hardcoded accuracy rules. NO EMBELLISHING. Model routing. |
+| Resume gen | Automated with config-driven accuracy rules. NO EMBELLISHING. Model routing. |
 | Cron | On-demand first. Reconsider after manual validation. |
 | Cross-reference | Local `~/projects/job-search` repo (git pull first, read-only) |
 | robots.txt | Human-like: 3-5s between requests, shallow pagination, standard UA |
@@ -70,23 +70,24 @@ tracks everything in a dashboard.
 | `docs/DEDUP_DESIGN.md` | 4-layer dedup with normalization functions and code examples | Implementing dedup |
 | `AGENTS.md` | Project rules for AI agents | Always (auto-loaded by agent tools) |
 
-## Tony's Profile (Quick Reference)
+## User Profile (Quick Reference)
 
-- **Role:** Senior/Staff/Principal SRE/Platform/DevOps Engineer
-- **Location:** Leander, TX (Austin metro) — remote only or local Austin
-- **Comp:** `floor` $150K (hard reject if listed below), `target` $165K (positive scoring modifier), `stretch` $220K (ranking/display context)
-- **Experience:** 25+ years (anchor figure, attached to overall career not cloud)
-- **Key skills:** AWS (breadth, not depth), Terraform, CI/CD (GitHub Actions, GitLab CI, Jenkins), observability (Datadog, Grafana, Prometheus), Python, Bash
-- **Re-ramping:** Kubernetes (was production at Hilton 2016-2020, self-rating 1-3 now)
-- **NOT interested in:** Large enterprise, relocation, hybrid/on-site outside Austin, FedRAMP/government, defense/ITAR, customer-facing/pre-sales, management roles
-- **Blacklisted companies:** AvidXchange, Fidelity, Marriott, Zapcom
-- **AI assistance:** Relies heavily on AI tooling — claimed depth should reflect AI-assisted capability
+User profile is configured in `config/profile.yml`. Key fields:
+
+- **Role:** Configure target title patterns in `scoring_rubric.yml`
+- **Location:** Set accepted cities/states and remote preference in `profile.yml`
+- **Comp:** `floor` (hard reject below), `target` (positive modifier), `stretch` (display context)
+- **Experience:** `years` and `anchor_phrase` for resume generation
+- **Key skills:** Configure as positive modifiers in `scoring_rubric.yml`
+- **NOT interested in:** Configure as hard rejects and negative modifiers
+- **Blacklisted companies:** List in `profile.yml` and `blacklist.txt`
+- **AI assistance:** Configure accuracy rules in `accuracy_rules.yml`
 
 ## Phase Roadmap
 
 | Phase | Goal | Status |
 |---|---|---|
-| 1 | Core pipeline (CLI): discover → filter → fetch JD → score → report. Uses Tony's pre-existing info → AI → config (done manually for Phase 1). | Starting now |
+| 1 | Core pipeline (CLI): discover → filter → fetch JD → score → report. User configures profile, rubric, and rules via YAML. | Starting now |
 | 2 | Web dashboard: FastAPI + Next.js, all views | Pending Phase 1 |
 | 2.5 | Onboarding wizard (CLI first, path to dashboard): resume ingest → AI interview → freeform rules → AI synthesis → config review. Generates profile.yml, scoring_rubric.yml, accuracy_rules.yml for new users. | Pending Phase 2 |
 | 3 | Resume generation: LLM + accuracy enforcement + PDF export | Pending Phase 2.5 |
