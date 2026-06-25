@@ -246,7 +246,8 @@ class TestCompanyKeyedCaching:
 
     def test_second_job_same_company_reuses_within_ttl(self):
         """Second job at the same company REUSES the cached dossier (no new Tavily call) within TTL."""
-        from seeker_os.api.company_research import _normalize_company_name, _find_fresh_dossier
+        from seeker_os.api.company_research import _find_fresh_dossier
+        from seeker_os.dedup.normalize import normalize_company
         from seeker_os.database import get_connection, json_encode, run_migrations
         import tempfile, os
 
@@ -264,7 +265,7 @@ class TestCompanyKeyedCaching:
         db.commit()
 
         # Insert a company_research record for job 1, company "Stripe"
-        company_norm = _normalize_company_name("Stripe")
+        company_norm = normalize_company("Stripe")
         now = datetime.now(timezone.utc).isoformat()
         db.execute(
             """INSERT INTO company_research (
@@ -290,7 +291,8 @@ class TestCompanyKeyedCaching:
 
     def test_stale_dossier_triggers_refresh(self):
         """A stale dossier (older than TTL) is NOT reused — returns None."""
-        from seeker_os.api.company_research import _normalize_company_name, _find_fresh_dossier
+        from seeker_os.api.company_research import _find_fresh_dossier
+        from seeker_os.dedup.normalize import normalize_company
         from seeker_os.database import get_connection, json_encode, run_migrations
         import tempfile, os
 
@@ -307,7 +309,7 @@ class TestCompanyKeyedCaching:
 
         # Insert a research record with an old researched_at (60 days ago)
         old_date = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
-        company_norm = _normalize_company_name("OldCo")
+        company_norm = normalize_company("OldCo")
         db.execute(
             """INSERT INTO company_research (
                 job_id, company_name, company_homepage, overall_confidence,
@@ -329,7 +331,8 @@ class TestCompanyKeyedCaching:
 
     def test_different_company_not_reused(self):
         """A dossier for a different company is not reused."""
-        from seeker_os.api.company_research import _normalize_company_name, _find_fresh_dossier
+        from seeker_os.api.company_research import _find_fresh_dossier
+        from seeker_os.dedup.normalize import normalize_company
         from seeker_os.database import get_connection, run_migrations
         import tempfile, os
 
@@ -339,7 +342,7 @@ class TestCompanyKeyedCaching:
         db = get_connection(db_path)
 
         now = datetime.now(timezone.utc).isoformat()
-        company_norm = _normalize_company_name("Stripe")
+        company_norm = normalize_company("Stripe")
         db.execute(
             "INSERT INTO jobs (id, title, company, status) VALUES (?, ?, ?, ?)",
             (1, "SRE", "Stripe", "discovered"),
@@ -357,6 +360,127 @@ class TestCompanyKeyedCaching:
         # Look up a different company
         row, age_days = _find_fresh_dossier(db, "plaid", ttl_days=30)
         assert row is None
+
+        db.close()
+        os.unlink(db_path)
+        os.rmdir(tmpdir)
+
+    def test_endpoint_reuses_cache_no_second_research_call(self, monkeypatch):
+        """Calling run_company_research twice for same company: second call reuses cache,
+        research_company is called only once."""
+        import tempfile, os
+        from seeker_os.api import company_research as cr_api
+        from seeker_os.database import get_connection, run_migrations
+        from seeker_os.research.models import CompanyResearchResult
+
+        tmpdir = tempfile.mkdtemp()
+        db_path = os.path.join(tmpdir, "test.db")
+        run_migrations(db_path)
+        db = get_connection(db_path)
+
+        # Insert two jobs at the same company
+        db.execute(
+            "INSERT INTO jobs (id, title, company, status) VALUES (?, ?, ?, ?)",
+            (1, "SRE", "Stripe", "discovered"),
+        )
+        db.execute(
+            "INSERT INTO jobs (id, title, company, status) VALUES (?, ?, ?, ?)",
+            (2, "Platform Engineer", "Stripe", "discovered"),
+        )
+        db.commit()
+
+        # Mock research_company to avoid real Tavily/LLM calls
+        call_count = 0
+
+        def mock_research_company(company, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return CompanyResearchResult(
+                company_name=company,
+                overall_confidence=0.7,
+                summary="Test dossier",
+                researched_at=datetime.now(timezone.utc).isoformat(),
+                sources_used=["wikipedia"],
+                retrieval_used=True,
+            )
+
+        monkeypatch.setattr(cr_api, "research_company", mock_research_company)
+        # Also patch the DB path so the API uses our temp DB
+        monkeypatch.setattr(cr_api, "get_connection", lambda: get_connection(db_path))
+
+        # First call — should run research
+        response1 = cr_api.run_company_research(job_id=1)
+        assert response1.reused_from_cache is False
+        assert call_count == 1
+
+        # Second call — should reuse cache, NOT call research_company again
+        response2 = cr_api.run_company_research(job_id=2)
+        assert response2.reused_from_cache is True
+        assert call_count == 1  # research_company still only called once
+
+        db.close()
+        os.unlink(db_path)
+        os.rmdir(tmpdir)
+
+    def test_name_variants_resolve_to_same_company_norm(self):
+        """Two name variants of the same company resolve to the SAME company_norm."""
+        from seeker_os.dedup.normalize import normalize_company
+
+        norm1 = normalize_company("Stripe")
+        norm2 = normalize_company("Stripe, Inc.")
+        norm3 = normalize_company("Stripe Inc")
+
+        assert norm1 == norm2 == norm3 == "stripe"
+
+    def test_name_variants_share_cache(self, monkeypatch):
+        """Two jobs with name variants of the same company share the cache."""
+        import tempfile, os
+        from seeker_os.api import company_research as cr_api
+        from seeker_os.database import get_connection, run_migrations
+        from seeker_os.research.models import CompanyResearchResult
+
+        tmpdir = tempfile.mkdtemp()
+        db_path = os.path.join(tmpdir, "test.db")
+        run_migrations(db_path)
+        db = get_connection(db_path)
+
+        # Insert two jobs with different name variants
+        db.execute(
+            "INSERT INTO jobs (id, title, company, status) VALUES (?, ?, ?, ?)",
+            (1, "SRE", "Stripe", "discovered"),
+        )
+        db.execute(
+            "INSERT INTO jobs (id, title, company, status) VALUES (?, ?, ?, ?)",
+            (2, "Platform Engineer", "Stripe, Inc.", "discovered"),
+        )
+        db.commit()
+
+        call_count = 0
+
+        def mock_research_company(company, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return CompanyResearchResult(
+                company_name=company,
+                overall_confidence=0.7,
+                summary="Test dossier",
+                researched_at=datetime.now(timezone.utc).isoformat(),
+                sources_used=["wikipedia"],
+                retrieval_used=True,
+            )
+
+        monkeypatch.setattr(cr_api, "research_company", mock_research_company)
+        monkeypatch.setattr(cr_api, "get_connection", lambda: get_connection(db_path))
+
+        # First call with "Stripe" — runs research
+        response1 = cr_api.run_company_research(job_id=1)
+        assert response1.reused_from_cache is False
+        assert call_count == 1
+
+        # Second call with "Stripe, Inc." — should reuse cache (same company_norm)
+        response2 = cr_api.run_company_research(job_id=2)
+        assert response2.reused_from_cache is True
+        assert call_count == 1
 
         db.close()
         os.unlink(db_path)

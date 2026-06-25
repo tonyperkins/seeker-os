@@ -16,10 +16,29 @@ from seeker_os.config import DATA_DIR
 DB_PATH = DATA_DIR / "seeker.db"
 
 # ---------------------------------------------------------------------------
+# Python-callable migrations (for data backfills that need application logic)
+# ---------------------------------------------------------------------------
+
+def _backfill_company_norm(conn):
+    """Recompute company_norm for all existing rows using normalize_company."""
+    from seeker_os.dedup.normalize import normalize_company
+    rows = conn.execute(
+        "SELECT id, company_name FROM company_research"
+    ).fetchall()
+    for row in rows:
+        name = row[1] or ""
+        norm = normalize_company(name)
+        conn.execute(
+            "UPDATE company_research SET company_norm = ? WHERE id = ?",
+            (norm, row[0]),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Schema migrations
 # ---------------------------------------------------------------------------
 
-MIGRATIONS: list[str] = [
+MIGRATIONS: list[str | callable] = [
     # v1: initial schema
     """
     CREATE TABLE IF NOT EXISTS jobs (
@@ -285,11 +304,20 @@ MIGRATIONS: list[str] = [
     ALTER TABLE jobs ADD COLUMN research_delta REAL DEFAULT 0;
     ALTER TABLE jobs ADD COLUMN research_breakdown TEXT;
     """,
+    # Migration 12: Backfill company_norm using the canonical normalizer
+    # (dedup.normalize.normalize_company). This fixes rows written with the
+    # old naive normalizer (strip().lower()) and NULL rows from pre-migration-11.
+    _backfill_company_norm,
 ]
 
 
 def run_migrations(db_path: Path | str = DB_PATH) -> None:
-    """Apply pending migrations based on PRAGMA user_version."""
+    """Apply pending migrations based on PRAGMA user_version.
+
+    Each entry in MIGRATIONS is either a SQL string (executed via executescript)
+    or a callable(conn) that runs Python code (for data backfills that need
+    application-level logic like normalize_company).
+    """
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -297,7 +325,11 @@ def run_migrations(db_path: Path | str = DB_PATH) -> None:
     try:
         current_version = conn.execute("PRAGMA user_version").fetchone()[0]
         for i in range(current_version, len(MIGRATIONS)):
-            conn.executescript(MIGRATIONS[i])
+            migration = MIGRATIONS[i]
+            if callable(migration):
+                migration(conn)
+            else:
+                conn.executescript(migration)
             conn.execute(f"PRAGMA user_version = {i + 1}")
             conn.commit()
             print(f"  Migration v{i + 1} applied")

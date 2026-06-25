@@ -8,14 +8,10 @@ from fastapi import APIRouter, HTTPException
 
 from seeker_os.api.schemas import CompanyResearchResponse, SourceRefSchema
 from seeker_os.database import get_connection, json_decode, json_encode
+from seeker_os.dedup.normalize import normalize_company
 from seeker_os.research.company_research import research_company
 
 router = APIRouter(prefix="/api/jobs", tags=["company-research"])
-
-
-def _normalize_company_name(name: str) -> str:
-    """Normalize company name for cache keying."""
-    return (name or "").strip().lower()
 
 
 def _row_to_response(row, reused_from_cache: bool = False, dossier_age_days: int | None = None) -> CompanyResearchResponse:
@@ -116,7 +112,7 @@ def get_company_research(job_id: int):
         reused = False
         age_days = None
         if not row:
-            company_norm = _normalize_company_name(job["company"] or "")
+            company_norm = normalize_company(job["company"] or "")
             if company_norm:
                 row = db.execute(
                     "SELECT * FROM company_research WHERE company_norm = ? ORDER BY researched_at DESC LIMIT 1",
@@ -159,7 +155,7 @@ def run_company_research(job_id: int, force_refresh: bool = False):
 
         company_homepage = job["company_homepage"] if "company_homepage" in job.keys() else None
         jd_full = job["jd_full"] if "jd_full" in job.keys() else None
-        company_norm = _normalize_company_name(company)
+        company_norm = normalize_company(company)
 
         # Check for fresh cached dossier by company_norm (unless force_refresh)
         ttl_days = 30
