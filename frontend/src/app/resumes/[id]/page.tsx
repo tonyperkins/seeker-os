@@ -29,6 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import { RevalidateButton } from "@/components/revalidate-button";
 import { ResumeEditor } from "@/components/resume-editor";
 import { DeleteResumeButton } from "@/components/delete-resume-button";
+import { ClearExportsButton } from "@/components/clear-exports-button";
 import { api, type ResumeDetail } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
 
@@ -171,6 +172,9 @@ export default async function ResumeDetailPage(props: PageProps<"/resumes/[id]">
             <CardHeader>
               <CardTitle>Downloads</CardTitle>
               <CardDescription>Export this resume</CardDescription>
+              <CardAction>
+                <ClearExportsButton resumeId={resume.id} />
+              </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               <Button
@@ -199,13 +203,9 @@ export default async function ResumeDetailPage(props: PageProps<"/resumes/[id]">
                 render={
                   <a href={api.resumes.docxUrl(resume.id)} target="_blank" rel="noopener noreferrer" />
                 }
-                disabled={!resume.docx_path}
               >
                 <FileType /> DOCX
               </Button>
-              {!resume.docx_path && (
-                <p className="text-xs text-muted-foreground">DOCX not available for this resume.</p>
-              )}
             </CardContent>
           </Card>
 

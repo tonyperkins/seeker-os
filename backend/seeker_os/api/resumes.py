@@ -468,22 +468,33 @@ def generate_resume_stream(body: ResumeGenerateRequest):
     thread = threading.Thread(target=run_in_thread, daemon=True)
     thread.start()
 
+    def _json_default(obj):
+        if hasattr(obj, 'model_dump'):
+            return obj.model_dump()
+        return str(obj)
+
     def event_stream():
+        import time
+        start = time.monotonic()
         while True:
-            try:
-                item = event_queue.get(timeout=300)
-            except queue_module.Empty:
-                yield 'data: {"type":"error","message":"Generation timeout"}\n\n'
+            if time.monotonic() - start > 300:
+                yield f"event: error\ndata: {json.dumps({'error': 'Generation timeout (5min)'})}\n\n"
                 break
+            try:
+                item = event_queue.get(timeout=5)
+            except queue_module.Empty:
+                # Send keepalive comment so the browser doesn't drop the connection
+                yield ': keepalive\n\n'
+                continue
             if isinstance(item, tuple):
                 if item[0] == "done":
-                    yield f"event: done\ndata: {json.dumps(item[1])}\n\n"
+                    yield f"event: done\ndata: {json.dumps(item[1], default=_json_default)}\n\n"
                     break
                 elif item[0] == "error":
-                    yield f"event: error\ndata: {json.dumps({'error': item[1]})}\n\n"
+                    yield f"event: error\ndata: {json.dumps({'error': item[1]}, default=_json_default)}\n\n"
                     break
             else:
-                yield f"data: {json.dumps(item)}\n\n"
+                yield f"data: {json.dumps(item, default=_json_default)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -501,6 +512,44 @@ def revalidate_resume(resume_id: int):
         return result.to_dict()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{resume_id}/exports", response_model=MessageResponse)
+def clear_exports(resume_id: int):
+    """Clear cached PDF and DOCX exports for a resume.
+
+    Deletes the generated PDF/DOCX files from disk and nulls their paths in the DB.
+    The markdown source is preserved. The next download request will regenerate
+    the export from markdown on the fly.
+    """
+    db = get_connection()
+    row = db.execute("SELECT * FROM resumes WHERE id = ?", (resume_id,)).fetchone()
+    if not row:
+        db.close()
+        raise HTTPException(status_code=404, detail=f"Resume {resume_id} not found")
+
+    cleared: list[str] = []
+    for col in ("pdf_path", "docx_path"):
+        p = row[col]
+        if p:
+            path = Path(p)
+            if path.exists():
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+            cleared.append(col.replace("_path", "").upper())
+
+    db.execute(
+        "UPDATE resumes SET pdf_path=NULL, docx_path=NULL, updated_at=? WHERE id=?",
+        (datetime.now(timezone.utc).isoformat(), resume_id),
+    )
+    db.commit()
+    db.close()
+
+    if cleared:
+        return MessageResponse(message=f"Cleared cached exports: {', '.join(cleared)}")
+    return MessageResponse(message="No cached exports to clear")
 
 
 @router.get("/{resume_id}/pdf")

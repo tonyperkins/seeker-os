@@ -438,6 +438,8 @@ export const api = {
       }),
     skip: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/skip`, { method: "POST" }),
+    apply: (id: number) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/apply`, { method: "POST" }),
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "DELETE" }),
     transition: (id: number, targetStatus: string, opts?: { occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
@@ -541,6 +543,8 @@ export const api = {
     },
     validate: (id: number) =>
       fetchAPI<Record<string, unknown>>(`/api/resumes/${id}/validate`, { method: "POST" }),
+    clearExports: (id: number) =>
+      fetchAPI<MessageResponse>(`/api/resumes/${id}/exports`, { method: "DELETE" }),
     pdfUrl: (id: number) => `${API_BASE}/api/resumes/${id}/pdf`,
     markdownUrl: (id: number) => `${API_BASE}/api/resumes/${id}/markdown`,
     docxUrl: (id: number) => `${API_BASE}/api/resumes/${id}/docx`,

@@ -21,6 +21,17 @@ These rules are validated programmatically after generation. Violations will fla
 ---
 {anchor_section}
 ## INSTRUCTIONS
-Tailor the master resume for this specific job. Emphasize relevant experience and skills. De-emphasize irrelevant parts. Do NOT add anything not in the master resume. Follow ALL accuracy rules above.
+Tailor the master resume for this specific job. Emphasize relevant experience and skills. De-emphasize irrelevant parts.
 
-Generate the tailored resume in Markdown format:
+Tailoring means REORDERING and REFRAMING existing master-resume content for relevance — NOT adding, upgrading, or inventing. Specifically:
+- Do NOT add anything not in the master resume.
+- Do NOT change the headline/title — copy it VERBATIM from the master (do not restyle it toward this JD's title).
+- The professional summary must be built only from claims present in the master. Do not introduce frequency words (daily/weekly), intensity upgrades, or positioning platitudes (high bar, passionate, world-class, proven track record) that are not in the master.
+- Preserve all qualifiers verbatim (e.g. "familiar, growing", "re-ramping", "comfortable with core services", "minimal"). Never strengthen a qualified claim.
+- It is better to omit a JD-relevant phrase than to manufacture support for it.
+- Render core competencies as labeled plain-text lines (bold category label, colon, comma-separated skills), NOT a markdown table. One category per line. No pipes.
+- Put the contact line on a single line with " · " between every element (email and all URLs). Do not split contact elements across multiple lines.
+
+Follow ALL accuracy rules above. Every line — including the summary and headline — must be traceable to the master resume.
+
+Generate the tailored resume in Markdown format

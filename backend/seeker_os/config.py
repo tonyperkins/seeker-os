@@ -397,10 +397,19 @@ class IdentityConfig(BaseModel):
 # Channel rules models
 # ---------------------------------------------------------------------------
 
+class ContentTieringConfig(BaseModel):
+    target_pages: int = 2
+    recent_years: int = 10
+    mid_years: int = 20
+    mid_max_bullets: int = 3
+    old_max_bullets: int = 1
+
+
 class ChannelConfig(BaseModel):
     require_visible_urls: bool = False
     format_hints: str = ""
     ai_generation_default: str = "allowed"
+    content_tiering: ContentTieringConfig | None = None
 
 
 class ChannelRulesConfig(BaseModel):

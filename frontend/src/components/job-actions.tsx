@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   RotateCcw,
   Trash2,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,6 +115,16 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
         >
           {busy === "interested" ? <Loader2 className="animate-spin" /> : <Star />}
           Mark Interested
+        </Button>
+
+        {/* Mark Applied — records APPLIED event */}
+        <Button
+          variant="default"
+          disabled={busy !== null || currentStatus === "applied"}
+          onClick={() => doAction("apply", () => api.jobs.apply(jobId))}
+        >
+          {busy === "apply" ? <Loader2 className="animate-spin" /> : <Send />}
+          Mark Applied
         </Button>
 
         {/* Skip — removes from active queue */}

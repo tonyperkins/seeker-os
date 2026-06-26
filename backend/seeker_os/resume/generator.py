@@ -106,6 +106,30 @@ def _load_never_claim_text(settings: Settings) -> str:
     return f"NEVER mention these technologies anywhere in the resume: {items}"
 
 
+def _build_tiering_instructions(settings: Settings) -> str:
+    """Build recency/relevance tiering instructions from channel_rules config.
+
+    Returns empty string if no content_tiering is configured — the prompt
+    says nothing about tiering in that case. No hardcoded values.
+    """
+    if not settings.channel_rules or not settings.channel_rules.resume:
+        return ""
+    tiering = settings.channel_rules.resume.content_tiering
+    if not tiering:
+        return ""
+
+    lines = [
+        f"Target length: {tiering.target_pages} pages. Apply recency-based bullet tiering to every role:",
+        f"- Recent roles (within the last {tiering.recent_years} years): keep ALL strong bullets — full detail.",
+        f"- Mid-age roles ({tiering.recent_years}-{tiering.mid_years} years old): compress to at most {tiering.mid_max_bullets} highest-impact bullets. Prefer bullets with quantified outcomes or keywords matching the target JD; drop generic ones.",
+        f"- Old roles ({tiering.mid_years}+ years old): compress to at most {tiering.old_max_bullets} bullet or a single summary line.",
+        "- NEVER drop a role entirely or alter dates/titles. This is about bullet COUNT per role, not removing history.",
+        "- JD-relevance can PROMOTE an older role's bullet: if a bullet from an older role directly matches the target JD's stack or requirements, keep it even when compressing. Recency is the default axis; JD-relevance can override downward compression.",
+        "- All honesty/traceability rules still apply. Compressing means SELECTING which true bullets to show — never invent or merge into new claims.",
+    ]
+    return "\n".join(lines)
+
+
 def generate_resume(
     settings: Settings,
     job_id: int,
@@ -191,6 +215,11 @@ def generate_resume(
             channel_lines.append(f"Format: {resume_channel.format_hints}")
         if channel_lines:
             system_prompt += f"\n\n--- CHANNEL RULES (resume) ---\n" + "\n".join(channel_lines) + "\n--- END CHANNEL RULES ---\n"
+
+    # Inject content tiering instructions from channel_rules config
+    tiering_text = _build_tiering_instructions(settings)
+    if tiering_text:
+        system_prompt += f"\n\n--- CONTENT TIERING (resume) ---\n{tiering_text}\n--- END CONTENT TIERING ---\n"
     if settings.profile and settings.profile.instructions:
         system_prompt += f"\n\n--- USER INSTRUCTIONS ---\n{settings.profile.instructions}\n--- END USER INSTRUCTIONS ---\n"
     router = ModelRouter(settings)

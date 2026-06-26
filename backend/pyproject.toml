@@ -15,6 +15,9 @@ dependencies = [
     "uvicorn[standard]>=0.29",  # ASGI server
     "anthropic>=0.40",       # Anthropic native API (Phase 3)
     "openai>=1.50",          # OpenAI-compatible API client (Phase 3)
+    "weasyprint>=60",        # PDF export (markdown → HTML → PDF)
+    "markdown>=3.7",         # Markdown → HTML conversion (for PDF export)
+    "python-docx>=1.1",      # DOCX export
 ]
 
 [project.optional-dependencies]

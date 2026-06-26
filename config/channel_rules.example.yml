@@ -17,12 +17,22 @@
 #                          markdown, reverse chronological")
 #   ai_generation_default — default AI policy when no per-job override is set
 #                           (allowed | draft_only | forbidden)
+#   content_tiering       — (resume only) recency/relevance-based bullet
+#                           compression rules. See ContentTieringConfig in
+#                           config.py. When present, the generator instructs
+#                           the LLM to tier experience bullets by role age.
 
 channels:
   resume:
     require_visible_urls: true
     format_hints: "1-2 pages, markdown, reverse chronological, action verbs"
     ai_generation_default: allowed
+    content_tiering:
+      target_pages: 2
+      recent_years: 10
+      mid_years: 20
+      mid_max_bullets: 3
+      old_max_bullets: 1
 
   cover_letter:
     require_visible_urls: false

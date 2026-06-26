@@ -802,6 +802,28 @@ def skip_job(job_id: int):
         db.close()
 
 
+@router.post("/{job_id}/apply", response_model=MessageResponse)
+def apply_to_job(job_id: int):
+    """Mark a job as applied — records an APPLIED event with CANDIDATE actor."""
+    db = get_connection()
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        current = row["status"]
+        if current == JobStatus.APPLIED:
+            raise HTTPException(status_code=409, detail=f"Job {job_id} is already marked applied")
+
+        transition_status(
+            db, job_id, JobStatus.APPLIED, EventType.APPLIED, Actor.CANDIDATE,
+        )
+        db.commit()
+        return MessageResponse(message=f"Job {job_id} marked as applied")
+    finally:
+        db.close()
+
+
 @router.get("/{job_id}/events", response_model=list[ApplicationEvent])
 def get_job_events(job_id: int):
     """Get a job's event timeline ordered by occurred_at."""
