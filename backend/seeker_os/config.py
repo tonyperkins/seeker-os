@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -579,3 +580,42 @@ class Settings:
             if line and not line.startswith("#"):
                 companies.append(line.lower())
         return companies
+
+
+# ---------------------------------------------------------------------------
+# Cached settings access — avoids re-parsing 7 YAML files on every call
+# ---------------------------------------------------------------------------
+
+_settings_cache: Settings | None = None
+_settings_lock = threading.Lock()
+
+
+def get_settings(config_dir: Path | None = None) -> Settings:
+    """Return a cached Settings instance.
+
+    The first call constructs Settings (loads all YAML from disk). Subsequent
+    calls return the same instance. Thread-safe.
+
+    Use invalidate_settings_cache() after writing config files (e.g. via
+    config_writer) so the next call re-reads from disk.
+    """
+    global _settings_cache
+    if _settings_cache is not None and config_dir is None:
+        return _settings_cache
+    with _settings_lock:
+        if _settings_cache is not None and config_dir is None:
+            return _settings_cache
+        _settings_cache = Settings(config_dir=config_dir)
+        return _settings_cache
+
+
+def invalidate_settings_cache() -> None:
+    """Clear the cached Settings instance.
+
+    Call this after writing to YAML config files (e.g. via config_writer,
+    api/models.py provider updates, api/company_research_settings.py key
+    rotation) so the next get_settings() call re-reads from disk.
+    """
+    global _settings_cache
+    with _settings_lock:
+        _settings_cache = None

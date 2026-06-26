@@ -14,6 +14,7 @@ from seeker_os.database import get_connection, json_decode, json_encode
 from seeker_os.events import (
     record_event, transition_status, EventType, Actor,
     JobStatus, EngagedEventType, compute_stale_flag,
+    STALE_ACTIVITY_EVENTS,
 )
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -22,15 +23,64 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 def _get_stale_after_days() -> int:
     """Get stale_after_days from lifecycle config (default 14)."""
     try:
-        from seeker_os.config import Settings
-        return Settings().lifecycle.stale_after_days
+        from seeker_os.config import get_settings
+        return get_settings().lifecycle.stale_after_days
     except Exception:
         return 14
 
 
-def _compute_stale(db, row) -> tuple[bool, int | None]:
+def _compute_stale(db, row, stale_after_days: int | None = None) -> tuple[bool, int | None]:
     """Compute stale flag for a job row."""
-    return compute_stale_flag(db, row["id"], row["status"], _get_stale_after_days())
+    if stale_after_days is None:
+        stale_after_days = _get_stale_after_days()
+    return compute_stale_flag(db, row["id"], row["status"], stale_after_days)
+
+
+def _batch_compute_stale(
+    db, rows, stale_after_days: int,
+) -> dict[int, tuple[bool, int | None]]:
+    """Batch-compute stale flags for a set of job rows in ONE query.
+
+    Returns {job_id: (is_stale, days_since)} for applied/engaged jobs only.
+    Jobs in other statuses are excluded (their stale flag is always (False, None)).
+    """
+    from datetime import datetime as _dt, timezone as _tz
+
+    ae_ids = [
+        r["id"] for r in rows
+        if r["status"] in (JobStatus.APPLIED, JobStatus.ENGAGED)
+    ]
+    if not ae_ids:
+        return {}
+
+    placeholders = ",".join("?" * len(ae_ids))
+    event_ph = ",".join("?" * len(STALE_ACTIVITY_EVENTS))
+    stale_rows = db.execute(
+        f"SELECT job_id, MAX(occurred_at) as last_activity "
+        f"FROM application_events "
+        f"WHERE job_id IN ({placeholders}) AND event_type IN ({event_ph}) "
+        f"GROUP BY job_id",
+        (*ae_ids, *STALE_ACTIVITY_EVENTS),
+    ).fetchall()
+
+    now = _dt.now(_tz.utc)
+    result: dict[int, tuple[bool, int | None]] = {}
+    for sr in stale_rows:
+        try:
+            last_dt = _dt.fromisoformat(sr["last_activity"])
+        except (ValueError, TypeError):
+            continue
+        delta = now - last_dt
+        days_since = delta.days
+        is_stale = days_since > stale_after_days
+        result[sr["job_id"]] = (is_stale, days_since)
+
+    # Jobs in applied/engaged with no activity events → not stale (no activity to be stale about)
+    for jid in ae_ids:
+        if jid not in result:
+            result[jid] = (False, None)
+
+    return result
 
 
 def _parse_iso(s: str) -> datetime | None:
@@ -118,11 +168,16 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
     )
 
 
-def _row_to_summary(row, db=None) -> JobSummary:
+def _row_to_summary(
+    row, db=None, *, stale_after_days: int | None = None,
+    stale_result: tuple[bool, int | None] | None = None,
+) -> JobSummary:
     is_stale = False
     days_since = None
-    if db is not None:
-        is_stale, days_since = _compute_stale(db, row)
+    if stale_result is not None:
+        is_stale, days_since = stale_result
+    elif db is not None:
+        is_stale, days_since = _compute_stale(db, row, stale_after_days=stale_after_days)
     return JobSummary(
         id=row["id"],
         title=row["title"] or "",
@@ -267,7 +322,18 @@ def list_jobs(
         params.extend([limit, offset])
 
         rows = db.execute(query, params).fetchall()
-        return [_row_to_summary(r, db=db) for r in rows]
+
+        # Batch stale-flag computation: one aggregate query for all applied/engaged jobs
+        stale_after_days = _get_stale_after_days()
+        stale_map = _batch_compute_stale(db, rows, stale_after_days)
+
+        return [
+            _row_to_summary(
+                r, db=db, stale_after_days=stale_after_days,
+                stale_result=stale_map.get(r["id"]),
+            )
+            for r in rows
+        ]
     finally:
         db.close()
 
