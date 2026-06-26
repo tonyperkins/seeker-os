@@ -14,6 +14,7 @@ TRACEABILITY APPLIES TO ALL PROSE, NOT JUST SKILLS — these are the most common
 9. NEVER add positioning platitudes or self-characterizations that are not substantiated by the master (e.g. "high bar for quality", "passionate about", "world-class", "proven track record", "results-driven", "deep expertise"). A claim about your character or standards is still a claim and must be traceable.
 10. PRESERVE THE JOB TITLE / HEADLINE from the master resume VERBATIM. Do not change "Senior" to "Staff", do not swap "DevOps & SRE" for "Infrastructure", do not re-style the headline to match the JD's title. The headline is a factual claim about your level and identity — copy it exactly from the master. If the master's headline lists a level (e.g. "Senior / Principal"), keep that level.
 11. When in doubt about whether a phrase is supported, leave it out. The traceability judge treats absence of evidence as evidence of absence — anything not grounded in the master will be rejected, including soft/qualitative claims.
+12. COMPETENCY CATEGORY LABELS are claims too, not just the skills under them. You may reorder categories and reorder skills within a category for relevance, but you must NOT rename a category label to mirror the JD's terminology. For example, if the master says "Security", do NOT rename it to "Security & DevSecOps" to match the JD. Use the master's category labels verbatim. If the JD uses a different term, the category heading stays as the master wrote it — the skills under it speak for themselves.
 
 OUTPUT FORMAT:
 - Markdown format
