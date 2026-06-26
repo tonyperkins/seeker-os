@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Building2,
   Loader2,
@@ -21,6 +21,8 @@ import {
   Database,
   Sparkles,
   CheckCircle,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -139,6 +141,83 @@ function ResearchProgress({ done }: { done: boolean }) {
   );
 }
 
+function formatResearchText(r: CompanyResearchResult): string {
+  const lines: string[] = [];
+  if (r.summary) {
+    lines.push(r.summary);
+    lines.push(`Confidence: ${Math.round(r.overall_confidence * 100)}%`);
+  }
+  if (r.wikipedia) {
+    lines.push(`\nAbout: ${r.wikipedia.extract}`);
+  }
+  if (r.funding) {
+    lines.push("\nFunding & Stage:");
+    if (r.funding.stage) lines.push(`  Stage: ${r.funding.stage}`);
+    if (r.funding.public) lines.push(`  Public: Yes`);
+    if (r.funding.founded) lines.push(`  Founded: ${r.funding.founded}`);
+    if (r.funding.hq) lines.push(`  HQ: ${r.funding.hq}`);
+    if (r.funding.total_raised_usd != null) lines.push(`  Total raised: $${(r.funding.total_raised_usd / 1e6).toFixed(0)}M`);
+    if (r.funding.valuation_usd != null) lines.push(`  Valuation: $${(r.funding.valuation_usd / 1e6).toFixed(0)}M`);
+    if (r.funding.headcount != null) lines.push(`  Headcount: ${r.funding.headcount.toLocaleString()}`);
+    if (r.funding.headcount_trend) lines.push(`  Trend: ${r.funding.headcount_trend}`);
+    if (r.funding.financial_health) lines.push(`  Health: ${r.funding.financial_health}`);
+    if (r.funding.layoffs.length > 0) {
+      lines.push("  Layoffs:");
+      r.funding.layoffs.forEach(l => {
+        let s = `    ${l.date || ""}`;
+        if (l.pct != null) s += ` (${l.pct}%)`;
+        if (l.count != null) s += ` · ${l.count} employees`;
+        lines.push(s);
+      });
+    }
+  }
+  if (r.sentiment) {
+    lines.push("\nEmployee Sentiment:");
+    if (r.sentiment.overall_rating_estimate != null) lines.push(`  Rating: ${r.sentiment.overall_rating_estimate.toFixed(1)} / ${r.sentiment.rating_scale}`);
+    if (r.sentiment.ceo_approval_pct != null) lines.push(`  CEO approval: ${r.sentiment.ceo_approval_pct.toFixed(0)}%`);
+    if (r.sentiment.recommend_pct != null) lines.push(`  Recommend: ${r.sentiment.recommend_pct.toFixed(0)}%`);
+    if (r.sentiment.positives.length > 0) {
+      lines.push("  Positives:");
+      r.sentiment.positives.forEach(t => lines.push(`    + ${t.theme} (${t.frequency})${t.paraphrase ? `: ${t.paraphrase}` : ""}`));
+    }
+    if (r.sentiment.negatives.length > 0) {
+      lines.push("  Negatives:");
+      r.sentiment.negatives.forEach(t => lines.push(`    - ${t.theme} (${t.frequency})${t.paraphrase ? `: ${t.paraphrase}` : ""}`));
+    }
+  }
+  if (r.fit) {
+    lines.push("\nFit Signals:");
+    if (r.fit.remote_policy) lines.push(`  Remote: ${r.fit.remote_policy}`);
+    if (r.fit.size_bucket) lines.push(`  Size: ${r.fit.size_bucket}`);
+    if (r.fit.ic_vs_mgmt_culture) lines.push(`  Culture: ${r.fit.ic_vs_mgmt_culture}`);
+    if (r.fit.comp_band) lines.push(`  Comp: ${r.fit.comp_band}`);
+    if (r.fit.remote_walkback) lines.push(`  Walkback: ${r.fit.remote_walkback}`);
+  }
+  if (r.verdict_flags.green.length > 0) lines.push(`\nGreen flags: ${r.verdict_flags.green.join(", ")}`);
+  if (r.verdict_flags.red.length > 0) lines.push(`Red flags: ${r.verdict_flags.red.join(", ")}`);
+  if (r.verdict_flags.watch.length > 0) lines.push(`Watch: ${r.verdict_flags.watch.join(", ")}`);
+  return lines.join("\n");
+}
+
+function CopyResearchButton({ data }: { data: CompanyResearchResult }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(formatResearchText(data)).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+    >
+      {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+    </Button>
+  );
+}
+
 export function CompanyResearch({ jobId }: { jobId: number }) {
   const [data, setData] = useState<CompanyResearchResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,7 +245,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
     }
   }
 
-  async function runResearch() {
+  const runResearch = useCallback(async () => {
     setRunning(true);
     setResearchDone(false);
     setError(null);
@@ -186,11 +265,19 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
       setRunning(false);
       setResearchDone(false);
     }
-  }
+  }, [jobId, data]);
 
   useEffect(() => {
     loadResearch();
   }, [jobId]);
+
+  useEffect(() => {
+    function onRunAll() {
+      runResearch();
+    }
+    window.addEventListener("run-all-triggered", onRunAll);
+    return () => window.removeEventListener("run-all-triggered", onRunAll);
+  }, [runResearch]);
 
   return (
     <CollapsibleCard
@@ -202,19 +289,24 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
           : "Funding, sentiment, and fit analysis"
       }
       action={
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={running}
-          onClick={runResearch}
-        >
-          {running ? (
-            <Loader2 className="animate-spin" />
-          ) : (
-            <RefreshCw />
+        <div className="flex items-center gap-1">
+          {data && (
+            <CopyResearchButton data={data} />
           )}
-          {data ? "Refresh" : "Research"}
-        </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={running}
+            onClick={runResearch}
+          >
+            {running ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <RefreshCw />
+            )}
+            {data ? "Refresh" : "Research"}
+          </Button>
+        </div>
       }
     >
         {loading && (

@@ -191,7 +191,7 @@ def analyze_job(
     job_id: int,
     task: str = "jd_analysis",
     temperature: float = 0.3,
-    max_tokens: int | None = 4096,
+    max_tokens: int | None = None,
 ) -> dict:
     """Run JD analysis for a specific job.
 
@@ -200,7 +200,7 @@ def analyze_job(
         job_id: Database job ID
         task: LLM task name (determines model routing)
         temperature: LLM temperature (low for analytical consistency)
-        max_tokens: Max output tokens
+        max_tokens: Max output tokens (None = resolve from config/defaults)
 
     Returns:
         Dict with the full analysis result and LLM metadata.
@@ -244,13 +244,24 @@ def analyze_job(
 
     # 4. Call LLM
     router = ModelRouter(settings)
-    response = router.generate(
-        task=task,
-        system_prompt=SYSTEM_PROMPT,
-        user_prompt=user_prompt,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+    from seeker_os.llm.models import TruncationError
+    try:
+        response = router.generate(
+            task=task,
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    except TruncationError as e:
+        db.close()
+        raise TruncationError(
+            task=e.task,
+            model=e.model,
+            requested_max_tokens=e.requested_max_tokens,
+            output_tokens=e.output_tokens,
+            stop_reason=e.stop_reason,
+        ) from e
 
     # 5. Parse JSON response
     text = _strip_code_fences(response.text)
@@ -282,15 +293,32 @@ def analyze_job(
     )
     analysis_id = cursor.lastrowid
 
-    # Compute and store analysis_delta on the jobs table
+    # Compute and store verdict + net_score on the jobs table
     verdict = data.get("verdict", "")
-    verdict_weights = (
-        settings.scoring.verdict_weights if settings.scoring else {}
+    verdict_caps = (
+        settings.scoring.verdict_caps if settings.scoring else {}
     )
-    analysis_delta = verdict_weights.get(verdict, 0.0)
+    # Fetch existing score + research_delta to compute net
+    job_row = db.execute(
+        "SELECT score, research_delta FROM jobs WHERE id = ?", (job_id,)
+    ).fetchone()
+    base_score = float(job_row["score"]) if job_row and job_row["score"] is not None else 0.0
+    research_delta = float(job_row["research_delta"] or 0.0) if job_row else 0.0
+    max_score = float(settings.scoring.max_score) if settings.scoring else 10.0
+    min_score = float(settings.scoring.min_score) if settings.scoring else 0.0
+
+    from seeker_os.scoring.net_score import compute_net_score
+    net = compute_net_score(
+        base_score=base_score,
+        research_delta=research_delta,
+        analysis_verdict=verdict or None,
+        verdict_caps=verdict_caps,
+        max_score=max_score,
+        min_score=min_score,
+    )
     db.execute(
-        "UPDATE jobs SET analysis_verdict = ?, analysis_delta = ? WHERE id = ?",
-        (verdict, analysis_delta, job_id),
+        "UPDATE jobs SET analysis_verdict = ?, analysis_delta = 0.0, net_score = ? WHERE id = ?",
+        (verdict, net, job_id),
     )
 
     db.commit()

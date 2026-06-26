@@ -98,6 +98,34 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
         </div>
       )}
       <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          disabled={busy !== null || currentStatus === "reviewing"}
+          onClick={() => doAction("reviewing", () => api.jobs.update(jobId, { status: "reviewing" }))}
+        >
+          {busy === "reviewing" ? <Loader2 className="animate-spin" /> : <Eye />}
+          Mark Reviewing
+        </Button>
+
+        <Button
+          variant="outline"
+          disabled={busy !== null || currentStatus === "interested"}
+          onClick={() => doAction("interested", () => api.jobs.update(jobId, { status: "interested" }))}
+        >
+          {busy === "interested" ? <Loader2 className="animate-spin" /> : <Star />}
+          Mark Interested
+        </Button>
+
+        {/* Skip — removes from active queue */}
+        <Button
+          variant="outline"
+          disabled={busy !== null}
+          onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
+        >
+          {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
+          Skip
+        </Button>
+
         {/* Reject with reason dialog */}
         <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
           <DialogTrigger
@@ -126,11 +154,11 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
                     setRejectReason(e.target.value);
                     setRejectDetails("");
                   }}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                  className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                 >
-                  <option value="">Select a reason…</option>
+                  <option value="" className="bg-background text-foreground">Select a reason…</option>
                   {REJECT_REASONS.map((r) => (
-                    <option key={r} value={r}>
+                    <option key={r} value={r} className="bg-background text-foreground">
                       {r}
                     </option>
                   ))}
@@ -178,34 +206,6 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* Skip — removes from active queue */}
-        <Button
-          variant="outline"
-          disabled={busy !== null}
-          onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
-        >
-          {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
-          Skip
-        </Button>
-
-        <Button
-          variant="outline"
-          disabled={busy !== null || currentStatus === "reviewing"}
-          onClick={() => doAction("reviewing", () => api.jobs.update(jobId, { status: "reviewing" }))}
-        >
-          {busy === "reviewing" ? <Loader2 className="animate-spin" /> : <Eye />}
-          Mark Reviewing
-        </Button>
-
-        <Button
-          variant="outline"
-          disabled={busy !== null || currentStatus === "interested"}
-          onClick={() => doAction("interested", () => api.jobs.update(jobId, { status: "interested" }))}
-        >
-          {busy === "interested" ? <Loader2 className="animate-spin" /> : <Star />}
-          Mark Interested
-        </Button>
 
         {currentStatus !== "ready" && (
           <Button

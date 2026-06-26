@@ -12,8 +12,8 @@ from __future__ import annotations
 import logging
 import os
 
-from seeker_os.config import Settings, ProviderConfig, ProvidersConfig
-from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth
+from seeker_os.config import Settings, ProviderConfig, ProvidersConfig, ProviderModel
+from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth, TruncationError
 from seeker_os.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -179,6 +179,99 @@ class ModelRouter:
         )
         return "moderate"
 
+    # --- Per-task max_tokens defaults (FIX 3) ---
+
+    # These are generous defaults used when the task is not explicitly configured
+    # in providers.yml. They can be overridden per-task via config.
+    _TASK_MAX_TOKENS_DEFAULTS: dict[str, int] = {
+        "jd_analysis": 4096,
+        "resume_generation_standard": 16000,
+        "resume_generation_high_value": 16000,
+        "cover_letter_generation": 4000,
+        "application_answer_generation": 2000,
+        "application_answer_critique": 2000,
+        "accuracy_validation": 16000,
+        "metadata_extraction": 1000,
+        "resume_parsing": 2000,
+        "company_dossier_generation": 16000,
+        "onboarding_interview": 4096,
+    }
+
+    # Fallback for tasks not in the defaults table
+    _DEFAULT_MAX_TOKENS = 4096
+
+    def get_task_max_tokens(self, task: str) -> int:
+        """Resolve the max_tokens for a task from config, falling back to defaults.
+
+        Priority:
+        1. tasks[task].max_tokens (if set in providers.yml)
+        2. _TASK_MAX_TOKENS_DEFAULTS[task]
+        3. _DEFAULT_MAX_TOKENS
+        """
+        config = self.settings.providers
+        if config:
+            task_config = config.tasks.get(task)
+            if task_config and task_config.max_tokens is not None:
+                return task_config.max_tokens
+        return self._TASK_MAX_TOKENS_DEFAULTS.get(task, self._DEFAULT_MAX_TOKENS)
+
+    # --- Model max_output ceiling enforcement (FIX 2) ---
+
+    def _get_model_max_output(self, provider_id: str, model_id: str) -> int | None:
+        """Look up a model's max_output from the provider config."""
+        config = self.settings.providers
+        if not config:
+            return None
+        pc = config.providers
+        for p in pc:
+            if p.id != provider_id:
+                continue
+            for m in p.models:
+                if m.id == model_id:
+                    return m.max_output
+            break
+        return None
+
+    def _enforce_max_output_ceiling(
+        self,
+        task: str,
+        provider_id: str,
+        model_id: str,
+        max_tokens: int | None,
+        explicitly_requested: bool = True,
+    ) -> int | None:
+        """Cap max_tokens at the model's max_output if known.
+
+        If max_tokens exceeds the model's max_output:
+        - When explicitly_requested=True: raise a clear error.
+        - When explicitly_requested=False (resolved from defaults): cap silently.
+        If max_tokens is None, return the model's max_output (or None if unknown).
+        """
+        model_max = self._get_model_max_output(provider_id, model_id)
+        if model_max is None:
+            # Unknown ceiling — pass through as-is
+            return max_tokens
+
+        if max_tokens is None:
+            # Use the model's max_output as the limit
+            return model_max
+
+        if max_tokens > model_max:
+            if explicitly_requested:
+                raise ValueError(
+                    f"Task '{task}' requests max_tokens={max_tokens}, but routed model "
+                    f"'{model_id}' (provider '{provider_id}') caps at max_output={model_max}. "
+                    f"Lower the request in config or route to a higher-capacity model."
+                )
+            # Resolved from defaults — cap silently
+            logger.warning(
+                "Task '%s' default max_tokens=%d exceeds model '%s' max_output=%d — capping",
+                task, max_tokens, model_id, model_max,
+            )
+            return model_max
+
+        return max_tokens
+
     def generate(
         self,
         task: str,
@@ -187,8 +280,29 @@ class ModelRouter:
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ) -> LLMResponse:
-        """Generate a response for a given task."""
+        """Generate a response for a given task.
+
+        If max_tokens is None, it is resolved from per-task config/defaults.
+        Before the call, the requested max_tokens is checked against the routed
+        model's max_output ceiling — raises ValueError if explicitly exceeded,
+        caps silently if resolved from defaults.
+        """
         provider, model = self.resolve(task)
+
+        # Track whether max_tokens was explicitly provided by the caller
+        explicitly_requested = max_tokens is not None
+
+        # Resolve max_tokens from config if not explicitly provided
+        if max_tokens is None:
+            max_tokens = self.get_task_max_tokens(task)
+
+        # Enforce model max_output ceiling (FIX 2)
+        provider_id = provider.id
+        max_tokens = self._enforce_max_output_ceiling(
+            task, provider_id, model, max_tokens,
+            explicitly_requested=explicitly_requested,
+        )
+
         request = LLMRequest(
             system_prompt=system_prompt,
             user_prompt=user_prompt,

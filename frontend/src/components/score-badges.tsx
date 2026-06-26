@@ -23,12 +23,16 @@ export function ScoreBadges({ initialJob }: { initialJob: JobDetail }) {
   const baseScore = job.score;
   const researchDelta = job.research_delta;
   const hasResearch = job.research_adjusted_score != null;
-  const analysisDelta = job.analysis_delta;
   const hasAnalysis = job.analysis_verdict != null;
 
-  const netScore = baseScore != null
-    ? baseScore + researchDelta + analysisDelta
-    : null;
+  // Use backend-computed net_score (verdict-capped composite).
+  // Fallback to base + research when net_score hasn't been computed yet
+  // (e.g. un-analyzed job, or pre-migration DB row).
+  const netScore = job.net_score != null
+    ? job.net_score
+    : baseScore != null
+      ? Math.max(0, Math.min(10, baseScore + researchDelta))
+      : null;
 
   function deltaColor(delta: number) {
     if (delta < 0) return "text-amber-600";
@@ -41,7 +45,7 @@ export function ScoreBadges({ initialJob }: { initialJob: JobDetail }) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 items-end">
       <div className="flex items-center gap-2">
         <Badge variant="outline">{job.status}</Badge>
         {netScore != null && (
@@ -50,7 +54,7 @@ export function ScoreBadges({ initialJob }: { initialJob: JobDetail }) {
           </Badge>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2 w-full">
         {/* Base Score */}
         <Card className="py-3">
           <CardContent className="flex flex-col items-center gap-0.5 px-3">
@@ -75,16 +79,19 @@ export function ScoreBadges({ initialJob }: { initialJob: JobDetail }) {
           </CardContent>
         </Card>
 
-        {/* AI Analysis Modifier */}
+        {/* AI Analysis Verdict (caps the composite score) */}
         <Card className="py-3">
           <CardContent className="flex flex-col items-center gap-0.5 px-3">
-            <span className="text-xs text-muted-foreground">AI Analysis</span>
+            <span className="text-xs text-muted-foreground">AI Verdict</span>
             {hasAnalysis ? (
               <>
-                <span className={`text-lg font-bold ${deltaColor(analysisDelta)}`}>
-                  {deltaStr(analysisDelta)}
+                <span className={`text-lg font-bold ${
+                  job.analysis_verdict === "APPLY" ? "text-emerald-600"
+                  : job.analysis_verdict === "SKIP" ? "text-amber-600"
+                  : "text-muted-foreground"
+                }`}>
+                  {job.analysis_verdict}
                 </span>
-                <span className="text-xs text-muted-foreground">{job.analysis_verdict}</span>
               </>
             ) : (
               <span className="text-lg font-bold text-muted-foreground">—</span>

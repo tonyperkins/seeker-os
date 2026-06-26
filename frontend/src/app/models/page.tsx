@@ -444,22 +444,22 @@ function TierTaskEditor({
                       <select
                         value={val.provider}
                         onChange={(e) => setTierValue(t.tier, "provider", e.target.value)}
-                        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+                        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
                       >
                         {providers.map((p) => (
-                          <option key={p.id} value={p.id}>{p.id}</option>
+                          <option key={p.id} value={p.id} className="bg-background text-foreground">{p.id}</option>
                         ))}
                       </select>
                       <select
                         value={val.model}
                         onChange={(e) => setTierValue(t.tier, "model", e.target.value)}
-                        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+                        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
                       >
                         {models.length === 0 ? (
-                          <option value="">(no models)</option>
+                          <option value="" className="bg-background text-foreground">(no models)</option>
                         ) : (
                           models.map((m) => (
-                            <option key={m.id} value={m.id}>{m.id}</option>
+                            <option key={m.id} value={m.id} className="bg-background text-foreground">{m.id}</option>
                           ))
                         )}
                       </select>
@@ -564,11 +564,11 @@ function TaskRow({
         <select
           value={tier}
           onChange={(e) => setTier(e.target.value)}
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
         >
-          <option value="heavy">heavy</option>
-          <option value="moderate">moderate</option>
-          <option value="light">light</option>
+          <option value="heavy" className="bg-background text-foreground">heavy</option>
+          <option value="moderate" className="bg-background text-foreground">moderate</option>
+          <option value="light" className="bg-background text-foreground">light</option>
         </select>
         <Badge variant="outline" className={cn("border", tierBadgeClass(tier))}>
           {tier}
@@ -594,22 +594,22 @@ function TaskRow({
                 setModel(newModels[0].id);
               }
             }}
-            className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
           >
             {providers.map((p) => (
-              <option key={p.id} value={p.id}>{p.id}</option>
+              <option key={p.id} value={p.id} className="bg-background text-foreground">{p.id}</option>
             ))}
           </select>
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
           >
             {models.length === 0 ? (
-              <option value="">(no models)</option>
+              <option value="" className="bg-background text-foreground">(no models)</option>
             ) : (
               models.map((m) => (
-                <option key={m.id} value={m.id}>{m.id}</option>
+                <option key={m.id} value={m.id} className="bg-background text-foreground">{m.id}</option>
               ))
             )}
           </select>

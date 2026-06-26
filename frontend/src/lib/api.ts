@@ -101,6 +101,7 @@ export interface JobDetail extends JobSummary {
   research_delta: number;
   analysis_verdict: string | null;
   analysis_delta: number;
+  net_score: number | null;
   filter_warnings: string[];
   overridden_at: string | null;
   override_note: string | null;
@@ -122,12 +123,14 @@ export interface JobCreateRequest {
   comp_currency?: string;
   company_homepage?: string;
   jd_text?: string;
+  force?: boolean;
 }
 
 export interface JobCreateResponse {
-  status: "created" | "already_exists" | "fetch_failed" | "likely_duplicate";
+  status: "created" | "already_exists" | "fetch_failed" | "possible_duplicate" | "likely_duplicate";
   job: JobDetail | null;
   existing_job_id: number | null;
+  existing_summary: string | null;
   fetch_error: string | null;
   filter_warnings: string[];
 }
@@ -168,6 +171,13 @@ export interface PipelineProgressEvent {
   tier4_rejected: number;
   tier4_hard_rejected: number;
   tier5_ready: number;
+}
+
+export interface ResumeProgressEvent {
+  step: string;
+  step_label: string;
+  status: "started" | "in_progress" | "completed";
+  detail: string;
 }
 
 export interface PipelineRunRecord {
@@ -519,6 +529,16 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ job_id: jobId, task: task || "resume_generation_standard" }),
       }),
+    generateStream: (jobId: number, task?: string) => {
+      const controller = new AbortController();
+      const response = fetch(`${API_BASE}/api/resumes/generate/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, task: task || "resume_generation_standard" }),
+        signal: controller.signal,
+      });
+      return { response, controller };
+    },
     validate: (id: number) =>
       fetchAPI<Record<string, unknown>>(`/api/resumes/${id}/validate`, { method: "POST" }),
     pdfUrl: (id: number) => `${API_BASE}/api/resumes/${id}/pdf`,

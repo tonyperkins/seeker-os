@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from openai import OpenAI
 
-from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth
+from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth, TruncationError
 
 
 class OpenAICompatProvider:
@@ -61,14 +61,28 @@ class OpenAICompatProvider:
         latency = int((time.monotonic() - start) * 1000)
 
         text = ""
-        if response.choices and response.choices[0].message.content:
-            text = response.choices[0].message.content
+        finish_reason = ""
+        if response.choices:
+            choice = response.choices[0]
+            if choice.message.content:
+                text = choice.message.content
+            finish_reason = choice.finish_reason or ""
 
         input_tokens = 0
         output_tokens = 0
         if response.usage:
             input_tokens = response.usage.prompt_tokens or 0
             output_tokens = response.usage.completion_tokens or 0
+
+        # Detect truncation: finish_reason "length" means the model hit max_tokens
+        if finish_reason in ("length", "max_tokens"):
+            raise TruncationError(
+                task=request.task,
+                model=response.model or request.model,
+                requested_max_tokens=request.max_tokens,
+                output_tokens=output_tokens,
+                stop_reason=finish_reason,
+            )
 
         return LLMResponse(
             text=text,
@@ -78,6 +92,7 @@ class OpenAICompatProvider:
             output_tokens=output_tokens,
             latency_ms=latency,
             task=request.task,
+            stop_reason=finish_reason,
         )
 
     def list_models(self) -> list[ModelInfo]:

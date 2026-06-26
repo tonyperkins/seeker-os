@@ -157,17 +157,19 @@ class TestScoring:
         # base 0 - 3.0 (relocation) - 3.0 (comp_below) = -6 → clamped to 0
         assert result.score >= 0
 
-    def test_verdict_weights_loaded_from_config(self):
-        """verdict_weights dict is populated from scoring_rubric.yml."""
+    def test_verdict_caps_loaded_from_config(self):
+        """verdict_caps dict is populated from scoring_rubric.yml."""
         from seeker_os.config import Settings
         settings = Settings()
-        if settings.scoring and settings.scoring.verdict_weights:
-            weights = settings.scoring.verdict_weights
-            assert "APPLY" in weights
-            assert "SKIP" in weights
-            assert weights["APPLY"] > weights["SKIP"]
+        if settings.scoring and settings.scoring.verdict_caps:
+            caps = settings.scoring.verdict_caps
+            assert "APPLY" in caps
+            assert "SKIP" in caps
+            # APPLY has no cap (null), SKIP has a low cap
+            assert caps["APPLY"] is None
+            assert caps["SKIP"] is not None
 
-    def test_verdict_weights_default_empty(self):
-        """ScoringConfig defaults verdict_weights to empty dict."""
+    def test_verdict_caps_default_empty(self):
+        """ScoringConfig defaults verdict_caps to empty dict."""
         rubric = _make_rubric()
-        assert rubric.verdict_weights == {}
+        assert rubric.verdict_caps == {}

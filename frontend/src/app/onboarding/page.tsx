@@ -816,23 +816,23 @@ function TierSelect({
         value={provider}
         onChange={(e) => handleProviderChange(e.target.value)}
         disabled={saving}
-        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono flex-1"
+        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground flex-1"
       >
         {availableProviders.map((p) => (
-          <option key={p.id} value={p.id}>{p.id}</option>
+          <option key={p.id} value={p.id} className="bg-background text-foreground">{p.id}</option>
         ))}
       </select>
       <select
         value={model}
         onChange={(e) => handleModelChange(e.target.value)}
         disabled={saving || models.length === 0}
-        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono flex-1"
+        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground flex-1"
       >
         {models.length === 0 ? (
-          <option value="">(no models)</option>
+          <option value="" className="bg-background text-foreground">(no models)</option>
         ) : (
           models.map((m) => (
-            <option key={m.id} value={m.id}>{m.id}</option>
+            <option key={m.id} value={m.id} className="bg-background text-foreground">{m.id}</option>
           ))
         )}
       </select>

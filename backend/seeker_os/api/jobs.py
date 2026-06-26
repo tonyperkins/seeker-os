@@ -151,17 +151,35 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
         min_score=settings.scoring.min_score,
     )
 
+    # Recompute net_score since research_delta changed
+    from seeker_os.scoring.net_score import compute_net_score
+    job_row = db.execute(
+        "SELECT analysis_verdict FROM jobs WHERE id = ?", (job_id,)
+    ).fetchone()
+    analysis_verdict = job_row["analysis_verdict"] if job_row else None
+    verdict_caps = settings.scoring.verdict_caps if settings.scoring else {}
+    net = compute_net_score(
+        base_score=float(job["score"]),
+        research_delta=result.research_delta,
+        analysis_verdict=analysis_verdict,
+        verdict_caps=verdict_caps,
+        max_score=settings.scoring.max_score,
+        min_score=settings.scoring.min_score,
+    )
+
     db.execute(
         """UPDATE jobs
            SET research_adjusted_score = ?,
                research_delta = ?,
                research_breakdown = ?,
+               net_score = ?,
                updated_at = ?
            WHERE id = ?""",
         (
             result.adjusted_score,
             result.research_delta,
             json_encode([item.model_dump() for item in result.breakdown]),
+            net,
             datetime.now(timezone.utc).isoformat(),
             job_id,
         ),
@@ -273,6 +291,7 @@ def _row_to_detail(row, db=None) -> JobDetail:
         research_delta=row["research_delta"] if "research_delta" in row.keys() else 0.0,
         analysis_verdict=row["analysis_verdict"] if "analysis_verdict" in row.keys() else None,
         analysis_delta=row["analysis_delta"] if "analysis_delta" in row.keys() else 0.0,
+        net_score=row["net_score"] if "net_score" in row.keys() else None,
         filter_warnings=json_decode(row["filter_warnings"]) if "filter_warnings" in row.keys() and row["filter_warnings"] else [],
         overridden_at=row["overridden_at"] if "overridden_at" in row.keys() else None,
         override_note=row["override_note"] if "override_note" in row.keys() else None,
@@ -346,8 +365,9 @@ def create_job(body: JobCreate):
     1. Compute url_hash, check dedup layer 1 (url_hash). If match → already_exists.
     2. If jd_text provided (paste-JD path), use it directly. Otherwise attempt
        fetch_jd from the URL. If fetch fails → return fetch_failed (no insert).
-    3. After JD is available, check content hash dedup (layer 3). If match →
-       warn with likely_duplicate but still insert (user can confirm).
+    3. After JD is available, check content hash dedup (layer 3). If match and
+       force=False → return possible_duplicate (NO insert). If force=True →
+       proceed with insert (likely_duplicate warning).
     4. Insert complete job with JD, run hard filters as informational metadata
        (manual jobs bypass filter rejection — DECISION 1), run scoring, and
        apply research adjustment from cached company dossier if available.
@@ -469,11 +489,25 @@ def create_job(body: JobCreate):
                     )
                 jd_text = jd_result.jd_text
 
-        # Step 3: Content hash dedup check (warn, don't block)
+        # Step 3: Content hash dedup check (ask before inserting — D3)
         content_dedup = check_content_duplicate(0, jd_text, db)
         # check_content_duplicate queries by job_id != 0, which matches all existing
         likely_dup_id = None
         if content_dedup.is_duplicate:
+            if not body.force:
+                # Soft match — ask the user before inserting
+                ex_row = db.execute(
+                    "SELECT title, company FROM jobs WHERE id = ?",
+                    (content_dedup.matched_job_id,),
+                ).fetchone()
+                ex_title = ex_row["title"] if ex_row else "Unknown"
+                ex_company = ex_row["company"] if ex_row else "Unknown"
+                return JobCreateResponse(
+                    status="possible_duplicate",
+                    existing_job_id=content_dedup.matched_job_id,
+                    existing_summary=f"{ex_title} at {ex_company}",
+                )
+            # force=True — proceed with insert, flag as likely_duplicate
             likely_dup_id = content_dedup.matched_job_id
 
         # Step 4: Insert complete job

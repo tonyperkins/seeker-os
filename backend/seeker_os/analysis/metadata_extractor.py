@@ -116,10 +116,14 @@ def extract_metadata_from_jd(
             system_prompt=_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             temperature=0.0,
-            max_tokens=1000,
         )
     except Exception as e:
-        logger.warning("LLM metadata extraction failed: %s", e)
+        from seeker_os.llm.models import TruncationError as _TE
+        if isinstance(e, _TE):
+            logger.warning("LLM metadata extraction was truncated (max_tokens=%s, produced %d): %s",
+                           e.requested_max_tokens, e.output_tokens, e)
+        else:
+            logger.warning("LLM metadata extraction failed: %s", e)
         return ExtractedMetadata()
 
     text = _strip_code_fences(response.text)

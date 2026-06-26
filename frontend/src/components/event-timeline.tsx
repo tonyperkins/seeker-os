@@ -7,7 +7,6 @@ import {
   User,
   Building2,
   Cpu,
-  Plus,
   Send,
   XCircle,
   Hand,
@@ -19,18 +18,12 @@ import {
   RotateCcw,
   Clock,
 } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import {
   Dialog,
   DialogContent,
@@ -325,22 +318,17 @@ export function EventTimeline({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Event Timeline</CardTitle>
-            <CardDescription>Append-only audit trail of the application lifecycle</CardDescription>
-          </div>
-          {isStale && (
-            <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-500">
-              <Clock className="size-3" />
-              Stale ({daysSinceLastActivity}d)
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <CollapsibleCard
+      title="Event Timeline"
+      description="Append-only audit trail of the application lifecycle"
+      action={isStale ? (
+        <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-500">
+          <Clock className="size-3" />
+          Stale ({daysSinceLastActivity}d)
+        </Badge>
+      ) : undefined}
+    >
+      <div className="flex flex-col gap-4">
         {error && (
           <div className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
             {error}
@@ -677,7 +665,7 @@ export function EventTimeline({
             })
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

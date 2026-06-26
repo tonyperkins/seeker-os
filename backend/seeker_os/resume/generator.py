@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from seeker_os.config import Settings
 from seeker_os.database import get_connection, json_decode
@@ -92,12 +93,26 @@ def _load_identity_anchor_text(settings: Settings) -> str:
     return ", ".join(parts) + "."
 
 
+def _load_never_claim_text(settings: Settings) -> str:
+    """Load the never-claim list from identity_rules.yml for the prompt.
+
+    Returns empty string if no identity or no never_claim entries — the prompt
+    says nothing about never-claim in that case. No hardcoded fallback.
+    """
+    identity = settings.identity
+    if not identity or not identity.never_claim:
+        return ""
+    items = ", ".join(identity.never_claim)
+    return f"NEVER mention these technologies anywhere in the resume: {items}"
+
+
 def generate_resume(
     settings: Settings,
     job_id: int,
     task: str = "resume_generation_standard",
     temperature: float = 0.7,
-    max_tokens: int | None = 16000,
+    max_tokens: int | None = None,
+    progress_cb: Callable[[str, str, str, str], None] | None = None,
 ) -> dict:
     """Generate a tailored resume for a specific job.
 
@@ -106,12 +121,19 @@ def generate_resume(
         job_id: Database job ID
         task: LLM task name (determines model routing)
         temperature: LLM temperature
-        max_tokens: Max output tokens
+        max_tokens: Max output tokens (None = resolve from config/defaults)
+        progress_cb: Optional callback invoked as (step, step_label, status, detail)
+                     at each pipeline step. Enables SSE progress streaming.
 
     Returns:
         Dict with resume metadata and validation results.
     """
+    def _emit(step: str, label: str, status: str, detail: str = ""):
+        if progress_cb:
+            progress_cb(step, label, status, detail)
+
     # 1. Load the job from DB
+    _emit("load_job", "Loading job", "started")
     db = get_connection()
     job = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
     if not job:
@@ -122,6 +144,8 @@ def generate_resume(
     if not jd_text:
         db.close()
         raise ValueError(f"Job {job_id} has no JD fetched — run Tier 3 first")
+
+    _emit("load_job", "Loading job", "completed", f"{job['company'] or 'Unknown'} — {job['title'] or 'Unknown'}")
 
     # 2. Load master resume
     if not settings.profile or not settings.profile.resume:
@@ -149,6 +173,12 @@ def generate_resume(
 
     # 4. Call LLM (inject user instructions and channel rules into system prompt)
     system_prompt = SYSTEM_PROMPT
+
+    # Inject never-claim list from identity_rules.yml as a hard constraint
+    never_claim_text = _load_never_claim_text(settings)
+    if never_claim_text:
+        system_prompt += f"\n\n--- NEVER CLAIM ---\n{never_claim_text}\n--- END NEVER CLAIM ---\n"
+
     channel_rules = settings.channel_rules
     if channel_rules and channel_rules.resume:
         resume_channel = channel_rules.resume
@@ -164,6 +194,7 @@ def generate_resume(
     if settings.profile and settings.profile.instructions:
         system_prompt += f"\n\n--- USER INSTRUCTIONS ---\n{settings.profile.instructions}\n--- END USER INSTRUCTIONS ---\n"
     router = ModelRouter(settings)
+    _emit("llm_generation", "Generating resume with LLM", "started", f"Task: {task}")
     response = router.generate(
         task=task,
         system_prompt=system_prompt,
@@ -171,18 +202,24 @@ def generate_resume(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+    _emit("llm_generation", "Generating resume with LLM", "completed", f"{response.output_tokens} tokens in {response.latency_ms}ms")
 
     # 5. Validate accuracy (deterministic deny-list + LLM-judged traceability)
+    _emit("validation", "Running accuracy validation", "started")
     validator = AccuracyValidator(settings)
     validation = validator.validate(response.text, artifact_type="resume", master_resume=master_resume)
 
     # 5b. Run traceability check (LLM-judged claim verification)
     traceability = TraceabilityChecker(settings)
     if traceability.enabled:
+        _emit("traceability", "Verifying claim traceability", "started")
         trace_result = traceability.check(response.text, master_resume, artifact_type="resume")
         trace_result.merge_into(validation)
+        _emit("traceability", "Verifying claim traceability", "completed", f"{len(trace_result.violations)} violations")
+    _emit("validation", "Running accuracy validation", "completed", f"{'passed' if validation.passed else 'violations found'}")
 
     # 6. Save to DB
+    _emit("saving", "Saving resume", "started")
     now = datetime.now(timezone.utc).isoformat()
     output_dir = Path(settings.profile.resume.output_dir or "data/resumes").expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -222,6 +259,7 @@ def generate_resume(
     )
     db.commit()
     db.close()
+    _emit("saving", "Saving resume", "completed", f"Resume #{resume_id}")
 
     return {
         "resume_id": resume_id,

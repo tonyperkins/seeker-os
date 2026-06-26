@@ -266,7 +266,7 @@ class ScoringConfig(BaseModel):
     negative_modifiers: list[ModifierRule] = []
     freshness: FreshnessConfig = FreshnessConfig()
     research_modifiers: list[ResearchModifierConfig] = []
-    verdict_weights: dict[str, float] = {}
+    verdict_caps: dict[str, float | None] = {}
 
 
 class FilterConfig(BaseModel):
@@ -362,6 +362,7 @@ class TaskOverride(BaseModel):
     tier: str
     provider: str | None = None
     model: str | None = None
+    max_tokens: int | None = None
 
 
 class ProvidersConfig(BaseModel):

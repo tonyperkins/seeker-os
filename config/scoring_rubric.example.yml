@@ -126,11 +126,19 @@ scoring:
       confidence_threshold: 0.6
       source_section: "sentiment"
 
-  # AI analysis verdict weights — maps the JD analyzer's verdict to a
-  # score delta. Shown as a modifier card alongside the base score and
-  # research modifier.
-  verdict_weights:
-    APPLY: 2.0
-    CONDITIONAL: 1.0
-    MONITOR: 0.0
-    SKIP: -2.0
+  # AI analysis verdict caps — the verdict from the JD analyzer CAPS the
+  # composite (net) score rather than adding to it. The AI verdict is the layer
+  # that read the JD against the profile, so it sets a ceiling on how high a
+  # keyword-matched score can present.
+  #
+  # Net = min(adjusted_score, verdict_cap) where adjusted = base + research_delta
+  # APPLY → no cap (null = full adjusted score shows)
+  # CONDITIONAL → cap at 7.0 (partial-fit cannot present as a top match)
+  # MONITOR → cap at 5.0
+  # SKIP → cap at 3.0
+  # If no analysis exists, Net falls back to the research-adjusted (or base) score.
+  verdict_caps:
+    APPLY: null
+    CONDITIONAL: 7.0
+    MONITOR: 5.0
+    SKIP: 3.0

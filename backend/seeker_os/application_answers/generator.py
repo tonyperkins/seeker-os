@@ -99,7 +99,7 @@ def generate_application_answer(
     question: str,
     task: str = "application_answer_generation",
     temperature: float = 0.7,
-    max_tokens: int | None = 2000,
+    max_tokens: int | None = None,
 ) -> dict:
     """Generate a draft answer to an application question.
 
@@ -114,7 +114,7 @@ def generate_application_answer(
         question: The application question to answer
         task: LLM task name
         temperature: LLM temperature
-        max_tokens: Max output tokens
+        max_tokens: Max output tokens (None = resolve from config/defaults)
 
     Returns:
         Dict with answer metadata and validation results.
@@ -275,7 +275,7 @@ def critique_application_answer(
     user_draft: str,
     task: str = "application_answer_critique",
     temperature: float = 0.3,
-    max_tokens: int | None = 2000,
+    max_tokens: int | None = None,
 ) -> dict:
     """Critique a user-supplied draft answer (allowed even when ai_policy='forbidden').
 
@@ -288,7 +288,7 @@ def critique_application_answer(
         user_draft: The user's own draft answer
         task: LLM task name
         temperature: LLM temperature
-        max_tokens: Max output tokens
+        max_tokens: Max output tokens (None = resolve from config/defaults)
 
     Returns:
         Dict with critique feedback.

@@ -105,6 +105,9 @@ class JobDetail(BaseModel):
     analysis_verdict: str | None = None
     analysis_delta: float = 0.0
 
+    # Net score (composite: base + research_delta, capped by verdict)
+    net_score: float | None = None
+
     # Manual job metadata + override audit
     filter_warnings: list[str] = []
     overridden_at: str | None = None
@@ -137,6 +140,7 @@ class JobCreate(BaseModel):
     comp_currency: str | None = None
     company_homepage: str | None = None
     jd_text: str | None = None  # paste-JD fallback — skip fetch when provided
+    force: bool = False  # bypass soft-duplicate check (content hash match)
 
 
 class JobCreateResponse(BaseModel):
@@ -147,12 +151,16 @@ class JobCreateResponse(BaseModel):
     - 'already_exists': url_hash matched an existing job — existing_job_id set
     - 'fetch_failed': JD fetch from URL failed — no job inserted; frontend
       should prompt user to paste JD and re-submit with jd_text
-    - 'likely_duplicate': content hash matched an existing job — job was still
-      created (warning only); existing_job_id set
+    - 'possible_duplicate': content hash matched an existing job — NO insert;
+      existing_job_id and existing_summary set. Frontend should ask user to
+      confirm and re-submit with force=true to insert anyway.
+    - 'likely_duplicate': content hash matched but force=true — job was
+      inserted (warning only); existing_job_id set
     """
     status: str
     job: JobDetail | None = None
     existing_job_id: int | None = None
+    existing_summary: str | None = None
     fetch_error: str | None = None
     filter_warnings: list[str] = []
 

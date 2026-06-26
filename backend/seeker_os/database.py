@@ -337,6 +337,10 @@ MIGRATIONS: list[str | callable] = [
     CREATE INDEX IF NOT EXISTS idx_application_events_job_occurred ON application_events(job_id, occurred_at);
     CREATE INDEX IF NOT EXISTS idx_application_events_event_type ON application_events(event_type);
     """,
+    # Migration 16: Net score column (composite of base + research + verdict cap)
+    """
+    ALTER TABLE jobs ADD COLUMN net_score REAL;
+    """,
 ]
 
 

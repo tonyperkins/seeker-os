@@ -11,7 +11,7 @@ from pathlib import Path
 
 import anthropic
 
-from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth
+from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth, TruncationError
 
 # OAuth client_id used by Claude CLI / Hermes (shared PKCE flow)
 _OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
@@ -216,6 +216,18 @@ class AnthropicProvider:
         if response.content:
             text = "".join(block.text for block in response.content if hasattr(block, "text"))
 
+        stop_reason = response.stop_reason or ""
+
+        # Detect truncation: Anthropic uses "max_tokens" as the stop_reason
+        if stop_reason in ("max_tokens", "length"):
+            raise TruncationError(
+                task=request.task,
+                model=response.model,
+                requested_max_tokens=request.max_tokens,
+                output_tokens=response.usage.output_tokens,
+                stop_reason=stop_reason,
+            )
+
         return LLMResponse(
             text=text,
             model=response.model,
@@ -224,6 +236,7 @@ class AnthropicProvider:
             output_tokens=response.usage.output_tokens,
             latency_ms=latency,
             task=request.task,
+            stop_reason=stop_reason,
         )
 
     def list_models(self) -> list[ModelInfo]:
