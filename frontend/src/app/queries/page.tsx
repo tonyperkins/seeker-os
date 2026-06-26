@@ -216,12 +216,12 @@ export default function QueriesPage() {
                     id="q-commitment"
                     value={newCommitment}
                     onChange={(e) => setNewCommitment(e.target.value)}
-                    className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                    className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                   >
-                    <option value="full-time">full-time</option>
-                    <option value="part-time">part-time</option>
-                    <option value="contract">contract</option>
-                    <option value="any">any</option>
+                    <option value="full-time" className="bg-background text-foreground">full-time</option>
+                    <option value="part-time" className="bg-background text-foreground">part-time</option>
+                    <option value="contract" className="bg-background text-foreground">contract</option>
+                    <option value="any" className="bg-background text-foreground">any</option>
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -304,12 +304,12 @@ export default function QueriesPage() {
                           <select
                             value={editCommitment}
                             onChange={(e) => setEditCommitment(e.target.value)}
-                            className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs outline-none dark:bg-input/30"
+                            className="h-7 rounded-md border border-input bg-background px-1.5 text-xs text-foreground outline-none dark:bg-input/30"
                           >
-                            <option value="full-time">full-time</option>
-                            <option value="part-time">part-time</option>
-                            <option value="contract">contract</option>
-                            <option value="any">any</option>
+                            <option value="full-time" className="bg-background text-foreground">full-time</option>
+                            <option value="part-time" className="bg-background text-foreground">part-time</option>
+                            <option value="contract" className="bg-background text-foreground">contract</option>
+                            <option value="any" className="bg-background text-foreground">any</option>
                           </select>
                         ) : (
                           <span className="text-muted-foreground">{q.commitment}</span>

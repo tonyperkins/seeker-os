@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Brain,
   Loader2,
@@ -16,6 +16,8 @@ import {
   Lightbulb,
   Flag,
   Cpu,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,58 @@ const SEVERITY_COLORS: Record<string, string> = {
   blocker: "text-destructive font-semibold",
 };
 
+function formatAnalysisText(a: JobAnalysisResult): string {
+  const lines: string[] = [];
+  lines.push(`Verdict: ${a.verdict}`);
+  lines.push(`Score: ${a.weighted_score.toFixed(1)}`);
+  lines.push(`Confidence: ${Math.round(a.confidence * 100)}%`);
+  lines.push(`Summary: ${a.one_line}`);
+  if (a.hard_blockers.length > 0) {
+    lines.push("\nHard Blockers:");
+    a.hard_blockers.forEach(b => lines.push(`  - ${b.type}: ${b.detail}`));
+  }
+  if (a.named_gaps.length > 0) {
+    lines.push("\nNamed Gaps:");
+    a.named_gaps.forEach(g => lines.push(`  - ${g.area} (${g.severity}): JD requires ${g.jd_requires}, actual ${g.candidate_actual}`));
+  }
+  if (a.rubric_breakdown.length > 0) {
+    lines.push("\nRubric Breakdown:");
+    a.rubric_breakdown.forEach(d => lines.push(`  - ${d.dimension}: ${d.weighted.toFixed(1)} (${d.raw.toFixed(1)} × ${d.weight.toFixed(1)})${d.note ? ` — ${d.note}` : ""}`));
+  }
+  if (a.bonuses_applied.length > 0) lines.push(`\nBonuses: ${a.bonuses_applied.join(", ")}`);
+  if (a.penalties_applied.length > 0) lines.push(`Penalties: ${a.penalties_applied.join(", ")}`);
+  if (a.comp.note) lines.push(`\nCompensation: ${a.comp.note}`);
+  if (a.positioning.note) lines.push(`Positioning: ${a.positioning.note}`);
+  if (a.company_fit.note) lines.push(`Company Fit: ${a.company_fit.note}`);
+  if (a.tailoring.lead_with.length > 0) lines.push(`\nLead with: ${a.tailoring.lead_with.join(", ")}`);
+  if (a.tailoring.reframe_summary) lines.push(`Reframe: ${a.tailoring.reframe_summary}`);
+  if (a.tailoring.do_not_claim.length > 0) lines.push(`Do NOT claim: ${a.tailoring.do_not_claim.join(", ")}`);
+  if (a.red_flags.length > 0) {
+    lines.push("\nRed Flags:");
+    a.red_flags.forEach(f => lines.push(`  - ${f}`));
+  }
+  return lines.join("\n");
+}
+
+function CopyButtonFromData({ data }: { data: JobAnalysisResult }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(formatAnalysisText(data)).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+    >
+      {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+    </Button>
+  );
+}
+
 export function JobAnalysis({ jobId }: { jobId: number }) {
   const [data, setData] = useState<JobAnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,7 +124,7 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
     }
   }
 
-  async function runAnalysis() {
+  const runAnalysis = useCallback(async () => {
     setRunning(true);
     setError(null);
     setNotFound(false);
@@ -84,11 +138,19 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
     } finally {
       setRunning(false);
     }
-  }
+  }, [jobId]);
 
   useEffect(() => {
     loadAnalysis();
   }, [jobId]);
+
+  useEffect(() => {
+    function onRunAll() {
+      runAnalysis();
+    }
+    window.addEventListener("run-all-triggered", onRunAll);
+    return () => window.removeEventListener("run-all-triggered", onRunAll);
+  }, [runAnalysis]);
 
   const verdictStyle = data ? VERDICT_STYLES[data.verdict] || VERDICT_STYLES.SKIP : null;
 
@@ -102,19 +164,24 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
           : "JD fit analysis against your profile"
       }
       action={
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={running}
-          onClick={runAnalysis}
-        >
-          {running ? (
-            <Loader2 className="animate-spin" />
-          ) : (
-            <RefreshCw />
+        <div className="flex items-center gap-1">
+          {data && (
+            <CopyButtonFromData data={data} />
           )}
-          {data ? "Refresh" : "Analyze"}
-        </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={running}
+            onClick={runAnalysis}
+          >
+            {running ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <RefreshCw />
+            )}
+            {data ? "Refresh" : "Analyze"}
+          </Button>
+        </div>
       }
     >
         {loading && (

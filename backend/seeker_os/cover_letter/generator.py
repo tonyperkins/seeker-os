@@ -98,7 +98,7 @@ def generate_cover_letter(
     job_id: int,
     task: str = "cover_letter_generation",
     temperature: float = 0.7,
-    max_tokens: int | None = 4000,
+    max_tokens: int | None = None,
 ) -> dict:
     """Generate a tailored cover letter for a specific job.
 
@@ -112,7 +112,7 @@ def generate_cover_letter(
         job_id: Database job ID
         task: LLM task name (determines model routing)
         temperature: LLM temperature
-        max_tokens: Max output tokens
+        max_tokens: Max output tokens (None = resolve from config/defaults)
 
     Returns:
         Dict with cover letter metadata and validation results.

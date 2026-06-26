@@ -172,17 +172,35 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
         item.model_dump() for item in result.breakdown
     ])
 
+    # Recompute net_score since research_delta changed
+    from seeker_os.scoring.net_score import compute_net_score
+    job_row = db.execute(
+        "SELECT analysis_verdict FROM jobs WHERE id = ?", (job_id,)
+    ).fetchone()
+    analysis_verdict = job_row["analysis_verdict"] if job_row else None
+    verdict_caps = scoring.verdict_caps if scoring else {}
+    net = compute_net_score(
+        base_score=base_score,
+        research_delta=result.research_delta,
+        analysis_verdict=analysis_verdict,
+        verdict_caps=verdict_caps,
+        max_score=scoring.max_score if scoring else 10,
+        min_score=scoring.min_score if scoring else 0,
+    )
+
     db.execute(
         """UPDATE jobs
            SET research_adjusted_score = ?,
                research_delta = ?,
                research_breakdown = ?,
+               net_score = ?,
                updated_at = ?
            WHERE id = ?""",
         (
             result.adjusted_score,
             result.research_delta,
             breakdown_json,
+            net,
             datetime.now(timezone.utc).isoformat(),
             job_id,
         ),
@@ -194,6 +212,7 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
         "research_delta": result.research_delta,
         "research_breakdown": [item.model_dump() for item in result.breakdown],
         "research_adjustment_applied": result.applied,
+        "net_score": net,
     }
 
 

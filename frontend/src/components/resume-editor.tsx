@@ -10,6 +10,8 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Copy,
+  Check,
 } from "lucide-react";
 import {
   Card,
@@ -36,6 +38,7 @@ export function ResumeEditor({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const dirty = text !== savedText;
 
@@ -78,14 +81,29 @@ export function ResumeEditor({
               </span>
             )}
             {mode === "preview" ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setMode("edit")}
-              >
-                <Pencil className="size-3.5" />
-                Edit
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    navigator.clipboard.writeText(text).then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    });
+                  }}
+                >
+                  {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                  {copied ? "Copied!" : "Copy"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMode("edit")}
+                >
+                  <Pencil className="size-3.5" />
+                  Edit
+                </Button>
+              </div>
             ) : (
               <div className="flex items-center gap-2">
                 <Button

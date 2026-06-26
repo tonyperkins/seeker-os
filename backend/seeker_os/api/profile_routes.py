@@ -237,7 +237,6 @@ Output the JSON now:"""
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=0.3,
-            max_tokens=4000,
         )
     except Exception:
         logger.exception("LLM call failed for AI rule generation")

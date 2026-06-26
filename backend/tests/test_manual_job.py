@@ -1,5 +1,8 @@
 """Tests for manual job entry, dedup handling, filter bypass, and override audit trail."""
 
+import json
+from datetime import datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -18,7 +21,7 @@ def client():
         if manual_ids:
             id_list = [str(r["id"]) for r in manual_ids]
             id_csv = ",".join(id_list)
-            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers"]:
+            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers", "application_events"]:
                 db.execute(f"DELETE FROM {table} WHERE job_id IN ({id_csv})")
             db.execute(f"DELETE FROM jobs WHERE id IN ({id_csv})")
         db.commit()
@@ -37,7 +40,7 @@ def cleanup_after():
         if manual_ids:
             id_list = [str(r["id"]) for r in manual_ids]
             id_csv = ",".join(id_list)
-            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers"]:
+            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers", "application_events"]:
                 db.execute(f"DELETE FROM {table} WHERE job_id IN ({id_csv})")
             db.execute(f"DELETE FROM jobs WHERE id IN ({id_csv})")
         db.commit()
@@ -190,6 +193,255 @@ class TestManualJobCreate:
         assert r.status_code == 200
         for job in r.json():
             assert job["source_id"] == "manual" if "source_id" in job else True
+
+    def test_content_hash_soft_dup_no_force(self, client):
+        """Same JD content, different URL → possible_duplicate, NO insert."""
+        shared_jd = "Soft dup content HASHTEST999\n\n" + _LONG_JD
+        # First create
+        r1 = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/content-dup-original",
+            "title": "Backend Engineer",
+            "company": "ContentDupCo",
+            "location": "Remote, US",
+            "workplace_type": "Remote",
+            "jd_text": shared_jd,
+        })
+        assert r1.status_code == 200
+        assert r1.json()["status"] == "created"
+        original_id = r1.json()["job"]["id"]
+
+        # Second attempt: different URL, same JD content
+        r2 = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/content-dup-second",
+            "title": "Backend Engineer",
+            "company": "ContentDupCo",
+            "jd_text": shared_jd,
+        })
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["status"] == "possible_duplicate"
+        assert data["existing_job_id"] == original_id
+        assert data["existing_summary"] is not None
+        assert data["job"] is None  # no job created
+
+        # Verify no second row was inserted
+        db = get_connection()
+        try:
+            dup_rows = db.execute(
+                "SELECT id FROM jobs WHERE company = 'ContentDupCo'"
+            ).fetchall()
+            assert len(dup_rows) == 1, "Should be exactly 1 row — the original"
+        finally:
+            db.close()
+
+    def test_content_hash_soft_dup_with_force(self, client):
+        """Same JD content, different URL, force=True → inserts as likely_duplicate."""
+        shared_jd = "Force dup content HASHTEST888\n\n" + _LONG_JD
+        # First create
+        r1 = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/force-dup-original",
+            "title": "Frontend Engineer",
+            "company": "ForceDupCo",
+            "location": "Remote, US",
+            "workplace_type": "Remote",
+            "jd_text": shared_jd,
+        })
+        assert r1.json()["status"] == "created"
+        original_id = r1.json()["job"]["id"]
+
+        # Second attempt: force=True
+        r2 = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/force-dup-second",
+            "title": "Frontend Engineer",
+            "company": "ForceDupCo",
+            "jd_text": shared_jd,
+            "force": True,
+        })
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["status"] == "likely_duplicate"
+        assert data["existing_job_id"] == original_id
+        assert data["job"] is not None  # job WAS created
+        assert data["job"]["status"] == "ready"
+
+    def test_url_hash_dupe_not_forceable(self, client):
+        """Exact url_hash dupe returns already_exists even with force=True."""
+        url = "https://example.com/jobs/exact-dup-not-forceable"
+        jd = "Exact dup not forceable AAA111\n\n" + _LONG_JD
+        r1 = client.post("/api/jobs", json={
+            "url": url,
+            "title": "Engineer",
+            "company": "ExactDupCo",
+            "jd_text": jd,
+        })
+        assert r1.json()["status"] == "created"
+
+        r2 = client.post("/api/jobs", json={
+            "url": url,
+            "jd_text": jd,
+            "force": True,
+        })
+        assert r2.json()["status"] == "already_exists"
+        assert r2.json()["job"] is None
+
+    def test_paste_retry_after_fetch_fail(self, client):
+        """Fetch fails → no insert; re-submit same request with jd_text → inserts."""
+        url = "https://nonexistent.invalid/jobs/paste-retry-test"
+        # First attempt: no jd_text, fetch will fail
+        r1 = client.post("/api/jobs", json={
+            "url": url,
+            "title": "Paste Retry Engineer",
+            "company": "PasteRetryCo",
+            "location": "Remote, US",
+            "workplace_type": "Remote",
+        })
+        assert r1.status_code == 200
+        data1 = r1.json()
+        assert data1["status"] == "fetch_failed"
+        assert data1["job"] is None
+
+        # Verify no row inserted
+        db = get_connection()
+        try:
+            row = db.execute(
+                "SELECT id FROM jobs WHERE company = 'PasteRetryCo'"
+            ).fetchone()
+            assert row is None
+        finally:
+            db.close()
+
+        # Re-submit with jd_text — same URL, now with pasted JD
+        r2 = client.post("/api/jobs", json={
+            "url": url,
+            "title": "Paste Retry Engineer",
+            "company": "PasteRetryCo",
+            "location": "Remote, US",
+            "workplace_type": "Remote",
+            "jd_text": "Paste retry content BBB222\n\n" + _LONG_JD,
+        })
+        assert r2.status_code == 200
+        data2 = r2.json()
+        assert data2["status"] == "created"
+        assert data2["job"] is not None
+        assert data2["job"]["status"] == "ready"
+        assert data2["job"]["score"] is not None
+        assert data2["job"]["company"] == "PasteRetryCo"
+
+    def test_research_cache_reuse(self, client):
+        """Manual job at a cached company uses the cached dossier (no new research call)
+        and gets a research-adjusted score."""
+        from seeker_os.dedup.normalize import normalize_company
+
+        company_name = "ResearchCacheCo"
+        company_norm = normalize_company(company_name)
+
+        # Seed a cached company dossier with high enough confidence to not be a stub
+        # and a funding section with a recent layoff to trigger the recent_layoffs modifier.
+        funding_data = {
+            "founded": 2015,
+            "stage": "Series B",
+            "layoffs": [{"date": datetime.now(timezone.utc).isoformat(), "pct": 10.0}],
+            "financial_health": "stable",
+            "confidence": 0.8,
+        }
+        sentiment_data = {
+            "overall_rating_estimate": 3.5,
+            "confidence": 0.7,
+        }
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        db = get_connection()
+        try:
+            db.execute(
+                """INSERT INTO company_research (
+                    job_id, company_name, company_norm, funding_data, sentiment_data,
+                    overall_confidence, researched_at, created_at,
+                    retrieval_sources
+                ) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    company_name,
+                    company_norm,
+                    json.dumps(funding_data),
+                    json.dumps(sentiment_data),
+                    0.8,
+                    now_iso,
+                    now_iso,
+                    json.dumps(["https://example.com/source1"]),
+                ),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        # Create a manual job at this company
+        r = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/research-cache-test",
+            "title": "Senior SRE",
+            "company": company_name,
+            "location": "Remote, US",
+            "workplace_type": "Remote",
+            "jd_text": "Research cache test CCC333\n\n" + _LONG_JD,
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "created"
+        assert data["job"] is not None
+        assert data["job"]["score"] is not None
+
+        job_id = data["job"]["id"]
+
+        # Verify research-adjusted score was computed (not None, not equal to base score)
+        db = get_connection()
+        try:
+            row = db.execute(
+                "SELECT score, research_adjusted_score, research_delta, research_breakdown FROM jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            assert row is not None
+            base_score = row["score"]
+            adjusted = row["research_adjusted_score"]
+            delta = row["research_delta"]
+            breakdown = row["research_breakdown"]
+
+            # The research path should have run — adjusted score should be set
+            assert adjusted is not None, "research_adjusted_score should be set (cache hit)"
+            assert delta is not None and delta != 0, (
+                f"research_delta should be non-zero (layoff modifier should apply), got {delta}"
+            )
+            # The recent_layoffs modifier is -1.5, so delta should be -1.5
+            assert delta == -1.5, f"Expected -1.5 (recent_layoffs), got {delta}"
+            # Adjusted score should be base + delta
+            assert adjusted == base_score + delta, (
+                f"adjusted ({adjusted}) should be base ({base_score}) + delta ({delta})"
+            )
+            # Breakdown should contain the recent_layoffs factor
+            breakdown_list = json.loads(breakdown) if breakdown else []
+            factors = [item["factor"] for item in breakdown_list]
+            assert "recent_layoffs" in factors, (
+                f"breakdown should include recent_layoffs, got {factors}"
+            )
+
+            # Prove no new retrieval call was made: the _try_apply_research_adjustment
+            # path is cache-hit-only (SQL lookup, no Tavily/retrieval). Verify only
+            # the one row we seeded exists — no second row was inserted.
+            cr_rows = db.execute(
+                "SELECT id FROM company_research WHERE company_norm = ?",
+                (company_norm,),
+            ).fetchall()
+            assert len(cr_rows) == 1, (
+                f"Expected exactly 1 company_research row (the seeded cache), "
+                f"got {len(cr_rows)} — a new retrieval call may have been made"
+            )
+        finally:
+            db.close()
+
+        # Clean up the seeded dossier
+        db = get_connection()
+        try:
+            db.execute("DELETE FROM company_research WHERE company_name = ?", (company_name,))
+            db.commit()
+        finally:
+            db.close()
 
 
 class TestJobOverride:

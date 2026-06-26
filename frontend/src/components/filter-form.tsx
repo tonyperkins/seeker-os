@@ -128,12 +128,12 @@ export function FilterForm({
           <select
             value={f.commitment_required}
             onChange={(e) => updateFilters({ commitment_required: e.target.value })}
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
           >
-            <option value="Full Time">Full Time</option>
-            <option value="Part Time">Part Time</option>
-            <option value="Contract">Contract</option>
-            <option value="">Any</option>
+            <option value="Full Time" className="bg-background text-foreground">Full Time</option>
+            <option value="Part Time" className="bg-background text-foreground">Part Time</option>
+            <option value="Contract" className="bg-background text-foreground">Contract</option>
+            <option value="" className="bg-background text-foreground">Any</option>
           </select>
         </div>
       </div>

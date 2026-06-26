@@ -66,18 +66,64 @@ def _build_judge_user_prompt(artifact_text: str, master_resume: str, artifact_ty
     )
 
 
-def _strip_code_fences(text: str) -> str:
-    """Strip markdown code fences if present."""
+def _extract_json(text: str) -> str:
+    """Extract the JSON object from an LLM response.
+
+    Handles:
+    - Markdown code fences (```json ... ``` or ``` ... ```)
+    - Prose preamble before the JSON object
+    - Trailing text after the JSON object
+    - Plain JSON with surrounding whitespace
+    """
     text = text.strip()
+
+    # Strip markdown code fences if present
     if text.startswith("```"):
         lines = text.split("\n")
         # Remove first line (```json or ```)
         lines = lines[1:]
         # Remove trailing ``` if present
-        if lines and lines[-1].strip() == "```":
+        if lines and lines[-1].strip().startswith("```"):
             lines = lines[:-1]
-        return "\n".join(lines)
-    return text
+        text = "\n".join(lines).strip()
+
+    # If it starts with {, still use brace matching to find the end
+    # (there may be trailing text after the JSON object)
+    if text.startswith("{"):
+        start = 0
+    else:
+        # Extract the first JSON object using brace matching
+        # This handles prose preamble like "Here is the analysis:\n{...}"
+        start = text.find("{")
+        if start == -1:
+            return text  # No JSON object found — let json.loads raise
+
+    # Find the matching closing brace
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+
+    # Truncated JSON — return what we have
+    return text[start:]
 
 
 class TraceabilityChecker:
@@ -148,23 +194,40 @@ class TraceabilityChecker:
             )
 
         from seeker_os.llm.router import ModelRouter
+        from seeker_os.llm.models import TruncationError
 
         router = ModelRouter(self.settings)
         user_prompt = _build_judge_user_prompt(artifact_text, master_resume, artifact_type)
 
-        response = router.generate(
-            task=self._task,
-            system_prompt=JUDGE_SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            temperature=0.0,
-            max_tokens=4000,
-        )
+        try:
+            response = router.generate(
+                task=self._task,
+                system_prompt=JUDGE_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                temperature=0.0,
+            )
+        except TruncationError as e:
+            logger.error("Traceability judge was truncated: %s", e)
+            return TraceabilityResult(
+                violations=[Violation(
+                    rule_id="traceability_truncated",
+                    description="Traceability judge response was truncated (hit max_tokens ceiling)",
+                    violation=str(e),
+                    severity="high",
+                )],
+                checked_at=datetime.now(timezone.utc).isoformat(),
+            )
 
-        text = _strip_code_fences(response.text)
+        text = _extract_json(response.text)
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
-            logger.error("Traceability judge returned invalid JSON: %s", text[:200])
+            logger.error(
+                "Traceability judge returned invalid JSON (response length=%d, "
+                "output_tokens=%d, extracted length=%d): %s",
+                len(response.text), response.output_tokens,
+                len(text), text[:500],
+            )
             # Treat parse failure as a single high-severity violation
             return TraceabilityResult(
                 violations=[Violation(

@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/delete-button";
+import { CopyResumeButton } from "@/components/copy-resume-button";
 import { api, type ResumeSummary } from "@/lib/api";
 import { formatDate } from "@/lib/date";
 
@@ -120,6 +121,7 @@ function ResumesContent() {
                   <TableHead className="w-28">Tokens</TableHead>
                   <TableHead className="w-32">Generated</TableHead>
                   <TableHead className="w-12" />
+                  <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -153,6 +155,9 @@ function ResumesContent() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(resume.generated_at)}
+                    </TableCell>
+                    <TableCell>
+                      <CopyResumeButton resumeId={resume.id} />
                     </TableCell>
                     <TableCell>
                       <DeleteButton

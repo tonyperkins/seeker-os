@@ -7,11 +7,88 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
 from seeker_os.api.schemas import (
     JobSummary, JobDetail, JobUpdate, JobReject, JobCreate, JobCreateResponse,
-    JobOverride, MessageResponse,
+    JobOverride, MessageResponse, ApplicationEvent, ApplicationEventCreate,
+    PostApplyTransition, EngagedEventCreate, CleanStartCreate,
 )
 from seeker_os.database import get_connection, json_decode, json_encode
+from seeker_os.events import (
+    record_event, transition_status, EventType, Actor,
+    JobStatus, EngagedEventType, compute_stale_flag,
+    STALE_ACTIVITY_EVENTS,
+)
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+
+
+def _get_stale_after_days() -> int:
+    """Get stale_after_days from lifecycle config (default 14)."""
+    try:
+        from seeker_os.config import get_settings
+        return get_settings().lifecycle.stale_after_days
+    except Exception:
+        return 14
+
+
+def _compute_stale(db, row, stale_after_days: int | None = None) -> tuple[bool, int | None]:
+    """Compute stale flag for a job row."""
+    if stale_after_days is None:
+        stale_after_days = _get_stale_after_days()
+    return compute_stale_flag(db, row["id"], row["status"], stale_after_days)
+
+
+def _batch_compute_stale(
+    db, rows, stale_after_days: int,
+) -> dict[int, tuple[bool, int | None]]:
+    """Batch-compute stale flags for a set of job rows in ONE query.
+
+    Returns {job_id: (is_stale, days_since)} for applied/engaged jobs only.
+    Jobs in other statuses are excluded (their stale flag is always (False, None)).
+    """
+    from datetime import datetime as _dt, timezone as _tz
+
+    ae_ids = [
+        r["id"] for r in rows
+        if r["status"] in (JobStatus.APPLIED, JobStatus.ENGAGED)
+    ]
+    if not ae_ids:
+        return {}
+
+    placeholders = ",".join("?" * len(ae_ids))
+    event_ph = ",".join("?" * len(STALE_ACTIVITY_EVENTS))
+    stale_rows = db.execute(
+        f"SELECT job_id, MAX(occurred_at) as last_activity "
+        f"FROM application_events "
+        f"WHERE job_id IN ({placeholders}) AND event_type IN ({event_ph}) "
+        f"GROUP BY job_id",
+        (*ae_ids, *STALE_ACTIVITY_EVENTS),
+    ).fetchall()
+
+    now = _dt.now(_tz.utc)
+    result: dict[int, tuple[bool, int | None]] = {}
+    for sr in stale_rows:
+        try:
+            last_dt = _dt.fromisoformat(sr["last_activity"])
+        except (ValueError, TypeError):
+            continue
+        delta = now - last_dt
+        days_since = delta.days
+        is_stale = days_since > stale_after_days
+        result[sr["job_id"]] = (is_stale, days_since)
+
+    # Jobs in applied/engaged with no activity events → not stale (no activity to be stale about)
+    for jid in ae_ids:
+        if jid not in result:
+            result[jid] = (False, None)
+
+    return result
+
+
+def _parse_iso(s: str) -> datetime | None:
+    """Parse an ISO datetime string; return None on failure."""
+    try:
+        return datetime.fromisoformat(s)
+    except (ValueError, TypeError):
+        return None
 
 
 def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
@@ -74,24 +151,51 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
         min_score=settings.scoring.min_score,
     )
 
+    # Recompute net_score since research_delta changed
+    from seeker_os.scoring.net_score import compute_net_score
+    job_row = db.execute(
+        "SELECT analysis_verdict FROM jobs WHERE id = ?", (job_id,)
+    ).fetchone()
+    analysis_verdict = job_row["analysis_verdict"] if job_row else None
+    verdict_caps = settings.scoring.verdict_caps if settings.scoring else {}
+    net = compute_net_score(
+        base_score=float(job["score"]),
+        research_delta=result.research_delta,
+        analysis_verdict=analysis_verdict,
+        verdict_caps=verdict_caps,
+        max_score=settings.scoring.max_score,
+        min_score=settings.scoring.min_score,
+    )
+
     db.execute(
         """UPDATE jobs
            SET research_adjusted_score = ?,
                research_delta = ?,
                research_breakdown = ?,
+               net_score = ?,
                updated_at = ?
            WHERE id = ?""",
         (
             result.adjusted_score,
             result.research_delta,
             json_encode([item.model_dump() for item in result.breakdown]),
+            net,
             datetime.now(timezone.utc).isoformat(),
             job_id,
         ),
     )
 
 
-def _row_to_summary(row) -> JobSummary:
+def _row_to_summary(
+    row, db=None, *, stale_after_days: int | None = None,
+    stale_result: tuple[bool, int | None] | None = None,
+) -> JobSummary:
+    is_stale = False
+    days_since = None
+    if stale_result is not None:
+        is_stale, days_since = stale_result
+    elif db is not None:
+        is_stale, days_since = _compute_stale(db, row, stale_after_days=stale_after_days)
     return JobSummary(
         id=row["id"],
         title=row["title"] or "",
@@ -113,10 +217,35 @@ def _row_to_summary(row) -> JobSummary:
         reject_reason=row["reject_reason"],
         source_id=row["source_id"] or "",
         discovered_query=row["discovered_query"] or "",
+        is_stale=is_stale,
+        days_since_last_activity=days_since,
     )
 
 
-def _row_to_detail(row) -> JobDetail:
+def _row_to_event(row) -> ApplicationEvent:
+    return ApplicationEvent(
+        id=row["id"],
+        job_id=row["job_id"],
+        event_type=row["event_type"],
+        actor=row["actor"],
+        occurred_at=row["occurred_at"],
+        created_at=row["created_at"],
+        metadata=json_decode(row["metadata"]) if row["metadata"] else None,
+        note=row["note"],
+    )
+
+
+def _row_to_detail(row, db=None) -> JobDetail:
+    events: list[ApplicationEvent] = []
+    is_stale = False
+    days_since = None
+    if db is not None:
+        event_rows = db.execute(
+            "SELECT * FROM application_events WHERE job_id = ? ORDER BY occurred_at ASC, id ASC",
+            (row["id"],),
+        ).fetchall()
+        events = [_row_to_event(r) for r in event_rows]
+        is_stale, days_since = _compute_stale(db, row)
     return JobDetail(
         id=row["id"],
         title=row["title"] or "",
@@ -162,10 +291,14 @@ def _row_to_detail(row) -> JobDetail:
         research_delta=row["research_delta"] if "research_delta" in row.keys() else 0.0,
         analysis_verdict=row["analysis_verdict"] if "analysis_verdict" in row.keys() else None,
         analysis_delta=row["analysis_delta"] if "analysis_delta" in row.keys() else 0.0,
+        net_score=row["net_score"] if "net_score" in row.keys() else None,
         filter_warnings=json_decode(row["filter_warnings"]) if "filter_warnings" in row.keys() and row["filter_warnings"] else [],
         overridden_at=row["overridden_at"] if "overridden_at" in row.keys() else None,
         override_note=row["override_note"] if "override_note" in row.keys() else None,
         original_reject_reason=row["original_reject_reason"] if "original_reject_reason" in row.keys() else None,
+        events=events,
+        is_stale=is_stale,
+        days_since_last_activity=days_since,
     )
 
 
@@ -208,7 +341,18 @@ def list_jobs(
         params.extend([limit, offset])
 
         rows = db.execute(query, params).fetchall()
-        return [_row_to_summary(r) for r in rows]
+
+        # Batch stale-flag computation: one aggregate query for all applied/engaged jobs
+        stale_after_days = _get_stale_after_days()
+        stale_map = _batch_compute_stale(db, rows, stale_after_days)
+
+        return [
+            _row_to_summary(
+                r, db=db, stale_after_days=stale_after_days,
+                stale_result=stale_map.get(r["id"]),
+            )
+            for r in rows
+        ]
     finally:
         db.close()
 
@@ -221,8 +365,9 @@ def create_job(body: JobCreate):
     1. Compute url_hash, check dedup layer 1 (url_hash). If match → already_exists.
     2. If jd_text provided (paste-JD path), use it directly. Otherwise attempt
        fetch_jd from the URL. If fetch fails → return fetch_failed (no insert).
-    3. After JD is available, check content hash dedup (layer 3). If match →
-       warn with likely_duplicate but still insert (user can confirm).
+    3. After JD is available, check content hash dedup (layer 3). If match and
+       force=False → return possible_duplicate (NO insert). If force=True →
+       proceed with insert (likely_duplicate warning).
     4. Insert complete job with JD, run hard filters as informational metadata
        (manual jobs bypass filter rejection — DECISION 1), run scoring, and
        apply research adjustment from cached company dossier if available.
@@ -344,11 +489,25 @@ def create_job(body: JobCreate):
                     )
                 jd_text = jd_result.jd_text
 
-        # Step 3: Content hash dedup check (warn, don't block)
+        # Step 3: Content hash dedup check (ask before inserting — D3)
         content_dedup = check_content_duplicate(0, jd_text, db)
         # check_content_duplicate queries by job_id != 0, which matches all existing
         likely_dup_id = None
         if content_dedup.is_duplicate:
+            if not body.force:
+                # Soft match — ask the user before inserting
+                ex_row = db.execute(
+                    "SELECT title, company FROM jobs WHERE id = ?",
+                    (content_dedup.matched_job_id,),
+                ).fetchone()
+                ex_title = ex_row["title"] if ex_row else "Unknown"
+                ex_company = ex_row["company"] if ex_row else "Unknown"
+                return JobCreateResponse(
+                    status="possible_duplicate",
+                    existing_job_id=content_dedup.matched_job_id,
+                    existing_summary=f"{ex_title} at {ex_company}",
+                )
+            # force=True — proceed with insert, flag as likely_duplicate
             likely_dup_id = content_dedup.matched_job_id
 
         # Step 4: Insert complete job
@@ -502,13 +661,19 @@ def create_job(body: JobCreate):
         # Apply research adjustment from cached company dossier (if any)
         _try_apply_research_adjustment(db, job_id, eff_company)
 
+        # Record the manual_created event
+        record_event(
+            db, job_id, EventType.MANUAL_CREATED, Actor.CANDIDATE,
+            metadata={"score": score_result.score},
+        )
+
         db.commit()
 
         row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         response_status = "likely_duplicate" if likely_dup_id else "created"
         return JobCreateResponse(
             status=response_status,
-            job=_row_to_detail(row),
+            job=_row_to_detail(row, db=db),
             existing_job_id=likely_dup_id,
             filter_warnings=filter_warnings,
         )
@@ -541,12 +706,14 @@ def override_job(job_id: int, body: JobOverride):
         now = datetime.now(timezone.utc).isoformat()
         original_reason = row["reject_reason"]
 
-        db.execute(
-            """UPDATE jobs
-               SET status=?, overridden_at=?, override_note=?, original_reject_reason=?,
-                   updated_at=?
-               WHERE id=?""",
-            (body.target_status, now, body.note, original_reason, now, job_id),
+        transition_status(
+            db, job_id, body.target_status, EventType.OVERRIDDEN, Actor.CANDIDATE,
+            extra_sets={
+                "overridden_at": now,
+                "override_note": body.note,
+                "original_reject_reason": original_reason,
+            },
+            metadata={"from": "rejected", "to": body.target_status, "note": body.note},
         )
         db.commit()
         return MessageResponse(message=f"Job {job_id} overridden to '{body.target_status}'")
@@ -562,7 +729,7 @@ def get_job(job_id: int):
         row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-        return _row_to_detail(row)
+        return _row_to_detail(row, db=db)
     finally:
         db.close()
 
@@ -578,7 +745,11 @@ def update_job(job_id: int, update: JobUpdate):
 
         now = datetime.now(timezone.utc).isoformat()
         if update.status is not None:
-            db.execute("UPDATE jobs SET status=?, updated_at=? WHERE id=?", (update.status, now, job_id))
+            old_status = row["status"]
+            transition_status(
+                db, job_id, update.status, EventType.STATUS_CHANGED, Actor.CANDIDATE,
+                metadata={"from": old_status, "to": update.status},
+            )
         if update.is_pinned is not None:
             db.execute("UPDATE jobs SET is_pinned=?, updated_at=? WHERE id=?", (update.is_pinned, now, job_id))
         if update.ai_policy is not None:
@@ -601,10 +772,10 @@ def reject_job(job_id: int, body: JobReject):
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        now = datetime.now(timezone.utc).isoformat()
-        db.execute(
-            "UPDATE jobs SET status='rejected', reject_reason=?, reject_details=?, updated_at=? WHERE id=?",
-            (body.reason, body.details, now, job_id),
+        transition_status(
+            db, job_id, "rejected", EventType.REJECTED, Actor.CANDIDATE,
+            extra_sets={"reject_reason": body.reason, "reject_details": body.details},
+            metadata={"reason": body.reason, "details": body.details},
         )
         db.commit()
         return MessageResponse(message=f"Job {job_id} rejected: {body.reason}")
@@ -621,13 +792,62 @@ def skip_job(job_id: int):
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        now = datetime.now(timezone.utc).isoformat()
-        db.execute(
-            "UPDATE jobs SET status='skipped', reject_reason=NULL, updated_at=? WHERE id=?",
-            (now, job_id),
+        transition_status(
+            db, job_id, "skipped", EventType.SKIPPED, Actor.CANDIDATE,
+            extra_sets={"reject_reason": None},
         )
         db.commit()
         return MessageResponse(message=f"Job {job_id} skipped")
+    finally:
+        db.close()
+
+
+@router.get("/{job_id}/events", response_model=list[ApplicationEvent])
+def get_job_events(job_id: int):
+    """Get a job's event timeline ordered by occurred_at."""
+    db = get_connection()
+    try:
+        row = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        rows = db.execute(
+            "SELECT * FROM application_events WHERE job_id = ? ORDER BY occurred_at ASC, id ASC",
+            (job_id,),
+        ).fetchall()
+        return [_row_to_event(r) for r in rows]
+    finally:
+        db.close()
+
+
+@router.post("/{job_id}/events", response_model=ApplicationEvent)
+def create_event(job_id: int, body: ApplicationEventCreate):
+    """Add an event to a job's timeline."""
+    db = get_connection()
+    try:
+        row = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        try:
+            event_id = record_event(
+                db=db,
+                job_id=job_id,
+                event_type=body.event_type,
+                actor=body.actor,
+                metadata=body.metadata,
+                occurred_at=body.occurred_at,
+                note=body.note,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+        db.commit()
+
+        event_row = db.execute(
+            "SELECT * FROM application_events WHERE id = ?", (event_id,)
+        ).fetchone()
+        return _row_to_event(event_row)
     finally:
         db.close()
 
@@ -642,7 +862,8 @@ def delete_job(job_id: int):
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
         for table in ("dedup_registry", "resumes", "company_research",
-                       "job_analyses", "cover_letters", "application_answers"):
+                       "job_analyses", "cover_letters", "application_answers",
+                       "application_events"):
             db.execute(f"DELETE FROM {table} WHERE job_id = ?", (job_id,))
         db.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         db.commit()
@@ -673,5 +894,215 @@ def check_cross_ref(job_id: int):
             repo_path=settings.profile.cross_reference.repo_path,
         )
         return result.model_dump()
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Post-apply lifecycle endpoints (L2)
+# ---------------------------------------------------------------------------
+
+_TRANSITION_MAP: dict[str, tuple[str, str]] = {
+    JobStatus.APPLIED: (EventType.APPLIED, Actor.CANDIDATE),
+    JobStatus.COMPANY_REJECTED: (EventType.COMPANY_REJECTED, Actor.COMPANY),
+    JobStatus.WITHDRAWN: (EventType.WITHDRAWN, Actor.CANDIDATE),
+    JobStatus.ENGAGED: (EventType.ENGAGED, Actor.CANDIDATE),
+    JobStatus.OFFER_ACCEPTED: (EventType.OFFER_ACCEPTED, Actor.CANDIDATE),
+    JobStatus.OFFER_DECLINED: (EventType.OFFER_DECLINED, Actor.CANDIDATE),
+}
+
+_VALID_TRANSITIONS: dict[str, frozenset[str]] = {
+    JobStatus.APPLIED: frozenset({JobStatus.COMPANY_REJECTED, JobStatus.WITHDRAWN, JobStatus.ENGAGED}),
+    JobStatus.ENGAGED: frozenset({
+        JobStatus.OFFER_ACCEPTED, JobStatus.OFFER_DECLINED,
+        JobStatus.COMPANY_REJECTED, JobStatus.WITHDRAWN,
+    }),
+}
+
+
+@router.post("/{job_id}/transition", response_model=MessageResponse)
+def post_apply_transition(job_id: int, body: PostApplyTransition):
+    """Post-apply status transition via the L1 central write path.
+
+    Valid transitions:
+      applied → {company_rejected | withdrawn | engaged}
+      engaged → {offer_accepted | offer_declined | company_rejected | withdrawn}
+    """
+    db = get_connection()
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        current = row["status"]
+        target = body.target_status
+
+        if target not in _TRANSITION_MAP:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid target_status '{target}'. Must be one of: {', '.join(sorted(_TRANSITION_MAP))}",
+            )
+
+        allowed = _VALID_TRANSITIONS.get(current, frozenset())
+        if target not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot transition from '{current}' to '{target}'. "
+                       f"Allowed from '{current}': {', '.join(sorted(allowed)) or 'none'}",
+            )
+
+        event_type, actor = _TRANSITION_MAP[target]
+        transition_status(
+            db, job_id, target, event_type, actor,
+            metadata=body.metadata,
+            occurred_at=body.occurred_at,
+            note=body.note,
+        )
+        db.commit()
+        return MessageResponse(message=f"Job {job_id} transitioned to '{target}'")
+    finally:
+        db.close()
+
+
+@router.post("/{job_id}/engaged-events", response_model=ApplicationEvent)
+def log_engaged_event(job_id: int, body: EngagedEventCreate):
+    """Log an engaged sub-lifecycle event WITHOUT changing status.
+
+    event_type must be one of the EngagedEventType values.
+    followup_sent and contact_received reset the staleness clock (they are
+    recent activity — the stale flag recomputes on next read).
+    """
+    db = get_connection()
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        if row["status"] != JobStatus.ENGAGED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Engaged events can only be logged when status='engaged' (current: '{row['status']}')",
+            )
+
+        if body.event_type not in EngagedEventType._ALL:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid engaged event_type '{body.event_type}'. Must be one of: {', '.join(sorted(EngagedEventType._ALL))}",
+            )
+
+        try:
+            event_id = record_event(
+                db=db,
+                job_id=job_id,
+                event_type=body.event_type,
+                actor=Actor.CANDIDATE,
+                metadata=body.metadata,
+                occurred_at=body.occurred_at,
+                note=body.note,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+        db.commit()
+
+        event_row = db.execute(
+            "SELECT * FROM application_events WHERE id = ?", (event_id,)
+        ).fetchone()
+        return _row_to_event(event_row)
+    finally:
+        db.close()
+
+
+@router.post("/{job_id}/clean-start", response_model=MessageResponse)
+def clean_start(job_id: int, body: CleanStartCreate):
+    """Enter a job directly at a post-apply status with a backdated event.
+
+    Sets status directly (applied, engaged, company_rejected, withdrawn,
+    offer_accepted, offer_declined, rejected) WITHOUT walking the pre-apply
+    funnel. The event's occurred_at is the supplied (possibly past) date;
+    created_at is always server now().
+
+    When entering at engaged or company_rejected, an optional applied_occurred_at
+    may be supplied to record a backdated 'applied' event first (complete funnel
+    history). If omitted, the job stands at engaged/rejected with no applied event.
+
+    This is the "I already applied/engaged/got rejected" clean-start path.
+    """
+    db = get_connection()
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        target = body.target_status
+        clean_start_statuses = {
+            JobStatus.APPLIED, JobStatus.ENGAGED,
+            JobStatus.COMPANY_REJECTED, JobStatus.WITHDRAWN,
+            JobStatus.OFFER_ACCEPTED, JobStatus.OFFER_DECLINED,
+            JobStatus.REJECTED,
+        }
+        if target not in clean_start_statuses:
+            raise HTTPException(
+                status_code=422,
+                detail=f"clean-start target_status must be one of: {', '.join(sorted(clean_start_statuses))}",
+            )
+
+        event_type, actor = _TRANSITION_MAP.get(
+            target, (EventType.STATUS_CHANGED, Actor.CANDIDATE),
+        )
+
+        # Resolve the target event's occurred_at (default now)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        target_occurred_at = body.occurred_at or now_iso
+
+        # If entering at engaged or company_rejected with an optional applied date,
+        # record a backdated 'applied' event first.
+        implies_application = target in (JobStatus.ENGAGED, JobStatus.COMPANY_REJECTED)
+        if implies_application and body.applied_occurred_at:
+            applied_dt = _parse_iso(body.applied_occurred_at)
+            if applied_dt is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid applied_occurred_at format: {body.applied_occurred_at}",
+                )
+            now = datetime.now(timezone.utc)
+            if applied_dt > now:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"applied_occurred_at cannot be in the future: {body.applied_occurred_at}",
+                )
+            target_dt = _parse_iso(target_occurred_at)
+            if target_dt and applied_dt > target_dt:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"applied_occurred_at ({body.applied_occurred_at}) cannot be "
+                        f"later than the {target} event's occurred_at ({target_occurred_at})"
+                    ),
+                )
+
+            # Record the backdated applied event (no status change — we go straight
+            # to the target status in the transition below)
+            try:
+                record_event(
+                    db=db,
+                    job_id=job_id,
+                    event_type=EventType.APPLIED,
+                    actor=Actor.CANDIDATE,
+                    occurred_at=body.applied_occurred_at,
+                    allow_before_discovery=True,
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=str(e))
+
+        transition_status(
+            db, job_id, target, event_type, actor,
+            occurred_at=body.occurred_at,
+            note=body.note,
+            metadata=body.metadata or {"clean_start": True},
+            allow_before_discovery=True,
+        )
+        db.commit()
+        return MessageResponse(message=f"Job {job_id} clean-started to '{target}'")
     finally:
         db.close()

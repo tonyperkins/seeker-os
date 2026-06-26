@@ -320,6 +320,27 @@ MIGRATIONS: list[str | callable] = [
     ALTER TABLE jobs ADD COLUMN analysis_verdict TEXT;
     ALTER TABLE jobs ADD COLUMN analysis_delta REAL DEFAULT 0;
     """,
+    # Migration 15: Application events log (append-only)
+    """
+    CREATE TABLE IF NOT EXISTS application_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id),
+        event_type TEXT,
+        actor TEXT,
+        occurred_at TEXT,
+        created_at TEXT,
+        metadata TEXT,
+        note TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_application_events_job_id ON application_events(job_id);
+    CREATE INDEX IF NOT EXISTS idx_application_events_job_occurred ON application_events(job_id, occurred_at);
+    CREATE INDEX IF NOT EXISTS idx_application_events_event_type ON application_events(event_type);
+    """,
+    # Migration 16: Net score column (composite of base + research + verdict cap)
+    """
+    ALTER TABLE jobs ADD COLUMN net_score REAL;
+    """,
 ]
 
 

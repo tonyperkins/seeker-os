@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import queue
+import queue as queue_module
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from seeker_os.api.schemas import ResumeParseResult, ContactInfoSchema, MessageResponse
@@ -168,7 +171,6 @@ def parse_master_resume():
             system_prompt=system_prompt,
             user_prompt=f"Parse this resume:\n\n{resume_text[:8000]}",
             temperature=0.3,
-            max_tokens=2000,
         )
 
         # Parse the JSON response
@@ -267,7 +269,7 @@ class ResumeGenerateRequest(BaseModel):
     job_id: int
     task: str = "resume_generation_standard"  # or "resume_generation_high_value"
     temperature: float = 0.7
-    max_tokens: int | None = 16000
+    max_tokens: int | None = None  # None = resolve from config/defaults
 
 
 class ResumeSummary(BaseModel):
@@ -426,6 +428,64 @@ def generate_resume(body: ResumeGenerateRequest):
     except Exception:
         logger.exception("Resume generation failed for job_id=%s", body.job_id)
         raise HTTPException(status_code=500, detail="Generation failed — see server logs for details")
+
+
+@router.post("/generate/stream")
+def generate_resume_stream(body: ResumeGenerateRequest):
+    """Generate a tailored resume with SSE progress streaming.
+
+    Returns a text/event-stream with progress events as they occur,
+    followed by a final 'done' event with the resume result.
+    """
+    from seeker_os.config import Settings
+    from seeker_os.resume.generator import generate_resume as _generate
+
+    settings = Settings()
+    event_queue: queue.Queue = queue.Queue()
+
+    def progress_cb(step: str, step_label: str, status: str, detail: str):
+        event_queue.put({
+            "step": step,
+            "step_label": step_label,
+            "status": status,
+            "detail": detail,
+        })
+
+    def run_in_thread():
+        try:
+            result = _generate(
+                settings=settings,
+                job_id=body.job_id,
+                task=body.task,
+                temperature=body.temperature,
+                max_tokens=body.max_tokens,
+                progress_cb=progress_cb,
+            )
+            event_queue.put(("done", result))
+        except Exception as e:
+            event_queue.put(("error", str(e)))
+
+    thread = threading.Thread(target=run_in_thread, daemon=True)
+    thread.start()
+
+    def event_stream():
+        while True:
+            try:
+                item = event_queue.get(timeout=300)
+            except queue_module.Empty:
+                yield 'data: {"type":"error","message":"Generation timeout"}\n\n'
+                break
+            if isinstance(item, tuple):
+                if item[0] == "done":
+                    yield f"event: done\ndata: {json.dumps(item[1])}\n\n"
+                    break
+                elif item[0] == "error":
+                    yield f"event: error\ndata: {json.dumps({'error': item[1]})}\n\n"
+                    break
+            else:
+                yield f"data: {json.dumps(item)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/{resume_id}/validate", response_model=dict)

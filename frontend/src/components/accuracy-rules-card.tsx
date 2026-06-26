@@ -268,10 +268,10 @@ export function AccuracyRulesCard({ initialRules }: { initialRules: AccuracyRule
                       <select
                         value={rule.severity}
                         onChange={(e) => updateRule(index, "severity", e.target.value)}
-                        className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+                        className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
                       >
-                        <option value="medium">medium</option>
-                        <option value="high">high</option>
+                        <option value="medium" className="bg-background text-foreground">medium</option>
+                        <option value="high" className="bg-background text-foreground">high</option>
                       </select>
                       <Button
                         size="sm"

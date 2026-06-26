@@ -34,6 +34,10 @@ import { JDRenderer } from "@/components/jd-renderer";
 import { CompanyResearch } from "@/components/company-research";
 import { ScoreBadges } from "@/components/score-badges";
 import { JobAnalysis } from "@/components/job-analysis";
+import { EventTimeline } from "@/components/event-timeline";
+import { CopyButton } from "@/components/copy-button";
+import { RunAllButton } from "@/components/run-all-button";
+import { CopyAllButton } from "@/components/copy-all-button";
 import { api, type JobDetail } from "@/lib/api";
 import { formatDate } from "@/lib/date";
 
@@ -51,6 +55,47 @@ function normalizeUrl(url: string): string {
   if (!url) return url;
   if (!/^https?:\/\//i.test(url)) return `https://${url}`;
   return url;
+}
+
+function formatDetailsText(job: JobDetail): string {
+  const lines: string[] = [];
+  lines.push(`Title: ${job.title}`);
+  lines.push(`Company: ${job.company}`);
+  lines.push(`Compensation: ${formatComp(job)}`);
+  lines.push(`Location: ${job.location}`);
+  lines.push(`Workplace: ${job.workplace_type}`);
+  lines.push(`Seniority: ${job.seniority_level || "—"}`);
+  lines.push(`Role type: ${job.role_type || "—"}`);
+  lines.push(`Date posted: ${formatDate(job.date_posted)}`);
+  lines.push(`Discovered: ${formatDate(job.discovered_at)}`);
+  lines.push(`ATS source: ${job.ats_source || "—"}`);
+  lines.push(`Commitment: ${job.commitment.join(", ") || "—"}`);
+  lines.push(`Countries: ${job.workplace_countries.join(", ") || "—"}`);
+  return lines.join("\n");
+}
+
+function formatScoreBreakdownText(job: JobDetail): string {
+  const lines: string[] = [];
+  lines.push(`Score: ${job.score != null ? job.score.toFixed(1) : "Not scored"}`);
+  lines.push(`Tier: ${job.tier_passed} passed`);
+  if (job.score_reasons.length > 0) {
+    lines.push("\nReasons:");
+    job.score_reasons.forEach(r => lines.push(`  + ${r}`));
+  }
+  if (job.score_gaps.length > 0) {
+    lines.push("\nGaps:");
+    job.score_gaps.forEach(g => lines.push(`  - ${g}`));
+  }
+  return lines.join("\n");
+}
+
+function formatRequirementsText(job: JobDetail): string {
+  const lines: string[] = [];
+  lines.push(job.requirements_summary || "(No requirements summary)");
+  if (job.technical_tools.length > 0) {
+    lines.push(`\nTools: ${job.technical_tools.join(", ")}`);
+  }
+  return lines.join("\n");
 }
 
 function InfoRow({
@@ -132,6 +177,10 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
           </div>
           <ScoreBadges initialJob={job} />
         </div>
+        <div className="flex flex-wrap gap-2">
+          <RunAllButton jobId={job.id} />
+          <CopyAllButton job={job} />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -139,8 +188,13 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
         <div className="flex flex-col gap-4 lg:col-span-1">
           <Card>
             <CardHeader>
-              <CardTitle>Details</CardTitle>
-              <CardDescription>Structured job metadata</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Details</CardTitle>
+                  <CardDescription>Structured job metadata</CardDescription>
+                </div>
+                <CopyButton text={formatDetailsText(job)} />
+              </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <InfoRow icon={DollarSign} label="Compensation" value={formatComp(job)} />
@@ -268,6 +322,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             title="Score Breakdown"
             description={job.score != null ? `Score: ${job.score}` : "Not scored"}
             defaultOpen
+            action={<CopyButton text={formatScoreBreakdownText(job)} />}
           >
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-2">
@@ -344,7 +399,10 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
 
           {/* Requirements summary */}
           {job.requirements_summary && (
-            <CollapsibleCard title="Requirements Summary">
+            <CollapsibleCard
+              title="Requirements Summary"
+              action={<CopyButton text={formatRequirementsText(job)} />}
+            >
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-muted-foreground">{job.requirements_summary}</p>
                 {job.technical_tools.length > 0 && (
@@ -365,11 +423,21 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             title="Job Description"
             description={job.jd_fetch_status ? `Fetch: ${job.jd_fetch_status}` : "Full JD text"}
             contentClassName="p-0"
+            action={<CopyButton text={job.jd_full || ""} />}
           >
             <ScrollArea className="h-[480px] rounded-md border border-border p-4">
               <JDRenderer content={job.jd_full || ""} />
             </ScrollArea>
           </CollapsibleCard>
+
+          {/* Event Timeline */}
+          <EventTimeline
+            jobId={job.id}
+            initialEvents={job.events}
+            currentStatus={job.status}
+            isStale={job.is_stale}
+            daysSinceLastActivity={job.days_since_last_activity}
+          />
         </div>
       </div>
     </div>

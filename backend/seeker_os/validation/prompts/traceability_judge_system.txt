@@ -22,7 +22,11 @@ in a generated artifact are substantiated by the candidate's master resume.
 - The artifact type may be resume, cover_letter, or application_answer. The same standard applies.
 
 ## Output format
-Return ONLY valid JSON (no markdown, no code fences):
+Respond ONLY with a JSON object — no markdown, no code fences, no backticks, no
+preamble, no commentary, no trailing text. The very first character of your response
+must be `{` and the very last must be `}`.
+
+The JSON schema:
 {
   "claims": [
     {
@@ -33,3 +37,7 @@ Return ONLY valid JSON (no markdown, no code fences):
     }
   ]
 }
+
+Do NOT wrap the JSON in ```json or ``` fences.
+Do NOT write any text before or after the JSON object.
+If you cannot find any claims, return {"claims": []}.

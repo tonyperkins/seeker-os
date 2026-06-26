@@ -37,6 +37,17 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
 // Types
 // ---------------------------------------------------------------------------
 
+export interface ApplicationEvent {
+  id: number;
+  job_id: number;
+  event_type: string;
+  actor: string;
+  occurred_at: string;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+  note: string | null;
+}
+
 export interface JobSummary {
   id: number;
   title: string;
@@ -59,6 +70,8 @@ export interface JobSummary {
   ai_policy: string | null;
   source_id: string;
   discovered_query: string;
+  is_stale: boolean;
+  days_since_last_activity: number | null;
 }
 
 export interface JobDetail extends JobSummary {
@@ -88,10 +101,14 @@ export interface JobDetail extends JobSummary {
   research_delta: number;
   analysis_verdict: string | null;
   analysis_delta: number;
+  net_score: number | null;
   filter_warnings: string[];
   overridden_at: string | null;
   override_note: string | null;
   original_reject_reason: string | null;
+  is_stale: boolean;
+  days_since_last_activity: number | null;
+  events: ApplicationEvent[];
 }
 
 export interface JobCreateRequest {
@@ -106,12 +123,14 @@ export interface JobCreateRequest {
   comp_currency?: string;
   company_homepage?: string;
   jd_text?: string;
+  force?: boolean;
 }
 
 export interface JobCreateResponse {
-  status: "created" | "already_exists" | "fetch_failed" | "likely_duplicate";
+  status: "created" | "already_exists" | "fetch_failed" | "possible_duplicate" | "likely_duplicate";
   job: JobDetail | null;
   existing_job_id: number | null;
+  existing_summary: string | null;
   fetch_error: string | null;
   filter_warnings: string[];
 }
@@ -152,6 +171,13 @@ export interface PipelineProgressEvent {
   tier4_rejected: number;
   tier4_hard_rejected: number;
   tier5_ready: number;
+}
+
+export interface ResumeProgressEvent {
+  step: string;
+  step_label: string;
+  status: "started" | "in_progress" | "completed";
+  detail: string;
 }
 
 export interface PipelineRunRecord {
@@ -414,6 +440,21 @@ export const api = {
       fetchAPI<{ message: string }>(`/api/jobs/${id}/skip`, { method: "POST" }),
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "DELETE" }),
+    transition: (id: number, targetStatus: string, opts?: { occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/transition`, {
+        method: "POST",
+        body: JSON.stringify({ target_status: targetStatus, ...opts }),
+      }),
+    logEngagedEvent: (id: number, eventType: string, opts?: { occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
+      fetchAPI<ApplicationEvent>(`/api/jobs/${id}/engaged-events`, {
+        method: "POST",
+        body: JSON.stringify({ event_type: eventType, ...opts }),
+      }),
+    cleanStart: (id: number, targetStatus: string, opts?: { occurred_at?: string; applied_occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/clean-start`, {
+        method: "POST",
+        body: JSON.stringify({ target_status: targetStatus, ...opts }),
+      }),
     crossRef: (id: number) => fetchAPI<Record<string, unknown>>(`/api/jobs/${id}/cross-ref`),
     companyResearch: {
       get: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`),
@@ -488,6 +529,16 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ job_id: jobId, task: task || "resume_generation_standard" }),
       }),
+    generateStream: (jobId: number, task?: string) => {
+      const controller = new AbortController();
+      const response = fetch(`${API_BASE}/api/resumes/generate/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, task: task || "resume_generation_standard" }),
+        signal: controller.signal,
+      });
+      return { response, controller };
+    },
     validate: (id: number) =>
       fetchAPI<Record<string, unknown>>(`/api/resumes/${id}/validate`, { method: "POST" }),
     pdfUrl: (id: number) => `${API_BASE}/api/resumes/${id}/pdf`,

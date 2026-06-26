@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from seeker_os.config import CONFIG_DIR, ProfileConfig, FiltersConfig
+from seeker_os.config import CONFIG_DIR, ProfileConfig, FiltersConfig, invalidate_settings_cache
 
 
 def _clean_none(value: Any) -> Any:
@@ -46,6 +46,7 @@ def write_profile(profile: ProfileConfig, path: Path | None = None) -> Path:
 
     yaml_text = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
     path.write_text(header + yaml_text, encoding="utf-8")
+    invalidate_settings_cache()
     return path
 
 
@@ -69,6 +70,7 @@ def write_filters(filters_config: FiltersConfig, path: Path | None = None) -> Pa
 
     yaml_text = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
     path.write_text(header + yaml_text, encoding="utf-8")
+    invalidate_settings_cache()
     return path
 
 
@@ -96,4 +98,5 @@ def write_accuracy_rules(rules: list[dict], path: Path | None = None) -> Path:
 
     yaml_text = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
     path.write_text(header + yaml_text, encoding="utf-8")
+    invalidate_settings_cache()
     return path

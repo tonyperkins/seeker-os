@@ -67,3 +67,10 @@ tasks:
   cover_letter_generation:      { tier: heavy }
   application_answer_generation: { tier: heavy }
   application_answer_critique:  { tier: moderate }
+  # Per-task max_tokens override (optional). If omitted, built-in defaults are used:
+  #   jd_analysis: 4096, resume_generation_*: 16000, cover_letter_generation: 4000,
+  #   application_answer_generation: 2000, application_answer_critique: 2000,
+  #   accuracy_validation: 16000, metadata_extraction: 1000, resume_parsing: 2000,
+  #   company_dossier_generation: 16000, onboarding_interview: 4096
+  # Example override:
+  # jd_analysis: { tier: moderate, max_tokens: 8192 }

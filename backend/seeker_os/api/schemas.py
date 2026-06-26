@@ -38,6 +38,10 @@ class JobSummary(BaseModel):
     source_id: str = ""
     discovered_query: str = ""
 
+    # Derived stale flag (computed, never stored)
+    is_stale: bool = False
+    days_since_last_activity: int | None = None
+
 
 class JobDetail(BaseModel):
     """Full job detail."""
@@ -101,11 +105,21 @@ class JobDetail(BaseModel):
     analysis_verdict: str | None = None
     analysis_delta: float = 0.0
 
+    # Net score (composite: base + research_delta, capped by verdict)
+    net_score: float | None = None
+
     # Manual job metadata + override audit
     filter_warnings: list[str] = []
     overridden_at: str | None = None
     override_note: str | None = None
     original_reject_reason: str | None = None
+
+    # Application lifecycle events timeline
+    events: list[ApplicationEvent] = []
+
+    # Derived stale flag (computed, never stored)
+    is_stale: bool = False
+    days_since_last_activity: int | None = None
 
 
 class JobCreate(BaseModel):
@@ -126,6 +140,7 @@ class JobCreate(BaseModel):
     comp_currency: str | None = None
     company_homepage: str | None = None
     jd_text: str | None = None  # paste-JD fallback — skip fetch when provided
+    force: bool = False  # bypass soft-duplicate check (content hash match)
 
 
 class JobCreateResponse(BaseModel):
@@ -136,12 +151,16 @@ class JobCreateResponse(BaseModel):
     - 'already_exists': url_hash matched an existing job — existing_job_id set
     - 'fetch_failed': JD fetch from URL failed — no job inserted; frontend
       should prompt user to paste JD and re-submit with jd_text
-    - 'likely_duplicate': content hash matched an existing job — job was still
-      created (warning only); existing_job_id set
+    - 'possible_duplicate': content hash matched an existing job — NO insert;
+      existing_job_id and existing_summary set. Frontend should ask user to
+      confirm and re-submit with force=true to insert anyway.
+    - 'likely_duplicate': content hash matched but force=true — job was
+      inserted (warning only); existing_job_id set
     """
     status: str
     job: JobDetail | None = None
     existing_job_id: int | None = None
+    existing_summary: str | None = None
     fetch_error: str | None = None
     filter_warnings: list[str] = []
 
@@ -169,6 +188,76 @@ class JobReject(BaseModel):
 class MessageResponse(BaseModel):
     """Generic message response."""
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Application Event schemas
+# ---------------------------------------------------------------------------
+
+class ApplicationEvent(BaseModel):
+    """An event in the job application lifecycle (read model)."""
+    id: int
+    job_id: int
+    event_type: str
+    actor: str
+    occurred_at: str
+    created_at: str
+    metadata: dict | None = None
+    note: str | None = None
+
+
+class ApplicationEventCreate(BaseModel):
+    """Payload for creating an event.
+
+    occurred_at is editable (defaults to server now). created_at is NOT
+    settable — it is always server-set and never appears in this model.
+    """
+    event_type: str
+    actor: str = "candidate"
+    occurred_at: str | None = None
+    metadata: dict | None = None
+    note: str | None = None
+
+
+class PostApplyTransition(BaseModel):
+    """POST /api/jobs/{id}/transition — post-apply status transition.
+
+    For: company_rejected, withdrawn, engaged, offer_accepted, offer_declined.
+    Each maps to a specific event_type + actor; the API enforces valid transitions.
+    """
+    target_status: str
+    occurred_at: str | None = None
+    note: str | None = None
+    metadata: dict | None = None
+
+
+class EngagedEventCreate(BaseModel):
+    """POST /api/jobs/{id}/engaged-events — log an engaged sub-lifecycle event.
+
+    Does NOT change status. event_type must be one of the EngagedEventType values.
+    """
+    event_type: str
+    occurred_at: str | None = None
+    note: str | None = None
+    metadata: dict | None = None
+
+
+class CleanStartCreate(BaseModel):
+    """POST /api/jobs/{id}/clean-start — enter a job directly at a post-apply status.
+
+    Sets status directly (applied, engaged, company_rejected, withdrawn,
+    offer_accepted, offer_declined, rejected) with a backdated event.
+    Skips the pre-apply funnel entirely.
+
+    When entering at engaged or company_rejected, an optional applied_occurred_at
+    may be supplied to record a backdated 'applied' event first (complete funnel
+    history). If omitted, the job stands at engaged/rejected with no applied event.
+    """
+    target_status: str
+    occurred_at: str | None = None
+    applied_occurred_at: str | None = None
+    note: str | None = None
+    metadata: dict | None = None
 
 
 # ---------------------------------------------------------------------------

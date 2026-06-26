@@ -175,6 +175,9 @@ def update_retrieval_settings(body: RetrievalSettingsUpdate):
 
     _save_cr_yaml(data)
 
+    from seeker_os.config import invalidate_settings_cache
+    invalidate_settings_cache()
+
     return MessageResponse(message="Company research settings saved")
 
 

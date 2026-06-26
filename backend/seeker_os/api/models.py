@@ -310,6 +310,10 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
     with open(providers_yml_path, "w") as f:
         yaml.dump(raw, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
+    # Invalidate cached settings so the next Settings() re-reads from disk
+    from seeker_os.config import invalidate_settings_cache
+    invalidate_settings_cache()
+
     # Reload and return updated provider
     settings = Settings()
     router_client = __import__("seeker_os.llm.router", fromlist=["ModelRouter"]).ModelRouter(settings)

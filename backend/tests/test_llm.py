@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth
+from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth, TruncationError
 from seeker_os.llm.cache import save_cached_models, get_cached_models, clear_cache, CACHE_DIR
 
 
@@ -243,3 +243,248 @@ class TestRouterResolution:
             "totally_unknown_task_xyz" in record.message and "silently" in record.message
             for record in caplog.records
         ), f"Expected warning about silent fallback, got: {[r.message for r in caplog.records]}"
+
+
+class TestTruncationDetection:
+    """FIX 1 — Truncation detection: stop_reason == length/max_tokens raises TruncationError."""
+
+    def test_truncation_error_raises_on_length_finish_reason(self):
+        """A mocked length/max_tokens finish_reason raises TruncationError, not a parse error."""
+        from seeker_os.llm.openai_compat_provider import OpenAICompatProvider
+
+        provider = OpenAICompatProvider.__new__(OpenAICompatProvider)
+        provider._id = "test"
+        provider._client = MagicMock()
+
+        # Simulate a truncated response: finish_reason="length"
+        mock_choice = MagicMock()
+        mock_choice.message.content = '{"claims": [truncated'
+        mock_choice.finish_reason = "length"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.model = "test-model"
+        mock_response.usage.prompt_tokens = 100
+        mock_response.usage.completion_tokens = 4000
+        provider._client.chat.completions.create.return_value = mock_response
+
+        request = LLMRequest(
+            system_prompt="sys", user_prompt="usr", model="m1",
+            max_tokens=4000, task="accuracy_validation",
+        )
+
+        with pytest.raises(TruncationError, match="truncated"):
+            provider.generate(request)
+
+    def test_truncation_error_includes_requested_and_produced_tokens(self):
+        """TruncationError must include requested max_tokens and produced output_tokens."""
+        from seeker_os.llm.openai_compat_provider import OpenAICompatProvider
+
+        provider = OpenAICompatProvider.__new__(OpenAICompatProvider)
+        provider._id = "test"
+        provider._client = MagicMock()
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = ""
+        mock_choice.finish_reason = "length"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.model = "test-model"
+        mock_response.usage.prompt_tokens = 100
+        mock_response.usage.completion_tokens = 4000
+        provider._client.chat.completions.create.return_value = mock_response
+
+        request = LLMRequest(
+            system_prompt="sys", user_prompt="usr", model="m1",
+            max_tokens=4000, task="accuracy_validation",
+        )
+
+        try:
+            provider.generate(request)
+            assert False, "Should have raised TruncationError"
+        except TruncationError as e:
+            assert e.requested_max_tokens == 4000
+            assert e.output_tokens == 4000
+            assert e.stop_reason == "length"
+            assert "accuracy_validation" in str(e)
+
+    def test_normal_completion_does_not_raise_truncation(self):
+        """A normal stop_reason='stop' response does not raise TruncationError."""
+        from seeker_os.llm.openai_compat_provider import OpenAICompatProvider
+
+        provider = OpenAICompatProvider.__new__(OpenAICompatProvider)
+        provider._id = "test"
+        provider._client = MagicMock()
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = '{"claims": []}'
+        mock_choice.finish_reason = "stop"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.model = "test-model"
+        mock_response.usage.prompt_tokens = 100
+        mock_response.usage.completion_tokens = 50
+        provider._client.chat.completions.create.return_value = mock_response
+
+        request = LLMRequest(
+            system_prompt="sys", user_prompt="usr", model="m1",
+            max_tokens=4000, task="test",
+        )
+
+        response = provider.generate(request)
+        assert response.text == '{"claims": []}'
+        assert response.stop_reason == "stop"
+
+    def test_truncation_error_message_names_cause_and_fix(self):
+        """TruncationError message must name the cause and the fix (raise limit vs fix prompt)."""
+        from seeker_os.llm.openai_compat_provider import OpenAICompatProvider
+
+        provider = OpenAICompatProvider.__new__(OpenAICompatProvider)
+        provider._id = "test"
+        provider._client = MagicMock()
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = ""
+        mock_choice.finish_reason = "max_tokens"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.model = "test-model"
+        mock_response.usage.prompt_tokens = 100
+        mock_response.usage.completion_tokens = 4000
+        provider._client.chat.completions.create.return_value = mock_response
+
+        request = LLMRequest(
+            system_prompt="sys", user_prompt="usr", model="m1",
+            max_tokens=4000, task="test_task",
+        )
+
+        with pytest.raises(TruncationError) as exc_info:
+            provider.generate(request)
+
+        msg = str(exc_info.value)
+        assert "truncated" in msg.lower()
+        assert "max_tokens" in msg or "increase" in msg.lower()
+
+
+class TestMaxOutputCeiling:
+    """FIX 2 — Model max_output enforced as ceiling on call-time max_tokens."""
+
+    def _make_router_with_model(self, max_output: int | None):
+        """Build a router with a mock provider and a model that has the given max_output."""
+        from seeker_os.config import Settings, ProvidersConfig, ProviderConfig, ProviderModel, TierMapping, TaskOverride
+        from seeker_os.llm.router import ModelRouter
+
+        class MockProvider:
+            def __init__(self, pid):
+                self._id = pid
+            @property
+            def id(self): return self._id
+            @property
+            def type(self): return "mock"
+            def generate(self, request): return LLMResponse(text="ok", model=request.model, provider=self._id, task=request.task)
+            def list_models(self): return []
+            def test_connection(self): return ProviderHealth(provider_id=self._id, healthy=True)
+
+        model = ProviderModel(id="big-model", label="Big", max_output=max_output, tags=["heavy"])
+        settings = Settings.__new__(Settings)
+        settings.providers = ProvidersConfig(
+            providers=[
+                ProviderConfig(id="p1", type="anthropic", api_key="x", enabled=True, models=[model]),
+            ],
+            tiers={"heavy": TierMapping(provider="p1", model="big-model")},
+            tasks={"resume_generation_standard": TaskOverride(tier="heavy")},
+        )
+
+        router = ModelRouter(settings)
+        router._providers = {"p1": MockProvider("p1")}
+        router._provider_configs = {"p1": ProviderConfig(id="p1", type="anthropic", api_key="x", models=[model])}
+        router._initialized = True
+        return router
+
+    def test_request_within_max_output_succeeds(self):
+        """max_tokens <= model max_output should work fine."""
+        router = self._make_router_with_model(max_output=16000)
+        response = router.generate("resume_generation_standard", "sys", "usr", max_tokens=8000)
+        assert response.text == "ok"
+
+    def test_request_exceeding_max_output_raises(self):
+        """max_tokens > model max_output must raise a clear ValueError."""
+        router = self._make_router_with_model(max_output=8192)
+        with pytest.raises(ValueError, match="caps at max_output=8192"):
+            router.generate("resume_generation_standard", "sys", "usr", max_tokens=16000)
+
+    def test_none_max_tokens_uses_model_max_output(self):
+        """When max_tokens is None, the router should use the model's max_output."""
+        router = self._make_router_with_model(max_output=8192)
+        # Should not raise — None gets resolved to model's max_output
+        response = router.generate("resume_generation_standard", "sys", "usr", max_tokens=None)
+        assert response.text == "ok"
+
+    def test_unknown_max_output_passes_through(self):
+        """When model max_output is None (unknown), no ceiling is enforced."""
+        router = self._make_router_with_model(max_output=None)
+        # Should not raise even with a high max_tokens
+        response = router.generate("resume_generation_standard", "sys", "usr", max_tokens=999999)
+        assert response.text == "ok"
+
+
+class TestTaskMaxTokensConfig:
+    """FIX 3 — Per-task max_tokens is configurable, replacing hardcoded literals."""
+
+    def test_known_task_returns_default(self):
+        """A known task returns its default max_tokens from the defaults table."""
+        from seeker_os.config import Settings, ProvidersConfig
+        from seeker_os.llm.router import ModelRouter
+
+        settings = Settings.__new__(Settings)
+        settings.providers = ProvidersConfig()
+        router = ModelRouter(settings)
+        router._initialized = True
+
+        assert router.get_task_max_tokens("jd_analysis") == 4096
+        assert router.get_task_max_tokens("resume_generation_standard") == 16000
+        assert router.get_task_max_tokens("accuracy_validation") == 16000
+        assert router.get_task_max_tokens("metadata_extraction") == 1000
+
+    def test_unknown_task_returns_fallback(self):
+        """An unknown task returns the fallback default."""
+        from seeker_os.config import Settings, ProvidersConfig
+        from seeker_os.llm.router import ModelRouter
+
+        settings = Settings.__new__(Settings)
+        settings.providers = ProvidersConfig()
+        router = ModelRouter(settings)
+        router._initialized = True
+
+        assert router.get_task_max_tokens("totally_unknown_task") == 4096
+
+    def test_config_override_takes_priority(self):
+        """A max_tokens set in providers.yml tasks overrides the built-in default."""
+        from seeker_os.config import Settings, ProvidersConfig, TaskOverride
+        from seeker_os.llm.router import ModelRouter
+
+        settings = Settings.__new__(Settings)
+        settings.providers = ProvidersConfig(
+            tasks={"jd_analysis": TaskOverride(tier="moderate", max_tokens=8192)},
+        )
+        router = ModelRouter(settings)
+        router._initialized = True
+
+        assert router.get_task_max_tokens("jd_analysis") == 8192
+
+    def test_no_hardcoded_literal_in_task_functions(self):
+        """Verify that task function signatures use max_tokens=None, not hardcoded literals."""
+        import inspect
+        from seeker_os.analysis.jd_analyzer import analyze_job
+        from seeker_os.resume.generator import generate_resume
+        from seeker_os.cover_letter.generator import generate_cover_letter
+        from seeker_os.application_answers.generator import generate_application_answer, critique_application_answer
+
+        for func in [analyze_job, generate_resume, generate_cover_letter,
+                     generate_application_answer, critique_application_answer]:
+            sig = inspect.signature(func)
+            param = sig.parameters.get("max_tokens")
+            assert param is not None, f"{func.__name__} has no max_tokens parameter"
+            assert param.default is None, (
+                f"{func.__name__} has hardcoded max_tokens={param.default!r}, "
+                f"should be None (router resolves from config)"
+            )
