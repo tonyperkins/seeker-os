@@ -12,6 +12,7 @@ import {
   Zap,
   Search,
   KeyRound,
+  ChevronDown,
 } from "lucide-react";
 import {
   Card,
@@ -41,6 +42,7 @@ import {
   type ModelInfoResponse,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { usePersistentState } from "@/lib/use-persistent-state";
 
 interface HealthResult {
   provider_id: string;
@@ -103,6 +105,7 @@ function ProviderCard({
 }) {
   const [search, setSearch] = useState("");
   const [authOpen, setAuthOpen] = useState(false);
+  const [expanded, setExpanded] = usePersistentState(`models:provider:${provider.id}:expanded`, true);
 
   const filteredModels = useMemo(() => {
     if (!search.trim()) return provider.models;
@@ -118,20 +121,31 @@ function ProviderCard({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Cpu className="h-4 w-4 text-muted-foreground" />
-              {provider.label}
-            </CardTitle>
-            <CardDescription className="font-mono text-xs">
-              {provider.id} · {provider.type}
-              {provider.models.length > 0 && (
-                <span className="ml-1">
-                  · {provider.models.length} model{provider.models.length !== 1 ? "s" : ""}
-                </span>
+          <button
+            className="flex items-start gap-2 text-left flex-1 min-w-0"
+            onClick={() => setExpanded((e) => !e)}
+          >
+            <ChevronDown
+              className={cn(
+                "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                !expanded && "-rotate-90",
               )}
-            </CardDescription>
-          </div>
+            />
+            <div className="space-y-1 min-w-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Cpu className="h-4 w-4 text-muted-foreground" />
+                {provider.label}
+              </CardTitle>
+              <CardDescription className="font-mono text-xs">
+                {provider.id} · {provider.type}
+                {provider.models.length > 0 && (
+                  <span className="ml-1">
+                    · {provider.models.length} model{provider.models.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </CardDescription>
+            </div>
+          </button>
           <div className="flex flex-wrap items-center gap-2">
             <HealthBadge provider={provider} />
             <Badge
@@ -144,163 +158,169 @@ function ProviderCard({
             </Badge>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Button size="sm" variant="outline" onClick={onTest} disabled={testing}>
-            {testing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Activity className="h-3.5 w-3.5" />
-            )}
-            Test Connection
-          </Button>
-          {provider.auto_fetch_models && (
-            <Button size="sm" variant="outline" onClick={onFetch} disabled={fetching}>
-              {fetching ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              Fetch Models
-            </Button>
-          )}
-          <EditProviderDialog provider={provider} onSaved={onSaved} />
-          {provider.type === "anthropic" && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setAuthOpen(true)}
-              >
-                <KeyRound className="h-3.5 w-3.5" />
-                {provider.auth_method === "oauth" && provider.api_key_set
-                  ? "Re-authorize"
-                  : "Connect Account"}
-              </Button>
-              <AnthropicAuthDialog
-                key={authOpen ? "open" : "closed"}
-                open={authOpen}
-                onOpenChange={setAuthOpen}
-                onSuccess={onSaved}
-              />
-            </>
-          )}
-        </div>
-        {testResult && (
-          <div
-            className={cn(
-              "mt-1 rounded-md border px-3 py-2 text-xs",
-              testResult.healthy
-                ? "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300"
-                : "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
-            )}
-          >
-            <span className="font-medium">
-              {testResult.healthy ? "Healthy" : "Unhealthy"}
-            </span>
-            {" · "}
-            {testResult.latency_ms}ms — {testResult.message}
-          </div>
-        )}
-        {provider.health_message && !testResult && (
-          <p className="text-xs text-muted-foreground pt-1">
-            {provider.health_message}
-          </p>
-        )}
-      </CardHeader>
-      <CardContent>
-        {provider.models.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">
-            No models configured.
-          </p>
-        ) : (
+        {expanded && (
           <>
-            {showSearch && (
-              <div className="relative mb-3">
-                <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search models…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-8 pl-8 text-sm"
-                />
-                {search && (
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                    {filteredModels.length}/{provider.models.length}
-                  </span>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button size="sm" variant="outline" onClick={onTest} disabled={testing}>
+                {testing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Activity className="h-3.5 w-3.5" />
                 )}
+                Test Connection
+              </Button>
+              {provider.auto_fetch_models && (
+                <Button size="sm" variant="outline" onClick={onFetch} disabled={fetching}>
+                  {fetching ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Fetch Models
+                </Button>
+              )}
+              <EditProviderDialog provider={provider} onSaved={onSaved} />
+              {provider.type === "anthropic" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAuthOpen(true)}
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    {provider.auth_method === "oauth" && provider.api_key_set
+                      ? "Re-authorize"
+                      : "Connect Account"}
+                  </Button>
+                  <AnthropicAuthDialog
+                    key={authOpen ? "open" : "closed"}
+                    open={authOpen}
+                    onOpenChange={setAuthOpen}
+                    onSuccess={onSaved}
+                  />
+                </>
+              )}
+            </div>
+            {testResult && (
+              <div
+                className={cn(
+                  "mt-1 rounded-md border px-3 py-2 text-xs",
+                  testResult.healthy
+                    ? "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300"
+                    : "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+                )}
+              >
+                <span className="font-medium">
+                  {testResult.healthy ? "Healthy" : "Unhealthy"}
+                </span>
+                {" · "}
+                {testResult.latency_ms}ms — {testResult.message}
               </div>
             )}
-            <div className="max-h-80 overflow-y-auto rounded-md border border-border">
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background">
-                  <TableRow>
-                    <TableHead className="min-w-[120px]">ID</TableHead>
-                    <TableHead className="min-w-[100px]">Label</TableHead>
-                    <TableHead className="min-w-[80px]">Tags</TableHead>
-                    <TableHead className="w-20">Source</TableHead>
-                    <TableHead className="w-16 text-right">Avail</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredModels.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
-                        No models match &ldquo;{search}&rdquo;
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredModels.map((m: ModelInfoResponse) => (
-                      <TableRow key={m.id}>
-                        <TableCell className="font-mono text-xs">{m.id}</TableCell>
-                        <TableCell className="text-sm">{m.label}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {m.tags.length === 0 ? (
-                              <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                                untagged
-                              </Badge>
-                            ) : (
-                              m.tags.map((t) => (
-                                <Badge
-                                  key={t}
-                                  variant="outline"
-                                  className={cn("border", tierBadgeClass(t))}
-                                >
-                                  {t}
-                                </Badge>
-                              ))
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              m.source === "auto"
-                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30"
-                                : "bg-muted text-muted-foreground border-border"
-                            )}
-                          >
-                            {m.source}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {m.available ? (
-                            <span className="text-green-600 dark:text-green-400 text-sm">●</span>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">○</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+            {provider.health_message && !testResult && (
+              <p className="text-xs text-muted-foreground pt-1">
+                {provider.health_message}
+              </p>
+            )}
           </>
         )}
-      </CardContent>
+      </CardHeader>
+      {expanded && (
+        <CardContent>
+          {provider.models.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No models configured.
+            </p>
+          ) : (
+            <>
+              {showSearch && (
+                <div className="relative mb-3">
+                  <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search models…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-8 pl-8 text-sm"
+                  />
+                  {search && (
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                      {filteredModels.length}/{provider.models.length}
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="max-h-80 overflow-y-auto rounded-md border border-border">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
+                    <TableRow>
+                      <TableHead className="min-w-[120px]">ID</TableHead>
+                      <TableHead className="min-w-[100px]">Label</TableHead>
+                      <TableHead className="min-w-[80px]">Tags</TableHead>
+                      <TableHead className="w-20">Source</TableHead>
+                      <TableHead className="w-16 text-right">Avail</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredModels.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-6">
+                          No models match &ldquo;{search}&rdquo;
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredModels.map((m: ModelInfoResponse) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-mono text-xs">{m.id}</TableCell>
+                          <TableCell className="text-sm">{m.label}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {m.tags.length === 0 ? (
+                                <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                                  untagged
+                                </Badge>
+                              ) : (
+                                m.tags.map((t) => (
+                                  <Badge
+                                    key={t}
+                                    variant="outline"
+                                    className={cn("border", tierBadgeClass(t))}
+                                  >
+                                    {t}
+                                  </Badge>
+                                ))
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                m.source === "auto"
+                                  ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30"
+                                  : "bg-muted text-muted-foreground border-border"
+                              )}
+                            >
+                              {m.source}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {m.available ? (
+                              <span className="text-green-600 dark:text-green-400 text-sm">●</span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">○</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 }
@@ -318,6 +338,8 @@ function TierTaskEditor({
 }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tiersExpanded, setTiersExpanded] = usePersistentState("models:tierMappings:expanded", true);
+  const [tasksExpanded, setTasksExpanded] = usePersistentState("models:taskOverrides:expanded", true);
 
   // Tier mappings — local state with single save
   const [tierEdits, setTierEdits] = useState<Record<string, { provider: string; model: string }>>({});
@@ -412,103 +434,133 @@ function TierTaskEditor({
     <div className="grid gap-6 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Layers className="h-4 w-4 text-muted-foreground" />
-            Tier Mappings
-          </CardTitle>
-          <CardDescription>
-            Default provider + model for each routing tier. Changes save to providers.yml.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {error && (
-            <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">{error}</div>
-          )}
-          {tiers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No tier mappings configured.
-            </p>
-          ) : (
-            <>
-              {tiers.map((t) => {
-                const val = getTierValue(t.tier, t.provider, t.model);
-                const models = providerModels[val.provider] ?? [];
-                return (
-                  <div key={t.tier} className="rounded-md border border-border p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={cn("border", tierBadgeClass(t.tier))}>
-                        {t.tier}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <select
-                        value={val.provider}
-                        onChange={(e) => setTierValue(t.tier, "provider", e.target.value)}
-                        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
-                      >
-                        {providers.map((p) => (
-                          <option key={p.id} value={p.id} className="bg-background text-foreground">{p.id}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={val.model}
-                        onChange={(e) => setTierValue(t.tier, "model", e.target.value)}
-                        className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
-                      >
-                        {models.length === 0 ? (
-                          <option value="" className="bg-background text-foreground">(no models)</option>
-                        ) : (
-                          models.map((m) => (
-                            <option key={m.id} value={m.id} className="bg-background text-foreground">{m.id}</option>
-                          ))
-                        )}
-                      </select>
-                    </div>
-                  </div>
-                );
-              })}
-              {tierDirty && (
-                <Button onClick={handleSaveAllTiers} disabled={savingTiers} size="sm" className="w-full">
-                  {savingTiers ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                  {savingTiers ? "Saving..." : "Save All Tiers"}
-                </Button>
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={() => setTiersExpanded((e) => !e)}
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                !tiersExpanded && "-rotate-90",
               )}
-            </>
-          )}
-        </CardContent>
+            />
+            <div className="space-y-1">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Layers className="h-4 w-4 text-muted-foreground" />
+                Tier Mappings
+              </CardTitle>
+              <CardDescription>
+                Default provider + model for each routing tier. Changes save to providers.yml.
+              </CardDescription>
+            </div>
+          </button>
+        </CardHeader>
+        {tiersExpanded && (
+          <CardContent className="space-y-3">
+            {error && (
+              <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">{error}</div>
+            )}
+            {tiers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No tier mappings configured.
+              </p>
+            ) : (
+              <>
+                {tiers.map((t) => {
+                  const val = getTierValue(t.tier, t.provider, t.model);
+                  const models = providerModels[val.provider] ?? [];
+                  return (
+                    <div key={t.tier} className="rounded-md border border-border p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn("border", tierBadgeClass(t.tier))}>
+                          {t.tier}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={val.provider}
+                          onChange={(e) => setTierValue(t.tier, "provider", e.target.value)}
+                          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
+                        >
+                          {providers.map((p) => (
+                            <option key={p.id} value={p.id} className="bg-background text-foreground">{p.id}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={val.model}
+                          onChange={(e) => setTierValue(t.tier, "model", e.target.value)}
+                          className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono text-foreground"
+                        >
+                          {models.length === 0 ? (
+                            <option value="" className="bg-background text-foreground">(no models)</option>
+                          ) : (
+                            models.map((m) => (
+                              <option key={m.id} value={m.id} className="bg-background text-foreground">{m.id}</option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+                {tierDirty && (
+                  <Button onClick={handleSaveAllTiers} disabled={savingTiers} size="sm" className="w-full">
+                    {savingTiers ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    {savingTiers ? "Saving..." : "Save All Tiers"}
+                  </Button>
+                )}
+              </>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <ListChecks className="h-4 w-4 text-muted-foreground" />
-            Task Overrides
-          </CardTitle>
-          <CardDescription>
-            Per-task model selection overrides. Changes save to providers.yml.
-          </CardDescription>
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={() => setTasksExpanded((e) => !e)}
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                !tasksExpanded && "-rotate-90",
+              )}
+            />
+            <div className="space-y-1">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-muted-foreground" />
+                Task Overrides
+              </CardTitle>
+              <CardDescription>
+                Per-task model selection overrides. Changes save to providers.yml.
+              </CardDescription>
+            </div>
+          </button>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {taskEntries.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No task overrides configured.
-            </p>
-          ) : (
-            taskEntries.map(([task, ov]) => (
-              <TaskRow
-                key={`${task}-${ov.tier}-${ov.provider ?? ""}-${ov.model ?? ""}`}
-                task={task}
-                currentTier={ov.tier}
-                currentProvider={ov.provider}
-                currentModel={ov.model}
-                providers={providers}
-                providerModels={providerModels}
-                saving={saving === `task-${task}`}
-                onSave={handleTaskSave}
-              />
-            ))
-          )}
-        </CardContent>
+        {tasksExpanded && (
+          <CardContent className="space-y-3">
+            {taskEntries.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No task overrides configured.
+              </p>
+            ) : (
+              taskEntries.map(([task, ov]) => (
+                <TaskRow
+                  key={`${task}-${ov.tier}-${ov.provider ?? ""}-${ov.model ?? ""}`}
+                  task={task}
+                  currentTier={ov.tier}
+                  currentProvider={ov.provider}
+                  currentModel={ov.model}
+                  providers={providers}
+                  providerModels={providerModels}
+                  saving={saving === `task-${task}`}
+                  onSave={handleTaskSave}
+                />
+              ))
+            )}
+          </CardContent>
+        )}
       </Card>
     </div>
   );

@@ -184,7 +184,7 @@ class ModelRouter:
     # These are generous defaults used when the task is not explicitly configured
     # in providers.yml. They can be overridden per-task via config.
     _TASK_MAX_TOKENS_DEFAULTS: dict[str, int] = {
-        "jd_analysis": 4096,
+        "jd_analysis": 16000,
         "resume_generation_standard": 16000,
         "resume_generation_high_value": 16000,
         "cover_letter_generation": 4000,

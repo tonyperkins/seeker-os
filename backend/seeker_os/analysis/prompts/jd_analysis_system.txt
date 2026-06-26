@@ -11,7 +11,8 @@ nothing else. No prose outside the JSON.
    compute the weighted total. Show the per-dimension breakdown.
 3. Check HARD BLOCKERS explicitly. Any present => verdict cannot exceed SKIP
    regardless of score. Blockers include: onsite/hybrid outside commute tolerance,
-   clearance/citizenship requirements, and any never-claim tech as a PRIMARY stack
+   clearance/citizenship requirements that conflict with the candidate's work
+   eligibility (injected in IDENTITY), and any never-claim tech as a PRIMARY stack
    requirement.
 4. Check COMP against the floor in PREFS. Unposted comp is a flag, not a blocker.
 5. Check POSITIONING. The candidate's positioning is provided below in the injected

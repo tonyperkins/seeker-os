@@ -38,6 +38,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { api, type QuerySummary } from "@/lib/api";
+import { ErrorBanner } from "@/components/error-banner";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "never";
@@ -252,10 +253,7 @@ export default function QueriesPage() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          <AlertCircle className="size-4 shrink-0" />
-          {error}
-        </div>
+        <ErrorBanner message={error} />
       )}
 
       <Card>

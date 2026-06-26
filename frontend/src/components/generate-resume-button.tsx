@@ -15,6 +15,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { api, type ResumeProgressEvent } from "@/lib/api";
+import { ErrorBanner } from "@/components/error-banner";
 
 const STEPS = [
   { key: "load_job", label: "Loading job", icon: FileSearch },
@@ -159,9 +160,7 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
         </DialogHeader>
 
         {error && (
-          <div className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
-            {error}
-          </div>
+          <ErrorBanner message={error} />
         )}
 
         {busy && (

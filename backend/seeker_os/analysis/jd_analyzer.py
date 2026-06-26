@@ -135,6 +135,8 @@ def _load_identity_text(settings: Settings) -> str:
     lines: list[str] = []
     if identity.positioning:
         lines.append(f"Positioning: {identity.positioning}")
+    if identity.work_eligibility:
+        lines.append(f"Work eligibility: {identity.work_eligibility}")
     if identity.experience_anchor.phrase:
         lines.append(f"Experience anchor: {identity.experience_anchor.phrase}")
         if identity.experience_anchor.applies_to:

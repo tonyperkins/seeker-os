@@ -8,7 +8,7 @@ These are separate from the internal models in models.py because:
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +42,13 @@ class JobSummary(BaseModel):
     is_stale: bool = False
     days_since_last_activity: int | None = None
 
+    @field_validator("comp_min", "comp_max", mode="before")
+    @classmethod
+    def _round_comp(cls, v):
+        if v is None:
+            return None
+        return int(round(float(v)))
+
 
 class JobDetail(BaseModel):
     """Full job detail."""
@@ -62,6 +69,13 @@ class JobDetail(BaseModel):
     requirements_summary: str = ""
     date_posted: str = ""
     role_type: str | None = None
+
+    @field_validator("comp_min", "comp_max", mode="before")
+    @classmethod
+    def _round_comp(cls, v):
+        if v is None:
+            return None
+        return int(round(float(v)))
 
     # Pipeline
     status: str
@@ -141,6 +155,13 @@ class JobCreate(BaseModel):
     company_homepage: str | None = None
     jd_text: str | None = None  # paste-JD fallback — skip fetch when provided
     force: bool = False  # bypass soft-duplicate check (content hash match)
+
+    @field_validator("comp_min", "comp_max", mode="before")
+    @classmethod
+    def _round_comp(cls, v):
+        if v is None:
+            return None
+        return int(round(float(v)))
 
 
 class JobCreateResponse(BaseModel):

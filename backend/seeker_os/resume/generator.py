@@ -106,6 +106,22 @@ def _load_never_claim_text(settings: Settings) -> str:
     return f"NEVER mention these technologies anywhere in the resume: {items}"
 
 
+def _load_work_eligibility_text(settings: Settings) -> str:
+    """Load work eligibility from identity_rules.yml for the prompt.
+
+    Returns empty string if no identity or no work_eligibility configured —
+    the prompt says nothing about it in that case. No hardcoded fallback.
+    """
+    identity = settings.identity
+    if not identity or not identity.work_eligibility:
+        return ""
+    return (
+        f"If the job description asks about work authorization, citizenship, "
+        f"or visa sponsorship, include this factual statement: "
+        f"\"{identity.work_eligibility}\". Do not invent or embellish beyond this."
+    )
+
+
 def _build_tiering_instructions(settings: Settings) -> str:
     """Build recency/relevance tiering instructions from channel_rules config.
 
@@ -202,6 +218,11 @@ def generate_resume(
     never_claim_text = _load_never_claim_text(settings)
     if never_claim_text:
         system_prompt += f"\n\n--- NEVER CLAIM ---\n{never_claim_text}\n--- END NEVER CLAIM ---\n"
+
+    # Inject work eligibility from identity_rules.yml
+    work_eligibility_text = _load_work_eligibility_text(settings)
+    if work_eligibility_text:
+        system_prompt += f"\n\n--- WORK ELIGIBILITY ---\n{work_eligibility_text}\n--- END WORK ELIGIBILITY ---\n"
 
     channel_rules = settings.channel_rules
     if channel_rules and channel_rules.resume:

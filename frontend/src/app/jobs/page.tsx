@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { api, type JobSummary } from "@/lib/api";
 import { AddJobDialog } from "@/components/add-job-dialog";
+import { usePersistentState } from "@/lib/use-persistent-state";
 
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -85,11 +86,11 @@ function JobsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [status, setStatus] = useState<string>(searchParams.get("status") ?? "");
-  const [minScore, setMinScore] = useState<string>(searchParams.get("min_score") ?? "");
-  const [minTier, setMinTier] = useState<string>(searchParams.get("min_tier") ?? "");
-  const [company, setCompany] = useState<string>(searchParams.get("company") ?? "");
-  const [source, setSource] = useState<string>(searchParams.get("source") ?? "");
+  const [status, setStatus] = usePersistentState<string>("jobs:filter:status", searchParams.get("status") ?? "");
+  const [minScore, setMinScore] = usePersistentState<string>("jobs:filter:minScore", searchParams.get("min_score") ?? "");
+  const [minTier, setMinTier] = usePersistentState<string>("jobs:filter:minTier", searchParams.get("min_tier") ?? "");
+  const [company, setCompany] = usePersistentState<string>("jobs:filter:company", searchParams.get("company") ?? "");
+  const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "");
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

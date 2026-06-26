@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { api, type CompanyResearchResult } from "@/lib/api";
+import { ErrorBanner } from "@/components/error-banner";
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
   const pct = Math.round(confidence * 100);
@@ -317,10 +318,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
         )}
 
         {error && (
-          <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
-            <AlertCircle className="size-4 shrink-0" />
-            {error}
-          </div>
+          <ErrorBanner message={error} />
         )}
 
         {notFound && !loading && !running && (

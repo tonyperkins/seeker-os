@@ -6,8 +6,10 @@ Run with:
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +26,27 @@ from seeker_os.api.company_research import router as company_research_router
 from seeker_os.api.company_research_settings import router as company_research_settings_router
 from seeker_os.api.jd_analysis import router as jd_analysis_router
 from seeker_os.database import run_migrations
+
+# ---------------------------------------------------------------------------
+# Logging — write to data/backend.log so the UI can retrieve recent lines
+# ---------------------------------------------------------------------------
+_LOG_DIR = Path(__file__).resolve().parents[2] / "data"
+_LOG_DIR.mkdir(exist_ok=True)
+_LOG_FILE = _LOG_DIR / "backend.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler(_LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
+
+# Suppress watchfiles (uvicorn --reload) to WARNING in the log file to prevent
+# a feedback loop: watchfiles detects the log file changing → logs the detection
+# → writes to the log file → triggers another detection.
+logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -77,3 +100,13 @@ def root():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/logs")
+def get_logs(tail: int = 80):
+    """Return the last *tail* lines of the backend log file for UI display."""
+    try:
+        lines = _LOG_FILE.read_text(encoding="utf-8").splitlines()
+        return {"lines": lines[-tail:], "path": str(_LOG_FILE)}
+    except FileNotFoundError:
+        return {"lines": [], "path": str(_LOG_FILE)}

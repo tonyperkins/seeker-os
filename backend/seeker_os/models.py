@@ -6,7 +6,7 @@ consistent typing. See AGENTS.md § Data Conventions.
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class JobCard(BaseModel):
@@ -47,6 +47,13 @@ class JobCard(BaseModel):
     # Metadata
     discovered_query: str        # which query slug found this
     detail_url: str | None = None  # source-specific detail page URL (e.g. hiring.cafe/job/{slug})
+
+    @field_validator("comp_min", "comp_max", mode="before")
+    @classmethod
+    def _round_comp(cls, v):
+        if v is None:
+            return None
+        return int(round(float(v)))
 
 
 class SourcePage(BaseModel):

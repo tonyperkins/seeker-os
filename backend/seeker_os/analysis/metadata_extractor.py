@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from seeker_os.config import Settings
 
@@ -58,6 +58,13 @@ class ExtractedMetadata(BaseModel):
     role_type: str | None = None
     commitment: str | None = None
     countries: list[str] | None = None
+
+    @field_validator("comp_min", "comp_max", mode="before")
+    @classmethod
+    def _round_comp(cls, v):
+        if v is None:
+            return None
+        return int(round(float(v)))
 
 
 def _strip_code_fences(text: str) -> str:

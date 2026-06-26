@@ -633,6 +633,10 @@ export const api = {
   // Health
   health: () => fetchAPI<{ status: string }>("/api/health"),
 
+  // Logs
+  logs: (tail?: number) =>
+    fetchAPI<{ lines: string[]; path: string }>(`/api/logs${tail ? `?tail=${tail}` : ""}`),
+
   // Company Research Settings
   companyResearchSettings: {
     get: () => fetchAPI<RetrievalSettings>("/api/settings/company-research"),

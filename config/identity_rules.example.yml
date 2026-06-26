@@ -15,6 +15,13 @@ identity:
   # alignment; the resume generator uses it to frame the summary.
   positioning: "<your positioning statement — e.g. 'I build and operate reliable systems, not design products'>"
 
+  # --- Work eligibility / citizenship ---
+  # Your work authorization status. The JD analyzer uses this to flag jobs
+  # with incompatible citizenship/clearance requirements as hard blockers.
+  # The resume generator includes it in the resume if the JD asks for it.
+  # Leave empty to skip this check entirely.
+  work_eligibility: "<e.g. 'US citizen, no sponsorship required'>"
+
   # --- Experience anchor ---
   # The only acceptable experience phrasing. The validator flags any variant
   # listed in disallowed_variants. The resume generator instructs the LLM

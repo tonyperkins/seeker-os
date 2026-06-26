@@ -21,7 +21,7 @@ fi
 
 # Start backend
 echo "Starting FastAPI backend on :8000..."
-uvicorn seeker_os.api.app:app --reload --port 8000 --app-dir backend &
+uvicorn seeker_os.api.app:app --reload --reload-dir backend --port 8000 --app-dir backend &
 BACKEND_PID=$!
 
 # Start frontend

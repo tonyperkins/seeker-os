@@ -264,7 +264,7 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
                   placeholder="Paste the full job description here to skip the URL fetch…"
                   value={jdText}
                   onChange={(e) => setJdText(e.target.value)}
-                  className="min-h-[80px] font-mono text-xs"
+                  className="max-h-[200px] min-h-[80px] font-mono text-xs"
                 />
               </div>
             </div>
@@ -308,7 +308,7 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
                   placeholder="Copy the job description from the posting and paste it here…"
                   value={jdText}
                   onChange={(e) => setJdText(e.target.value)}
-                  className="min-h-[200px] font-mono text-xs"
+                  className="max-h-[300px] min-h-[200px] font-mono text-xs"
                   autoFocus
                 />
               </div>

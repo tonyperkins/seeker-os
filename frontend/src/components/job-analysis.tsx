@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { api, type JobAnalysisResult, type NamedGap } from "@/lib/api";
+import { ErrorBanner } from "@/components/error-banner";
 
 const VERDICT_STYLES: Record<string, { color: string; label: string }> = {
   APPLY: { color: "text-emerald-600", label: "APPLY" },
@@ -192,10 +193,7 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
         )}
 
         {error && (
-          <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
-            <AlertCircle className="size-4 shrink-0" />
-            {error}
-          </div>
+          <ErrorBanner message={error} />
         )}
 
         {notFound && !loading && !running && (

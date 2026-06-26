@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api, type JobSummary } from "@/lib/api";
 import { AddJobDialog } from "@/components/add-job-dialog";
+import { usePersistentState } from "@/lib/use-persistent-state";
 
 const PRE_APPLY_COLUMNS = [
   { key: "ready", label: "Ready", icon: CheckCircle2, color: "text-emerald-500" },
@@ -52,9 +53,9 @@ export default function KanbanPage() {
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
-  const [rejectedFilter, setRejectedFilter] = useState<"manual" | "all">("manual");
+  const [rejectedFilter, setRejectedFilter] = usePersistentState<"manual" | "all">("kanban:rejectedFilter", "manual");
   const [overridingId, setOverridingId] = useState<number | null>(null);
-  const [boardView, setBoardView] = useState<"pre-apply" | "post-apply">("pre-apply");
+  const [boardView, setBoardView] = usePersistentState<"pre-apply" | "post-apply">("kanban:boardView", "pre-apply");
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);

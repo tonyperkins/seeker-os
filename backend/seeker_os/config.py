@@ -388,6 +388,7 @@ class ExperienceAnchor(BaseModel):
 
 class IdentityConfig(BaseModel):
     positioning: str = ""
+    work_eligibility: str = ""
     experience_anchor: ExperienceAnchor = ExperienceAnchor()
     honest_qualifiers: list[HonestQualifier] = []
     never_claim: list[str] = []
