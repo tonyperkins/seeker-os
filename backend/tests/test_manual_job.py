@@ -18,7 +18,7 @@ def client():
         if manual_ids:
             id_list = [str(r["id"]) for r in manual_ids]
             id_csv = ",".join(id_list)
-            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers"]:
+            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers", "application_events"]:
                 db.execute(f"DELETE FROM {table} WHERE job_id IN ({id_csv})")
             db.execute(f"DELETE FROM jobs WHERE id IN ({id_csv})")
         db.commit()
@@ -37,7 +37,7 @@ def cleanup_after():
         if manual_ids:
             id_list = [str(r["id"]) for r in manual_ids]
             id_csv = ",".join(id_list)
-            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers"]:
+            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers", "application_events"]:
                 db.execute(f"DELETE FROM {table} WHERE job_id IN ({id_csv})")
             db.execute(f"DELETE FROM jobs WHERE id IN ({id_csv})")
         db.commit()

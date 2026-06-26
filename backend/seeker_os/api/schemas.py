@@ -107,6 +107,9 @@ class JobDetail(BaseModel):
     override_note: str | None = None
     original_reject_reason: str | None = None
 
+    # Application lifecycle events timeline
+    events: list[ApplicationEvent] = []
+
 
 class JobCreate(BaseModel):
     """POST /api/jobs — manually add a job.
@@ -169,6 +172,35 @@ class JobReject(BaseModel):
 class MessageResponse(BaseModel):
     """Generic message response."""
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Application Event schemas
+# ---------------------------------------------------------------------------
+
+class ApplicationEvent(BaseModel):
+    """An event in the job application lifecycle (read model)."""
+    id: int
+    job_id: int
+    event_type: str
+    actor: str
+    occurred_at: str
+    created_at: str
+    metadata: dict | None = None
+    note: str | None = None
+
+
+class ApplicationEventCreate(BaseModel):
+    """Payload for creating an event.
+
+    occurred_at is editable (defaults to server now). created_at is NOT
+    settable — it is always server-set and never appears in this model.
+    """
+    event_type: str
+    actor: str = "candidate"
+    occurred_at: str | None = None
+    metadata: dict | None = None
+    note: str | None = None
 
 
 # ---------------------------------------------------------------------------

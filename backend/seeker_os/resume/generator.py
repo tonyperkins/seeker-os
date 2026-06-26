@@ -13,6 +13,7 @@ from pathlib import Path
 
 from seeker_os.config import Settings
 from seeker_os.database import get_connection, json_decode
+from seeker_os.events import transition_status, EventType, Actor
 from seeker_os.llm.router import ModelRouter
 from seeker_os.validation import AccuracyValidator
 from seeker_os.validation.traceability import TraceabilityChecker
@@ -215,9 +216,9 @@ def generate_resume(
     resume_id = cursor.lastrowid
 
     # Update job status to 'interested' (resume generated = moving forward)
-    db.execute(
-        "UPDATE jobs SET status='interested', updated_at=? WHERE id=?",
-        (now, job_id),
+    transition_status(
+        db, job_id, "interested", EventType.RESUME_GENERATED, Actor.SYSTEM,
+        metadata={"resume_id": resume_id},
     )
     db.commit()
     db.close()

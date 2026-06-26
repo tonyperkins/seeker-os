@@ -7,9 +7,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
 from seeker_os.api.schemas import (
     JobSummary, JobDetail, JobUpdate, JobReject, JobCreate, JobCreateResponse,
-    JobOverride, MessageResponse,
+    JobOverride, MessageResponse, ApplicationEvent, ApplicationEventCreate,
 )
 from seeker_os.database import get_connection, json_decode, json_encode
+from seeker_os.events import record_event, transition_status, EventType, Actor
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -116,7 +117,27 @@ def _row_to_summary(row) -> JobSummary:
     )
 
 
-def _row_to_detail(row) -> JobDetail:
+def _row_to_event(row) -> ApplicationEvent:
+    return ApplicationEvent(
+        id=row["id"],
+        job_id=row["job_id"],
+        event_type=row["event_type"],
+        actor=row["actor"],
+        occurred_at=row["occurred_at"],
+        created_at=row["created_at"],
+        metadata=json_decode(row["metadata"]) if row["metadata"] else None,
+        note=row["note"],
+    )
+
+
+def _row_to_detail(row, db=None) -> JobDetail:
+    events: list[ApplicationEvent] = []
+    if db is not None:
+        event_rows = db.execute(
+            "SELECT * FROM application_events WHERE job_id = ? ORDER BY occurred_at ASC, id ASC",
+            (row["id"],),
+        ).fetchall()
+        events = [_row_to_event(r) for r in event_rows]
     return JobDetail(
         id=row["id"],
         title=row["title"] or "",
@@ -166,6 +187,7 @@ def _row_to_detail(row) -> JobDetail:
         overridden_at=row["overridden_at"] if "overridden_at" in row.keys() else None,
         override_note=row["override_note"] if "override_note" in row.keys() else None,
         original_reject_reason=row["original_reject_reason"] if "original_reject_reason" in row.keys() else None,
+        events=events,
     )
 
 
@@ -502,13 +524,19 @@ def create_job(body: JobCreate):
         # Apply research adjustment from cached company dossier (if any)
         _try_apply_research_adjustment(db, job_id, eff_company)
 
+        # Record the manual_created event
+        record_event(
+            db, job_id, EventType.MANUAL_CREATED, Actor.CANDIDATE,
+            metadata={"score": score_result.score},
+        )
+
         db.commit()
 
         row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         response_status = "likely_duplicate" if likely_dup_id else "created"
         return JobCreateResponse(
             status=response_status,
-            job=_row_to_detail(row),
+            job=_row_to_detail(row, db=db),
             existing_job_id=likely_dup_id,
             filter_warnings=filter_warnings,
         )
@@ -541,12 +569,14 @@ def override_job(job_id: int, body: JobOverride):
         now = datetime.now(timezone.utc).isoformat()
         original_reason = row["reject_reason"]
 
-        db.execute(
-            """UPDATE jobs
-               SET status=?, overridden_at=?, override_note=?, original_reject_reason=?,
-                   updated_at=?
-               WHERE id=?""",
-            (body.target_status, now, body.note, original_reason, now, job_id),
+        transition_status(
+            db, job_id, body.target_status, EventType.OVERRIDDEN, Actor.CANDIDATE,
+            extra_sets={
+                "overridden_at": now,
+                "override_note": body.note,
+                "original_reject_reason": original_reason,
+            },
+            metadata={"from": "rejected", "to": body.target_status, "note": body.note},
         )
         db.commit()
         return MessageResponse(message=f"Job {job_id} overridden to '{body.target_status}'")
@@ -562,7 +592,7 @@ def get_job(job_id: int):
         row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-        return _row_to_detail(row)
+        return _row_to_detail(row, db=db)
     finally:
         db.close()
 
@@ -578,7 +608,11 @@ def update_job(job_id: int, update: JobUpdate):
 
         now = datetime.now(timezone.utc).isoformat()
         if update.status is not None:
-            db.execute("UPDATE jobs SET status=?, updated_at=? WHERE id=?", (update.status, now, job_id))
+            old_status = row["status"]
+            transition_status(
+                db, job_id, update.status, EventType.STATUS_CHANGED, Actor.CANDIDATE,
+                metadata={"from": old_status, "to": update.status},
+            )
         if update.is_pinned is not None:
             db.execute("UPDATE jobs SET is_pinned=?, updated_at=? WHERE id=?", (update.is_pinned, now, job_id))
         if update.ai_policy is not None:
@@ -601,10 +635,10 @@ def reject_job(job_id: int, body: JobReject):
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        now = datetime.now(timezone.utc).isoformat()
-        db.execute(
-            "UPDATE jobs SET status='rejected', reject_reason=?, reject_details=?, updated_at=? WHERE id=?",
-            (body.reason, body.details, now, job_id),
+        transition_status(
+            db, job_id, "rejected", EventType.REJECTED, Actor.CANDIDATE,
+            extra_sets={"reject_reason": body.reason, "reject_details": body.details},
+            metadata={"reason": body.reason, "details": body.details},
         )
         db.commit()
         return MessageResponse(message=f"Job {job_id} rejected: {body.reason}")
@@ -621,13 +655,62 @@ def skip_job(job_id: int):
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        now = datetime.now(timezone.utc).isoformat()
-        db.execute(
-            "UPDATE jobs SET status='skipped', reject_reason=NULL, updated_at=? WHERE id=?",
-            (now, job_id),
+        transition_status(
+            db, job_id, "skipped", EventType.SKIPPED, Actor.CANDIDATE,
+            extra_sets={"reject_reason": None},
         )
         db.commit()
         return MessageResponse(message=f"Job {job_id} skipped")
+    finally:
+        db.close()
+
+
+@router.get("/{job_id}/events", response_model=list[ApplicationEvent])
+def get_job_events(job_id: int):
+    """Get a job's event timeline ordered by occurred_at."""
+    db = get_connection()
+    try:
+        row = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        rows = db.execute(
+            "SELECT * FROM application_events WHERE job_id = ? ORDER BY occurred_at ASC, id ASC",
+            (job_id,),
+        ).fetchall()
+        return [_row_to_event(r) for r in rows]
+    finally:
+        db.close()
+
+
+@router.post("/{job_id}/events", response_model=ApplicationEvent)
+def create_event(job_id: int, body: ApplicationEventCreate):
+    """Add an event to a job's timeline."""
+    db = get_connection()
+    try:
+        row = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        try:
+            event_id = record_event(
+                db=db,
+                job_id=job_id,
+                event_type=body.event_type,
+                actor=body.actor,
+                metadata=body.metadata,
+                occurred_at=body.occurred_at,
+                note=body.note,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+        db.commit()
+
+        event_row = db.execute(
+            "SELECT * FROM application_events WHERE id = ?", (event_id,)
+        ).fetchone()
+        return _row_to_event(event_row)
     finally:
         db.close()
 
@@ -642,7 +725,8 @@ def delete_job(job_id: int):
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
         for table in ("dedup_registry", "resumes", "company_research",
-                       "job_analyses", "cover_letters", "application_answers"):
+                       "job_analyses", "cover_letters", "application_answers",
+                       "application_events"):
             db.execute(f"DELETE FROM {table} WHERE job_id = ?", (job_id,))
         db.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         db.commit()

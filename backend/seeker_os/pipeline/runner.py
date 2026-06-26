@@ -29,6 +29,7 @@ from seeker_os.dedup.layers import (
 from seeker_os.discovery.ats_fetch import fetch_jd
 from seeker_os.crossref.jobsearch_repo import sync_repo, check_cross_reference
 from seeker_os.models import JobCard, PipelineProgressEvent, PipelineRunResult
+from seeker_os.events import record_event, transition_status, EventType, Actor
 
 
 def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
@@ -60,7 +61,9 @@ def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
             job.detail_url,
         ),
     )
-    return cursor.lastrowid
+    job_id = cursor.lastrowid
+    record_event(db, job_id, EventType.DISCOVERED, Actor.SYSTEM)
+    return job_id
 
 
 def _get_job_row(db: sqlite3.Connection, job_id: int) -> sqlite3.Row | None:
@@ -228,15 +231,16 @@ def run_pipeline(
             )
 
             if filter_result.passed:
-                db.execute(
-                    "UPDATE jobs SET status='filtered', tier_passed=2, updated_at=? WHERE id=?",
-                    (datetime.now(timezone.utc).isoformat(), row["id"]),
+                transition_status(
+                    db, row["id"], "filtered", EventType.FILTER_PASSED, Actor.SYSTEM,
+                    extra_sets={"tier_passed": 2},
                 )
                 result.tier2_passed += 1
             else:
-                db.execute(
-                    "UPDATE jobs SET status='rejected', reject_reason=?, updated_at=? WHERE id=?",
-                    (filter_result.reason, datetime.now(timezone.utc).isoformat(), row["id"]),
+                transition_status(
+                    db, row["id"], "rejected", EventType.FILTER_REJECTED, Actor.SYSTEM,
+                    extra_sets={"reject_reason": filter_result.reason},
+                    metadata={"reason": filter_result.reason},
                 )
                 result.tier2_rejected += 1
                 result.rejection_reasons[filter_result.reason] = (
@@ -271,9 +275,9 @@ def run_pipeline(
         if retry_jobs:
             print(f"  Retrying {len(retry_jobs)} previously failed JD fetches")
             for row in retry_jobs:
-                db.execute(
-                    "UPDATE jobs SET status='filtered', jd_fetch_status='pending', reject_reason=NULL, updated_at=? WHERE id=?",
-                    (datetime.now(timezone.utc).isoformat(), row["id"]),
+                transition_status(
+                    db, row["id"], "filtered", EventType.JD_FETCH_RETRY, Actor.SYSTEM,
+                    extra_sets={"jd_fetch_status": "pending", "reject_reason": None},
                 )
             db.commit()
 
@@ -308,26 +312,33 @@ def run_pipeline(
             )
 
             if jd_result.status == "fetched":
-                db.execute(
-                    "UPDATE jobs SET jd_full=?, jd_fetch_status='fetched', status='jd_fetched', tier_passed=3, updated_at=? WHERE id=?",
-                    (jd_result.jd_text, datetime.now(timezone.utc).isoformat(), row["id"]),
+                transition_status(
+                    db, row["id"], "jd_fetched", EventType.JD_FETCHED, Actor.SYSTEM,
+                    extra_sets={
+                        "jd_full": jd_result.jd_text,
+                        "jd_fetch_status": "fetched",
+                        "tier_passed": 3,
+                    },
                 )
                 result.tier3_fetched += 1
 
                 # Run dedup layers 3 (content hash) after JD is available
                 content_dedup = check_content_duplicate(row["id"], jd_result.jd_text, db)
                 if content_dedup.is_duplicate:
-                    db.execute(
-                        "UPDATE jobs SET status='duplicate_flagged', updated_at=? WHERE id=?",
-                        (datetime.now(timezone.utc).isoformat(), row["id"]),
+                    transition_status(
+                        db, row["id"], "duplicate_flagged", EventType.DUPLICATE_FLAGGED, Actor.SYSTEM,
                     )
                 else:
                     register_content_hash(row["id"], jd_result.jd_text, db)
 
             else:
-                db.execute(
-                    "UPDATE jobs SET jd_fetch_status='failed', status='rejected', reject_reason=?, updated_at=? WHERE id=?",
-                    (f"JD fetch failed: {jd_result.error}", datetime.now(timezone.utc).isoformat(), row["id"]),
+                transition_status(
+                    db, row["id"], "rejected", EventType.JD_FETCH_FAILED, Actor.SYSTEM,
+                    extra_sets={
+                        "jd_fetch_status": "failed",
+                        "reject_reason": f"JD fetch failed: {jd_result.error}",
+                    },
+                    metadata={"error": jd_result.error},
                 )
                 result.tier3_failed += 1
 
@@ -381,39 +392,39 @@ def run_pipeline(
             )
 
             if score_result.hard_reject:
-                db.execute(
-                    "UPDATE jobs SET score=0, score_reasons=?, score_gaps=?, status='rejected', reject_reason=?, updated_at=? WHERE id=?",
-                    (
-                        json_encode(score_result.reasons),
-                        json_encode(score_result.gaps),
-                        score_result.reject_reason,
-                        datetime.now(timezone.utc).isoformat(),
-                        row["id"],
-                    ),
+                transition_status(
+                    db, row["id"], "rejected", EventType.SCORED_REJECTED, Actor.SYSTEM,
+                    extra_sets={
+                        "score": 0,
+                        "score_reasons": json_encode(score_result.reasons),
+                        "score_gaps": json_encode(score_result.gaps),
+                        "reject_reason": score_result.reject_reason,
+                    },
+                    metadata={"hard_reject": True, "reason": score_result.reject_reason},
                 )
                 result.tier4_hard_rejected += 1
             elif score_result.score >= settings.scoring.post_threshold:
-                db.execute(
-                    "UPDATE jobs SET score=?, score_reasons=?, score_gaps=?, status='ready', tier_passed=4, updated_at=? WHERE id=?",
-                    (
-                        score_result.score,
-                        json_encode(score_result.reasons),
-                        json_encode(score_result.gaps),
-                        datetime.now(timezone.utc).isoformat(),
-                        row["id"],
-                    ),
+                transition_status(
+                    db, row["id"], "ready", EventType.SCORED_READY, Actor.SYSTEM,
+                    extra_sets={
+                        "tier_passed": 4,
+                        "score": score_result.score,
+                        "score_reasons": json_encode(score_result.reasons),
+                        "score_gaps": json_encode(score_result.gaps),
+                    },
+                    metadata={"score": score_result.score},
                 )
                 result.tier4_scored += 1
             else:
-                db.execute(
-                    "UPDATE jobs SET score=?, score_reasons=?, score_gaps=?, status='rejected', reject_reason='score below threshold', updated_at=? WHERE id=?",
-                    (
-                        score_result.score,
-                        json_encode(score_result.reasons),
-                        json_encode(score_result.gaps),
-                        datetime.now(timezone.utc).isoformat(),
-                        row["id"],
-                    ),
+                transition_status(
+                    db, row["id"], "rejected", EventType.SCORED_REJECTED, Actor.SYSTEM,
+                    extra_sets={
+                        "score": score_result.score,
+                        "score_reasons": json_encode(score_result.reasons),
+                        "score_gaps": json_encode(score_result.gaps),
+                        "reject_reason": "score below threshold",
+                    },
+                    metadata={"hard_reject": False, "reason": "score below threshold"},
                 )
                 result.tier4_rejected += 1
 
@@ -448,9 +459,8 @@ def run_pipeline(
             company = row["company"] or "Unknown"
             company_counts[company] = company_counts.get(company, 0) + 1
             if company_counts[company] > cap:
-                db.execute(
-                    "UPDATE jobs SET status='capped', updated_at=? WHERE id=?",
-                    (datetime.now(timezone.utc).isoformat(), row["id"]),
+                transition_status(
+                    db, row["id"], "capped", EventType.CAPPED, Actor.SYSTEM,
                 )
                 result.tier5_capped += 1
 
