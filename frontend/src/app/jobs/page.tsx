@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api, type JobSummary } from "@/lib/api";
+import { AddJobDialog } from "@/components/add-job-dialog";
 
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -34,6 +35,12 @@ const STATUS_OPTIONS = [
   { value: "interested", label: "Interested" },
   { value: "applied", label: "Applied" },
   { value: "skipped", label: "Skipped" },
+];
+
+const SOURCE_OPTIONS = [
+  { value: "", label: "All sources" },
+  { value: "manual", label: "Manual" },
+  { value: "hiring_cafe", label: "hiring.cafe" },
 ];
 
 function statusBadgeVariant(status: string) {
@@ -82,6 +89,7 @@ function JobsPageInner() {
   const [minScore, setMinScore] = useState<string>(searchParams.get("min_score") ?? "");
   const [minTier, setMinTier] = useState<string>(searchParams.get("min_tier") ?? "");
   const [company, setCompany] = useState<string>(searchParams.get("company") ?? "");
+  const [source, setSource] = useState<string>(searchParams.get("source") ?? "");
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +98,7 @@ function JobsPageInner() {
     setLoading(true);
     setError(null);
     try {
-      const params: { status?: string; min_score?: number; min_tier?: number; company?: string; limit?: number } = {
+      const params: { status?: string; min_score?: number; min_tier?: number; company?: string; source?: string; limit?: number } = {
         limit: 200,
       };
       if (status) params.status = status;
@@ -99,6 +107,7 @@ function JobsPageInner() {
       const ms = parseInt(minScore, 10);
       if (!isNaN(ms)) params.min_score = ms;
       if (company.trim()) params.company = company.trim();
+      if (source) params.source = source;
       const data = await api.jobs.list(params);
       setJobs(data);
     } catch (err) {
@@ -106,7 +115,7 @@ function JobsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [status, minScore, minTier, company]);
+  }, [status, minScore, minTier, company, source]);
 
   useEffect(() => {
     // Fetch on mount and when filters change — legitimate data-fetching effect.
@@ -121,9 +130,10 @@ function JobsPageInner() {
     if (minTier) params.set("min_tier", minTier);
     if (minScore) params.set("min_score", minScore);
     if (company) params.set("company", company);
+    if (source) params.set("source", source);
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
-  }, [status, minTier, minScore, company, router]);
+  }, [status, minTier, minScore, company, source, router]);
 
   const sortedJobs = useMemo(() => {
     if (!jobs) return [];
@@ -132,11 +142,14 @@ function JobsPageInner() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Jobs</h1>
-        <p className="text-sm text-muted-foreground">
-          All discovered jobs with filtering and search.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Jobs</h1>
+          <p className="text-sm text-muted-foreground">
+            All discovered jobs with filtering and search.
+          </p>
+        </div>
+        <AddJobDialog onCreated={fetchJobs} />
       </div>
 
       {/* Filters */}
@@ -186,6 +199,21 @@ function JobsPageInner() {
                 onChange={(e) => setMinScore(e.target.value)}
                 className="w-24"
               />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Source</label>
+              <select
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+                className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              >
+                {SOURCE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value} className="bg-background text-foreground">
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex flex-1 flex-col gap-1.5">

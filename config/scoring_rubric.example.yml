@@ -83,6 +83,7 @@ scoring:
       pattern: "fortune\\s*(?:500|100|50)|\\b\\d{2,3},000\\+?\\s*employees"
       points: -1.5
       check: "jd"
+      unless: "our customers|customers include|customers range|client.*fortune|fortune.*customer"
     - signal: "staffing_agency"
       pattern: "staffing|consulting llc|recruiting agency"
       points: -1.5
@@ -124,3 +125,12 @@ scoring:
       delta: -1.0
       confidence_threshold: 0.6
       source_section: "sentiment"
+
+  # AI analysis verdict weights — maps the JD analyzer's verdict to a
+  # score delta. Shown as a modifier card alongside the base score and
+  # research modifier.
+  verdict_weights:
+    APPLY: 2.0
+    CONDITIONAL: 1.0
+    MONITOR: 0.0
+    SKIP: -2.0

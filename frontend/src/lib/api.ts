@@ -57,6 +57,8 @@ export interface JobSummary {
   is_pinned: boolean;
   reject_reason: string | null;
   ai_policy: string | null;
+  source_id: string;
+  discovered_query: string;
 }
 
 export interface JobDetail extends JobSummary {
@@ -84,6 +86,34 @@ export interface JobDetail extends JobSummary {
   ai_policy: string | null;
   research_adjusted_score: number | null;
   research_delta: number;
+  analysis_verdict: string | null;
+  analysis_delta: number;
+  filter_warnings: string[];
+  overridden_at: string | null;
+  override_note: string | null;
+  original_reject_reason: string | null;
+}
+
+export interface JobCreateRequest {
+  url: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  workplace_type?: string;
+  seniority_level?: string;
+  comp_min?: number;
+  comp_max?: number;
+  comp_currency?: string;
+  company_homepage?: string;
+  jd_text?: string;
+}
+
+export interface JobCreateResponse {
+  status: "created" | "already_exists" | "fetch_failed" | "likely_duplicate";
+  job: JobDetail | null;
+  existing_job_id: number | null;
+  fetch_error: string | null;
+  filter_warnings: string[];
 }
 
 export interface PipelineRunSummary {
@@ -353,18 +383,26 @@ export interface MasterResumeInfo {
 export const api = {
   // Jobs
   jobs: {
-    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; source?: string; limit?: number; offset?: number }) => {
       const search = new URLSearchParams();
       if (params?.status) search.set("status", params.status);
       if (params?.min_tier) search.set("min_tier", String(params.min_tier));
       if (params?.min_score) search.set("min_score", String(params.min_score));
       if (params?.company) search.set("company", params.company);
+      if (params?.source) search.set("source", params.source);
       if (params?.limit) search.set("limit", String(params.limit));
       if (params?.offset) search.set("offset", String(params.offset));
       const qs = search.toString();
       return fetchAPI<JobSummary[]>(`/api/jobs${qs ? `?${qs}` : ""}`);
     },
     get: (id: number) => fetchAPI<JobDetail>(`/api/jobs/${id}`),
+    create: (data: JobCreateRequest) =>
+      fetchAPI<JobCreateResponse>(`/api/jobs`, { method: "POST", body: JSON.stringify(data) }),
+    override: (id: number, note?: string, targetStatus?: string) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/override`, {
+        method: "POST",
+        body: JSON.stringify({ note, target_status: targetStatus || "ready" }),
+      }),
     update: (id: number, data: { status?: string; notes?: string; is_pinned?: boolean; ai_policy?: string }) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     reject: (id: number, reason: string, details?: string) =>
@@ -374,6 +412,8 @@ export const api = {
       }),
     skip: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/skip`, { method: "POST" }),
+    delete: (id: number) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "DELETE" }),
     crossRef: (id: number) => fetchAPI<Record<string, unknown>>(`/api/jobs/${id}/cross-ref`),
     companyResearch: {
       get: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`),

@@ -9,6 +9,8 @@ import {
   Star,
   Loader2,
   CheckCircle2,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +56,9 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
   const [rejectReason, setRejectReason] = useState("");
   const [rejectDetails, setRejectDetails] = useState("");
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideNote, setOverrideNote] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   async function doAction(
     key: string,
@@ -67,6 +72,19 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
       if (refresh) router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDelete() {
+    setBusy("delete");
+    setError(null);
+    try {
+      await api.jobs.delete(jobId);
+      router.push("/jobs");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete job");
     } finally {
       setBusy(null);
     }
@@ -199,6 +217,101 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
             Reset to Ready
           </Button>
         )}
+
+        {/* Override rejection — auditable, only for rejected jobs */}
+        {currentStatus === "rejected" && (
+          <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
+            <DialogTrigger
+              render={
+                <Button variant="default" disabled={busy !== null}>
+                  {busy === "override" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+                  Override Rejection
+                </Button>
+              }
+            />
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Override Rejection</DialogTitle>
+                <DialogDescription>
+                  This will move the job back to Ready and record the override with a timestamp.
+                  The original rejection reason is preserved for audit.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="override-note">
+                    Note
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      (optional — why are you overriding?)
+                    </span>
+                  </Label>
+                  <Textarea
+                    id="override-note"
+                    value={overrideNote}
+                    onChange={(e) => setOverrideNote(e.target.value)}
+                    placeholder="e.g. 'Want to apply anyway — good company culture'"
+                    rows={3}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                <Button
+                  disabled={busy !== null}
+                  onClick={() =>
+                    doAction(
+                      "override",
+                      () => api.jobs.override(jobId, overrideNote.trim() || undefined),
+                      true,
+                    ).then(() => {
+                      setOverrideOpen(false);
+                      setOverrideNote("");
+                    })
+                  }
+                >
+                  {busy === "override" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+                  Confirm Override
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Delete — permanent removal */}
+        <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <DialogTrigger
+            render={
+              <Button variant="ghost" disabled={busy !== null} className="text-destructive hover:text-destructive">
+                {busy === "delete" ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                Delete
+              </Button>
+            }
+          />
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete job</DialogTitle>
+              <DialogDescription>
+                This permanently deletes the job and all associated data (resumes,
+                cover letters, analyses, research). This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button
+                variant="destructive"
+                disabled={busy !== null}
+                onClick={() => {
+                  handleDelete();
+                  setDeleteOpen(false);
+                }}
+              >
+                {busy === "delete" ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                Delete permanently
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

@@ -35,6 +35,8 @@ class JobSummary(BaseModel):
     cross_ref_status: str | None = None
     is_pinned: bool = False
     reject_reason: str | None = None
+    source_id: str = ""
+    discovered_query: str = ""
 
 
 class JobDetail(BaseModel):
@@ -95,6 +97,60 @@ class JobDetail(BaseModel):
     research_adjusted_score: float | None = None
     research_delta: float = 0.0
 
+    # AI analysis verdict + delta (shown as modifier card)
+    analysis_verdict: str | None = None
+    analysis_delta: float = 0.0
+
+    # Manual job metadata + override audit
+    filter_warnings: list[str] = []
+    overridden_at: str | None = None
+    override_note: str | None = None
+    original_reject_reason: str | None = None
+
+
+class JobCreate(BaseModel):
+    """POST /api/jobs — manually add a job.
+
+    URL is required. All other fields are optional (user may provide known
+    details; the backend fills gaps from JD fetch when possible).
+    If jd_text is provided (paste-JD fallback path), JD fetch is skipped.
+    """
+    url: str
+    title: str = ""
+    company: str = ""
+    location: str = ""
+    workplace_type: str = ""
+    seniority_level: str | None = None
+    comp_min: int | None = None
+    comp_max: int | None = None
+    comp_currency: str | None = None
+    company_homepage: str | None = None
+    jd_text: str | None = None  # paste-JD fallback — skip fetch when provided
+
+
+class JobCreateResponse(BaseModel):
+    """Response from POST /api/jobs.
+
+    status is one of:
+    - 'created': job inserted and scored successfully
+    - 'already_exists': url_hash matched an existing job — existing_job_id set
+    - 'fetch_failed': JD fetch from URL failed — no job inserted; frontend
+      should prompt user to paste JD and re-submit with jd_text
+    - 'likely_duplicate': content hash matched an existing job — job was still
+      created (warning only); existing_job_id set
+    """
+    status: str
+    job: JobDetail | None = None
+    existing_job_id: int | None = None
+    fetch_error: str | None = None
+    filter_warnings: list[str] = []
+
+
+class JobOverride(BaseModel):
+    """POST /api/jobs/{id}/override — override a rejection with audit trail."""
+    note: str | None = None
+    target_status: str = "ready"  # 'ready' or 'interested'
+
 
 class JobUpdate(BaseModel):
     """PATCH /api/jobs/{id} — partial update."""
@@ -108,6 +164,11 @@ class JobReject(BaseModel):
     """POST /api/jobs/{id}/reject."""
     reason: str
     details: str | None = None  # free-text feedback on why the job was rejected
+
+
+class MessageResponse(BaseModel):
+    """Generic message response."""
+    message: str
 
 
 # ---------------------------------------------------------------------------
@@ -333,10 +394,6 @@ class ResponseRateStats(BaseModel):
 # ---------------------------------------------------------------------------
 # Generic
 # ---------------------------------------------------------------------------
-
-class MessageResponse(BaseModel):
-    message: str
-
 
 class ErrorResponse(BaseModel):
     detail: str

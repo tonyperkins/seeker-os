@@ -77,6 +77,21 @@ class TestScoring:
         assert result.hard_reject is True
         assert "FedRAMP" in result.reject_reason
 
+    def test_fedramp_nice_to_have_not_rejected(self):
+        """FedRAMP listed as nice-to-have should NOT trigger hard reject when unless_pattern is set."""
+        profile = _make_profile()
+        profile.hard_rejects = [
+            HardReject(reason="FedRAMP required", pattern="fedramp",
+                        unless_pattern="nice.to.have|preferred|bonus|optional"),
+            HardReject(reason="Clearance required", pattern="security clearance"),
+        ]
+        jd = "We are hiring a Senior SRE. FedRAMP experience is a nice-to-have. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=profile,
+        )
+        assert result.hard_reject is False
+
     def test_base_score_senior_sre(self):
         jd = "We are looking for a senior SRE. " + "x" * 500
         result = score_job(
@@ -141,3 +156,18 @@ class TestScoring:
         # This would be hard-rejected by relocation, but if it reaches scoring:
         # base 0 - 3.0 (relocation) - 3.0 (comp_below) = -6 → clamped to 0
         assert result.score >= 0
+
+    def test_verdict_weights_loaded_from_config(self):
+        """verdict_weights dict is populated from scoring_rubric.yml."""
+        from seeker_os.config import Settings
+        settings = Settings()
+        if settings.scoring and settings.scoring.verdict_weights:
+            weights = settings.scoring.verdict_weights
+            assert "APPLY" in weights
+            assert "SKIP" in weights
+            assert weights["APPLY"] > weights["SKIP"]
+
+    def test_verdict_weights_default_empty(self):
+        """ScoringConfig defaults verdict_weights to empty dict."""
+        rubric = _make_rubric()
+        assert rubric.verdict_weights == {}

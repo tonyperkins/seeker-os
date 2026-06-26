@@ -46,6 +46,9 @@ cross_reference:
   auto_pull: true
 
 hard_rejects:
+  - reason: "FedRAMP required"
+    pattern: "fedramp"
+    unless_pattern: "nice.to.have|preferred|bonus|optional|desired|plus if|a plus|not required"
   - reason: "Clearance required"
     pattern: "security clearance|active clearance|ts/sci|top secret"
   - reason: "Customer-facing/solutions role"

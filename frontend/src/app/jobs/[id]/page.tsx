@@ -173,6 +173,52 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             </CardContent>
           </Card>
 
+          {job.filter_warnings && job.filter_warnings.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Filter Warnings</CardTitle>
+                <CardDescription>Informational — manual jobs bypass hard filters</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                  {job.filter_warnings.map((w, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <XCircle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+                      <span>{w}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {job.overridden_at && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Override History</CardTitle>
+                <CardDescription>This job was manually overridden</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Overridden:</span>
+                  <span className="font-medium">{formatDate(job.overridden_at)}</span>
+                </div>
+                {job.original_reject_reason && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Original reason:</span>
+                    <Badge variant="destructive">{job.original_reject_reason}</Badge>
+                  </div>
+                )}
+                {job.override_note && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Note:</span>
+                    <span className="rounded-md bg-muted p-2 text-xs">{job.override_note}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Actions</CardTitle>

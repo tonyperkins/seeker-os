@@ -265,6 +265,7 @@ class ScoringConfig(BaseModel):
     negative_modifiers: list[ModifierRule] = []
     freshness: FreshnessConfig = FreshnessConfig()
     research_modifiers: list[ResearchModifierConfig] = []
+    verdict_weights: dict[str, float] = {}
 
 
 class FilterConfig(BaseModel):

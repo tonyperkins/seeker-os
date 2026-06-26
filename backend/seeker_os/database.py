@@ -308,6 +308,18 @@ MIGRATIONS: list[str | callable] = [
     # (dedup.normalize.normalize_company). This fixes rows written with the
     # old naive normalizer (strip().lower()) and NULL rows from pre-migration-11.
     _backfill_company_norm,
+    # Migration 13: Manual job entry + override audit columns
+    """
+    ALTER TABLE jobs ADD COLUMN filter_warnings TEXT;
+    ALTER TABLE jobs ADD COLUMN overridden_at TEXT;
+    ALTER TABLE jobs ADD COLUMN override_note TEXT;
+    ALTER TABLE jobs ADD COLUMN original_reject_reason TEXT;
+    """,
+    # Migration 14: AI analysis verdict + delta columns
+    """
+    ALTER TABLE jobs ADD COLUMN analysis_verdict TEXT;
+    ALTER TABLE jobs ADD COLUMN analysis_delta REAL DEFAULT 0;
+    """,
 ]
 
 

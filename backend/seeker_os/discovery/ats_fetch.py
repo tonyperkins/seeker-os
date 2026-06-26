@@ -18,16 +18,31 @@ import httpx
 from seeker_os.models import JDFetchResult
 
 
+def parse_greenhouse_url(url: str) -> tuple[str, str] | None:
+    """Parse a Greenhouse job board URL to extract (board, job_id).
+
+    Supports:
+      - https://job-boards.greenhouse.io/{board}/jobs/{job_id}
+      - https://boards.greenhouse.io/{board}/jobs/{job_id}
+    """
+    m = re.match(
+        r"https?://(?:job-boards\.|boards\.)greenhouse\.io/([^/]+)/jobs/(\d+)",
+        url,
+    )
+    if m:
+        return m.group(1), m.group(2)
+    return None
+
+
 def _strip_html(html: str) -> str:
     """Strip HTML tags, decode entities, normalize whitespace."""
+    import html as html_mod
     # Remove script and style blocks
     text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
     # Remove all HTML tags
     text = re.sub(r"<[^>]+>", " ", text)
-    # Decode common HTML entities
-    text = text.replace("&nbsp;", " ").replace("&amp;", "&")
-    text = text.replace("&lt;", "<").replace("&gt;", ">")
-    text = text.replace("&quot;", '"').replace("&#39;", "'")
+    # Decode HTML entities (covers &mdash;, &ndash;, &nbsp;, &amp;, numeric entities, etc.)
+    text = html_mod.unescape(text)
     # Normalize whitespace
     text = re.sub(r"\s+", " ", text).strip()
     return text
@@ -53,6 +68,18 @@ def _fetch_greenhouse(board: str, job_id: str, user_agent: str) -> str:
         # Try first_content
         content = data.get("first_content", "")
     return _strip_html(content) if content else ""
+
+
+def fetch_greenhouse_job(board: str, job_id: str, user_agent: str) -> dict:
+    """Fetch full job data from Greenhouse API and return the raw JSON dict.
+
+    This includes structured metadata (title, location, compensation, metadata)
+    that can be used to populate JobCard fields for manual job entry.
+    """
+    import json
+    url = f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs/{job_id}"
+    text = _fetch_url(url, user_agent)
+    return json.loads(text)
 
 
 def _fetch_ashby(board: str, user_agent: str) -> str:

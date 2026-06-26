@@ -281,6 +281,18 @@ def analyze_job(
         ),
     )
     analysis_id = cursor.lastrowid
+
+    # Compute and store analysis_delta on the jobs table
+    verdict = data.get("verdict", "")
+    verdict_weights = (
+        settings.scoring.verdict_weights if settings.scoring else {}
+    )
+    analysis_delta = verdict_weights.get(verdict, 0.0)
+    db.execute(
+        "UPDATE jobs SET analysis_verdict = ?, analysis_delta = ? WHERE id = ?",
+        (verdict, analysis_delta, job_id),
+    )
+
     db.commit()
     db.close()
 

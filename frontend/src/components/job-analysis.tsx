@@ -78,6 +78,7 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
       const result = await api.jobs.analysis.run(jobId);
       setData(result);
       setNotFound(false);
+      window.dispatchEvent(new Event("analysis-complete"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {

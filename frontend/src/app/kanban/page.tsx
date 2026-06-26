@@ -11,6 +11,7 @@ import {
   Send,
   XCircle,
   GripVertical,
+  RotateCcw,
 } from "lucide-react";
 import {
   Card,
@@ -19,7 +20,9 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { api, type JobSummary } from "@/lib/api";
+import { AddJobDialog } from "@/components/add-job-dialog";
 
 const COLUMNS = [
   { key: "ready", label: "Ready", icon: CheckCircle2, color: "text-emerald-500" },
@@ -36,6 +39,8 @@ export default function KanbanPage() {
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [rejectedFilter, setRejectedFilter] = useState<"manual" | "all">("manual");
+  const [overridingId, setOverridingId] = useState<number | null>(null);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -60,7 +65,14 @@ export default function KanbanPage() {
   const jobsByColumn = (colKey: string): JobSummary[] => {
     if (!jobs) return [];
     return jobs
-      .filter((j) => j.status === colKey)
+      .filter((j) => {
+        if (j.status !== colKey) return false;
+        // Rejected column: filter by source when rejectedFilter is 'manual'
+        if (colKey === "rejected" && rejectedFilter === "manual") {
+          return j.source_id === "manual" || j.discovered_query === "manual";
+        }
+        return true;
+      })
       .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
   };
 
@@ -109,6 +121,21 @@ export default function KanbanPage() {
     }
   }
 
+  async function handleOverride(id: number) {
+    setOverridingId(id);
+    try {
+      await api.jobs.override(id);
+      // Optimistic update — move to ready
+      setJobs((prev) =>
+        prev ? prev.map((j) => (j.id === id ? { ...j, status: "ready" } : j)) : prev,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to override job");
+    } finally {
+      setOverridingId(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
@@ -141,9 +168,12 @@ export default function KanbanPage() {
             Drag and drop jobs between columns to update status.
           </p>
         </div>
-        {error && (
-          <span className="text-xs text-destructive">{error}</span>
-        )}
+        <div className="flex items-center gap-3">
+          {error && (
+            <span className="text-xs text-destructive">{error}</span>
+          )}
+          <AddJobDialog onCreated={fetchJobs} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
@@ -168,6 +198,16 @@ export default function KanbanPage() {
                 <Badge variant="secondary" className="ml-auto">
                   {colJobs.length}
                 </Badge>
+                {col.key === "rejected" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setRejectedFilter(rejectedFilter === "manual" ? "all" : "manual")}
+                  >
+                    {rejectedFilter === "manual" ? "Show all" : "Manual only"}
+                  </Button>
+                )}
               </div>
 
               <div className="flex flex-col gap-2 min-h-[120px]">
@@ -209,6 +249,25 @@ export default function KanbanPage() {
                         )}
                         {job.is_pinned && (
                           <span className="text-xs text-amber-500">pinned</span>
+                        )}
+                        {col.key === "rejected" && (job.source_id === "manual" || job.discovered_query === "manual") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto h-6 px-2 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOverride(job.id);
+                            }}
+                            disabled={overridingId === job.id}
+                          >
+                            {overridingId === job.id ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <RotateCcw className="size-3" />
+                            )}
+                            Override
+                          </Button>
                         )}
                         {updatingId === job.id && (
                           <Loader2 className="ml-auto size-3.5 animate-spin text-muted-foreground" />
