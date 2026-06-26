@@ -440,7 +440,7 @@ class TestTaskMaxTokensConfig:
         router = ModelRouter(settings)
         router._initialized = True
 
-        assert router.get_task_max_tokens("jd_analysis") == 4096
+        assert router.get_task_max_tokens("jd_analysis") == 16000
         assert router.get_task_max_tokens("resume_generation_standard") == 16000
         assert router.get_task_max_tokens("accuracy_validation") == 16000
         assert router.get_task_max_tokens("metadata_extraction") == 1000

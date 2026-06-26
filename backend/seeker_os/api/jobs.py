@@ -189,6 +189,7 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
 def _row_to_summary(
     row, db=None, *, stale_after_days: int | None = None,
     stale_result: tuple[bool, int | None] | None = None,
+    indicator_flags: tuple[bool, bool, bool] | None = None,
 ) -> JobSummary:
     is_stale = False
     days_since = None
@@ -196,6 +197,7 @@ def _row_to_summary(
         is_stale, days_since = stale_result
     elif db is not None:
         is_stale, days_since = _compute_stale(db, row, stale_after_days=stale_after_days)
+    has_analysis, has_research, has_resume = indicator_flags or (False, False, False)
     return JobSummary(
         id=row["id"],
         title=row["title"] or "",
@@ -219,6 +221,10 @@ def _row_to_summary(
         discovered_query=row["discovered_query"] or "",
         is_stale=is_stale,
         days_since_last_activity=days_since,
+        has_analysis=has_analysis,
+        has_research=has_research,
+        has_resume=has_resume,
+        analysis_verdict=row["analysis_verdict"] if "analysis_verdict" in row.keys() else None,
     )
 
 
@@ -346,10 +352,38 @@ def list_jobs(
         stale_after_days = _get_stale_after_days()
         stale_map = _batch_compute_stale(db, rows, stale_after_days)
 
+        # Batch indicator-flag computation: one query per table for all job IDs
+        job_ids = [r["id"] for r in rows]
+        analysis_ids = set()
+        research_ids = set()
+        resume_ids = set()
+        if job_ids:
+            placeholders = ",".join("?" * len(job_ids))
+            analysis_rows = db.execute(
+                f"SELECT DISTINCT job_id FROM job_analyses WHERE job_id IN ({placeholders})",
+                job_ids,
+            ).fetchall()
+            analysis_ids = {r["job_id"] for r in analysis_rows}
+            research_rows = db.execute(
+                f"SELECT DISTINCT job_id FROM company_research WHERE job_id IN ({placeholders})",
+                job_ids,
+            ).fetchall()
+            research_ids = {r["job_id"] for r in research_rows}
+            resume_rows = db.execute(
+                f"SELECT DISTINCT job_id FROM resumes WHERE job_id IN ({placeholders})",
+                job_ids,
+            ).fetchall()
+            resume_ids = {r["job_id"] for r in resume_rows}
+
         return [
             _row_to_summary(
                 r, db=db, stale_after_days=stale_after_days,
                 stale_result=stale_map.get(r["id"]),
+                indicator_flags=(
+                    r["id"] in analysis_ids,
+                    r["id"] in research_ids,
+                    r["id"] in resume_ids,
+                ),
             )
             for r in rows
         ]

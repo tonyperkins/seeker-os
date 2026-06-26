@@ -72,6 +72,10 @@ export interface JobSummary {
   discovered_query: string;
   is_stale: boolean;
   days_since_last_activity: number | null;
+  has_analysis: boolean;
+  has_research: boolean;
+  has_resume: boolean;
+  analysis_verdict: string | null;
 }
 
 export interface JobDetail extends JobSummary {
