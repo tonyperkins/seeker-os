@@ -38,6 +38,10 @@ class JobSummary(BaseModel):
     source_id: str = ""
     discovered_query: str = ""
 
+    # Derived stale flag (computed, never stored)
+    is_stale: bool = False
+    days_since_last_activity: int | None = None
+
 
 class JobDetail(BaseModel):
     """Full job detail."""
@@ -109,6 +113,10 @@ class JobDetail(BaseModel):
 
     # Application lifecycle events timeline
     events: list[ApplicationEvent] = []
+
+    # Derived stale flag (computed, never stored)
+    is_stale: bool = False
+    days_since_last_activity: int | None = None
 
 
 class JobCreate(BaseModel):
@@ -201,6 +209,47 @@ class ApplicationEventCreate(BaseModel):
     occurred_at: str | None = None
     metadata: dict | None = None
     note: str | None = None
+
+
+class PostApplyTransition(BaseModel):
+    """POST /api/jobs/{id}/transition — post-apply status transition.
+
+    For: company_rejected, withdrawn, engaged, offer_accepted, offer_declined.
+    Each maps to a specific event_type + actor; the API enforces valid transitions.
+    """
+    target_status: str
+    occurred_at: str | None = None
+    note: str | None = None
+    metadata: dict | None = None
+
+
+class EngagedEventCreate(BaseModel):
+    """POST /api/jobs/{id}/engaged-events — log an engaged sub-lifecycle event.
+
+    Does NOT change status. event_type must be one of the EngagedEventType values.
+    """
+    event_type: str
+    occurred_at: str | None = None
+    note: str | None = None
+    metadata: dict | None = None
+
+
+class CleanStartCreate(BaseModel):
+    """POST /api/jobs/{id}/clean-start — enter a job directly at a post-apply status.
+
+    Sets status directly (applied, engaged, company_rejected, withdrawn,
+    offer_accepted, offer_declined, rejected) with a backdated event.
+    Skips the pre-apply funnel entirely.
+
+    When entering at engaged or company_rejected, an optional applied_occurred_at
+    may be supplied to record a backdated 'applied' event first (complete funnel
+    history). If omitted, the job stands at engaged/rejected with no applied event.
+    """
+    target_status: str
+    occurred_at: str | None = None
+    applied_occurred_at: str | None = None
+    note: str | None = None
+    metadata: dict | None = None
 
 
 # ---------------------------------------------------------------------------

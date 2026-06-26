@@ -34,6 +34,7 @@ import { JDRenderer } from "@/components/jd-renderer";
 import { CompanyResearch } from "@/components/company-research";
 import { ScoreBadges } from "@/components/score-badges";
 import { JobAnalysis } from "@/components/job-analysis";
+import { EventTimeline } from "@/components/event-timeline";
 import { api, type JobDetail } from "@/lib/api";
 import { formatDate } from "@/lib/date";
 
@@ -341,6 +342,15 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
 
           {/* Company Research */}
           <CompanyResearch jobId={job.id} />
+
+          {/* Event Timeline */}
+          <EventTimeline
+            jobId={job.id}
+            initialEvents={job.events}
+            currentStatus={job.status}
+            isStale={job.is_stale}
+            daysSinceLastActivity={job.days_since_last_activity}
+          />
 
           {/* Requirements summary */}
           {job.requirements_summary && (

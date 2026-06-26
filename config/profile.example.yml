@@ -57,3 +57,6 @@ hard_rejects:
     pattern: "early.?career|entry.?level|new.?grad|\\bjunior\\b|\\bintern\\b|\\binternship\\b|\\bassociate\\b"
   - reason: "Relocation required"
     pattern: "relocation required"
+
+lifecycle:
+  stale_after_days: 14  # jobs in applied/engaged with no activity for this many days are flagged stale

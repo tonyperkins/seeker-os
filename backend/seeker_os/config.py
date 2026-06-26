@@ -455,6 +455,14 @@ class FitPreferencesConfig(BaseModel):
     notes: str = ""
 
 
+class LifecycleConfig(BaseModel):
+    """Config for application lifecycle — stale flag threshold.
+
+    Loaded from profile.yml under the 'lifecycle' key. If absent, defaults apply.
+    """
+    stale_after_days: int = 14
+
+
 class CompanyResearchConfig(BaseModel):
     """Config for company_research.yml — controls research flow and thresholds."""
     wikipedia: WikipediaConfig = WikipediaConfig()
@@ -498,6 +506,7 @@ class Settings:
         self.identity: IdentityConfig | None = None
         self.channel_rules: ChannelRulesConfig | None = None
         self.company_research: CompanyResearchConfig | None = None
+        self.lifecycle: LifecycleConfig = LifecycleConfig()
 
         self._load_all()
 
@@ -525,7 +534,11 @@ class Settings:
 
         # Personal configs (gitignored)
         if (self.config_dir / "profile.yml").exists():
-            self.profile = ProfileConfig(**self._load_yaml("profile.yml"))
+            profile_data = self._load_yaml("profile.yml")
+            self.profile = ProfileConfig(**profile_data)
+            # Lifecycle config lives under 'lifecycle' key in profile.yml
+            if profile_data and "lifecycle" in profile_data:
+                self.lifecycle = LifecycleConfig(**profile_data["lifecycle"])
 
         if (self.config_dir / "scoring_rubric.yml").exists():
             scoring_data = self._load_yaml("scoring_rubric.yml")

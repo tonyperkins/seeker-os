@@ -26,6 +26,19 @@ Event types (closed vocabulary — use EventType constants, not raw strings):
     skipped              — manual skip
     overridden           — rejection overridden
     resume_generated     — resume generated, status → interested
+    applied              — candidate submitted application
+    company_rejected     — company rejected (post-apply)
+    withdrawn            — candidate withdrew (post-apply)
+    engaged              — moved to engaged sub-lifecycle
+    offer_accepted       — offer accepted
+    offer_declined       — offer declined
+    interview            — interview scheduled (engaged sub-event)
+    challenge_assigned   — take-home challenge assigned (engaged sub-event)
+    challenge_submitted  — challenge submitted (engaged sub-event)
+    offer_received       — offer received (engaged sub-event)
+    offer_countered      — offer countered (engaged sub-event)
+    followup_sent        — follow-up sent (engaged sub-event, resets staleness)
+    contact_received     — company contact received (engaged sub-event, resets staleness)
 """
 
 from __future__ import annotations
@@ -71,13 +84,135 @@ class EventType:
     SKIPPED = "skipped"
     OVERRIDDEN = "overridden"
     RESUME_GENERATED = "resume_generated"
+    APPLIED = "applied"
+    COMPANY_REJECTED = "company_rejected"
+    WITHDRAWN = "withdrawn"
+    ENGAGED = "engaged"
+    OFFER_ACCEPTED = "offer_accepted"
+    OFFER_DECLINED = "offer_declined"
+    INTERVIEW = "interview"
+    CHALLENGE_ASSIGNED = "challenge_assigned"
+    CHALLENGE_SUBMITTED = "challenge_submitted"
+    OFFER_RECEIVED = "offer_received"
+    OFFER_COUNTERED = "offer_countered"
+    FOLLOWUP_SENT = "followup_sent"
+    CONTACT_RECEIVED = "contact_received"
 
     _ALL = frozenset({
         DISCOVERED, FILTER_PASSED, FILTER_REJECTED, JD_FETCHED,
         JD_FETCH_FAILED, JD_FETCH_RETRY, DUPLICATE_FLAGGED,
         SCORED_READY, SCORED_REJECTED, CAPPED, MANUAL_CREATED,
         STATUS_CHANGED, REJECTED, SKIPPED, OVERRIDDEN, RESUME_GENERATED,
+        APPLIED, COMPANY_REJECTED, WITHDRAWN, ENGAGED,
+        OFFER_ACCEPTED, OFFER_DECLINED,
+        INTERVIEW, CHALLENGE_ASSIGNED, CHALLENGE_SUBMITTED,
+        OFFER_RECEIVED, OFFER_COUNTERED, FOLLOWUP_SENT, CONTACT_RECEIVED,
     })
+
+
+class JobStatus:
+    """Closed catalog of job statuses. Use these constants, not raw strings."""
+    DISCOVERED = "discovered"
+    FILTERED = "filtered"
+    JD_FETCHED = "jd_fetched"
+    DUPLICATE_FLAGGED = "duplicate_flagged"
+    READY = "ready"
+    REVIEWING = "reviewing"
+    INTERESTED = "interested"
+    APPLIED = "applied"
+    ENGAGED = "engaged"
+    COMPANY_REJECTED = "company_rejected"
+    WITHDRAWN = "withdrawn"
+    OFFER_ACCEPTED = "offer_accepted"
+    OFFER_DECLINED = "offer_declined"
+    REJECTED = "rejected"
+    SKIPPED = "skipped"
+    CAPPED = "capped"
+
+    _ALL = frozenset({
+        DISCOVERED, FILTERED, JD_FETCHED, DUPLICATE_FLAGGED,
+        READY, REVIEWING, INTERESTED, APPLIED, ENGAGED,
+        COMPANY_REJECTED, WITHDRAWN, OFFER_ACCEPTED, OFFER_DECLINED,
+        REJECTED, SKIPPED, CAPPED,
+    })
+
+    _POST_APPLY = frozenset({APPLIED, ENGAGED, COMPANY_REJECTED, WITHDRAWN, OFFER_ACCEPTED, OFFER_DECLINED})
+    _TERMINAL = frozenset({COMPANY_REJECTED, WITHDRAWN, OFFER_ACCEPTED, OFFER_DECLINED, REJECTED, SKIPPED, CAPPED})
+
+
+class EngagedEventType:
+    """Engaged sub-lifecycle event types — these do NOT change status."""
+    INTERVIEW = EventType.INTERVIEW
+    CHALLENGE_ASSIGNED = EventType.CHALLENGE_ASSIGNED
+    CHALLENGE_SUBMITTED = EventType.CHALLENGE_SUBMITTED
+    OFFER_RECEIVED = EventType.OFFER_RECEIVED
+    OFFER_COUNTERED = EventType.OFFER_COUNTERED
+    FOLLOWUP_SENT = EventType.FOLLOWUP_SENT
+    CONTACT_RECEIVED = EventType.CONTACT_RECEIVED
+
+    _ALL = frozenset({
+        EventType.INTERVIEW, EventType.CHALLENGE_ASSIGNED,
+        EventType.CHALLENGE_SUBMITTED, EventType.OFFER_RECEIVED,
+        EventType.OFFER_COUNTERED, EventType.FOLLOWUP_SENT,
+        EventType.CONTACT_RECEIVED,
+    })
+
+
+STALE_ACTIVITY_EVENTS: frozenset[str] = frozenset({
+    EventType.APPLIED,
+    EventType.ENGAGED,
+    EventType.INTERVIEW,
+    EventType.CHALLENGE_ASSIGNED,
+    EventType.CHALLENGE_SUBMITTED,
+    EventType.OFFER_RECEIVED,
+    EventType.OFFER_COUNTERED,
+    EventType.FOLLOWUP_SENT,
+    EventType.CONTACT_RECEIVED,
+})
+"""Allowlist of event types that count as "application activity" for stale-flag
+purposes. Only these events reset the staleness clock for applied/engaged jobs.
+
+Terminal-status events (company_rejected, withdrawn, offer_accepted,
+offer_declined) are excluded — the status guard already short-circuits before
+stale computes. manual_created/discovered are excluded — they are about job
+creation, not application activity.
+
+New event types default to NOT resetting staleness unless explicitly added here.
+"""
+
+
+def compute_stale_flag(
+    db: sqlite3.Connection, job_id: int, status: str, stale_after_days: int
+) -> tuple[bool, int | None]:
+    """Compute derived stale flag — NOT stored, NOT an event.
+
+    A job is stale if status ∈ {applied, engaged} AND the most recent event's
+    occurred_at is older than stale_after_days.
+
+    Returns (is_stale, days_since_last_activity).
+    """
+    if status not in (JobStatus.APPLIED, JobStatus.ENGAGED):
+        return False, None
+
+    row = db.execute(
+        f"SELECT occurred_at FROM application_events "
+        f"WHERE job_id = ? AND event_type IN ({','.join('?' * len(STALE_ACTIVITY_EVENTS))}) "
+        f"ORDER BY occurred_at DESC LIMIT 1",
+        (job_id, *STALE_ACTIVITY_EVENTS),
+    ).fetchone()
+    if not row or not row["occurred_at"]:
+        return False, None
+
+    try:
+        last_dt = datetime.fromisoformat(row["occurred_at"])
+    except (ValueError, TypeError):
+        return False, None
+
+    now = datetime.now(timezone.utc)
+    delta = now - last_dt
+    days_since = delta.days
+    is_stale = days_since > stale_after_days
+    return is_stale, days_since
 
 
 def _utc_now_iso() -> str:
@@ -85,12 +220,17 @@ def _utc_now_iso() -> str:
 
 
 def _validate_occurred_at(
-    db: sqlite3.Connection, job_id: int, occurred_at: str
+    db: sqlite3.Connection, job_id: int, occurred_at: str,
+    *, allow_before_discovery: bool = False,
 ) -> None:
     """Soft validation: reject future dates and dates before job discovery.
 
     Raises ValueError with a clear message — callers should catch and return
     as a 422 in API context.
+
+    If allow_before_discovery is True, the discovery-date floor check is
+    skipped (used by the clean-start path where the user is backdating an
+    event that happened before the job was added to Seeker OS).
     """
     try:
         occurred_dt = datetime.fromisoformat(occurred_at)
@@ -100,6 +240,9 @@ def _validate_occurred_at(
     now = datetime.now(timezone.utc)
     if occurred_dt > now:
         raise ValueError(f"occurred_at cannot be in the future: {occurred_at}")
+
+    if allow_before_discovery:
+        return
 
     row = db.execute(
         "SELECT discovered_at FROM jobs WHERE id = ?", (job_id,)
@@ -125,12 +268,15 @@ def record_event(
     metadata: dict | None = None,
     occurred_at: str | None = None,
     note: str | None = None,
+    allow_before_discovery: bool = False,
 ) -> int:
     """The ONLY way events are written.
 
     occurred_at defaults to now; created_at is always server now().
     event_type must be a known EventType constant (warns loudly on unknown).
     actor must be one of Actor.CANDIDATE | Actor.COMPANY | Actor.SYSTEM.
+    If allow_before_discovery is True, occurred_at may predate the job's
+    discovered_at (used by the clean-start path).
     Returns the event ID.
     """
     if event_type not in EventType._ALL:
@@ -149,7 +295,7 @@ def record_event(
     if occurred_at is None:
         occurred_at = now
     else:
-        _validate_occurred_at(db, job_id, occurred_at)
+        _validate_occurred_at(db, job_id, occurred_at, allow_before_discovery=allow_before_discovery)
 
     cursor = db.execute(
         """INSERT INTO application_events
@@ -179,6 +325,7 @@ def transition_status(
     occurred_at: str | None = None,
     note: str | None = None,
     extra_sets: dict[str, Any] | None = None,
+    allow_before_discovery: bool = False,
 ) -> int:
     """Change a job's status AND record the matching event in the same transaction.
 
@@ -187,6 +334,9 @@ def transition_status(
 
     extra_sets: additional column=value pairs to include in the UPDATE
     (e.g. {"tier_passed": 4, "score": 8.5}).
+
+    If allow_before_discovery is True, occurred_at may predate the job's
+    discovered_at (used by the clean-start path).
 
     Returns the event ID.
     """
@@ -218,6 +368,7 @@ def transition_status(
             metadata=metadata,
             occurred_at=occurred_at,
             note=note,
+            allow_before_discovery=allow_before_discovery,
         )
     except Exception:
         db.rollback()

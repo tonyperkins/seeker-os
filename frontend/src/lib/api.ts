@@ -37,6 +37,17 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
 // Types
 // ---------------------------------------------------------------------------
 
+export interface ApplicationEvent {
+  id: number;
+  job_id: number;
+  event_type: string;
+  actor: string;
+  occurred_at: string;
+  created_at: string;
+  metadata: Record<string, unknown> | null;
+  note: string | null;
+}
+
 export interface JobSummary {
   id: number;
   title: string;
@@ -59,6 +70,8 @@ export interface JobSummary {
   ai_policy: string | null;
   source_id: string;
   discovered_query: string;
+  is_stale: boolean;
+  days_since_last_activity: number | null;
 }
 
 export interface JobDetail extends JobSummary {
@@ -92,6 +105,9 @@ export interface JobDetail extends JobSummary {
   overridden_at: string | null;
   override_note: string | null;
   original_reject_reason: string | null;
+  is_stale: boolean;
+  days_since_last_activity: number | null;
+  events: ApplicationEvent[];
 }
 
 export interface JobCreateRequest {
@@ -414,6 +430,21 @@ export const api = {
       fetchAPI<{ message: string }>(`/api/jobs/${id}/skip`, { method: "POST" }),
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "DELETE" }),
+    transition: (id: number, targetStatus: string, opts?: { occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/transition`, {
+        method: "POST",
+        body: JSON.stringify({ target_status: targetStatus, ...opts }),
+      }),
+    logEngagedEvent: (id: number, eventType: string, opts?: { occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
+      fetchAPI<ApplicationEvent>(`/api/jobs/${id}/engaged-events`, {
+        method: "POST",
+        body: JSON.stringify({ event_type: eventType, ...opts }),
+      }),
+    cleanStart: (id: number, targetStatus: string, opts?: { occurred_at?: string; applied_occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/clean-start`, {
+        method: "POST",
+        body: JSON.stringify({ target_status: targetStatus, ...opts }),
+      }),
     crossRef: (id: number) => fetchAPI<Record<string, unknown>>(`/api/jobs/${id}/cross-ref`),
     companyResearch: {
       get: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`),
