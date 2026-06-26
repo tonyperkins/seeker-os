@@ -42,6 +42,12 @@ class JobSummary(BaseModel):
     is_stale: bool = False
     days_since_last_activity: int | None = None
 
+    # Derived indicator flags (computed from related tables, never stored)
+    has_analysis: bool = False
+    has_research: bool = False
+    has_resume: bool = False
+    analysis_verdict: str | None = None
+
     @field_validator("comp_min", "comp_max", mode="before")
     @classmethod
     def _round_comp(cls, v):
@@ -666,6 +672,20 @@ class CompAssessmentSchema(BaseModel):
     posted: str | float | None = None
     meets_floor: bool | None = None
     note: str = ""
+
+    @field_validator("meets_floor", mode="before")
+    @classmethod
+    def _coerce_meets_floor(cls, v):
+        if v is None or isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            v_lower = v.strip().lower()
+            if v_lower in ("true", "yes", "1"):
+                return True
+            if v_lower in ("false", "no", "0"):
+                return False
+            return None
+        return bool(v)
 
 
 class PositioningSchema(BaseModel):

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Loader2, AlertCircle, Pin } from "lucide-react";
+import { Search, Loader2, AlertCircle, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -24,6 +24,14 @@ import {
 import { api, type JobSummary } from "@/lib/api";
 import { AddJobDialog } from "@/components/add-job-dialog";
 import { usePersistentState } from "@/lib/use-persistent-state";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { ErrorBanner } from "@/components/error-banner";
 
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -94,6 +102,10 @@ function JobsPageInner() {
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; action: string } | null>(null);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -140,6 +152,52 @@ function JobsPageInner() {
     if (!jobs) return [];
     return [...jobs].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
   }, [jobs]);
+
+  const allSelected = sortedJobs.length > 0 && sortedJobs.every((j) => selectedIds.has(j.id));
+  const someSelected = selectedIds.size > 0;
+
+  function toggleJob(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedJobs.map((j) => j.id)));
+    }
+  }
+
+  async function runBulkAction(
+    action: string,
+    fn: (id: number) => Promise<unknown>,
+  ) {
+    setBulkLoading(true);
+    setBulkError(null);
+    const ids = [...selectedIds];
+    const errors: string[] = [];
+    for (let i = 0; i < ids.length; i++) {
+      setBulkProgress({ current: i + 1, total: ids.length, action });
+      try {
+        await fn(ids[i]);
+      } catch (err) {
+        errors.push(`Job ${ids[i]}: ${err instanceof Error ? err.message : "failed"}`);
+      }
+    }
+    setBulkLoading(false);
+    setBulkProgress(null);
+    if (errors.length > 0) {
+      setBulkError(`${action}: ${errors.length}/${ids.length} failed — ${errors.slice(0, 3).join("; ")}${errors.length > 3 ? "…" : ""}`);
+    } else {
+      setBulkError(null);
+    }
+    await fetchJobs();
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -239,13 +297,104 @@ function JobsPageInner() {
         </CardContent>
       </Card>
 
+      {/* Bulk action toolbar */}
+      {someSelected && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5">
+          <span className="text-sm font-medium">
+            {selectedIds.size} selected
+          </span>
+          {bulkError && (
+            <span className="text-xs text-destructive">{bulkError}</span>
+          )}
+          <div className="flex-1" />
+          {bulkLoading && bulkProgress && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              <span>{bulkProgress.action}: {bulkProgress.current}/{bulkProgress.total}</span>
+            </div>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm" disabled={bulkLoading}>
+                  Set status <ChevronDown className="size-3.5" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              {STATUS_OPTIONS.filter((o) => o.value).map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => runBulkAction(`Set ${opt.label}`, (id) => api.jobs.update(id, { status: opt.value }))}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => runBulkAction("Skip", (id) => api.jobs.skip(id))}
+              >
+                Skip
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={bulkLoading}
+            onClick={() => runBulkAction("AI Analysis", (id) => api.jobs.analysis.run(id))}
+          >
+            <Brain className="size-3.5" />
+            Run Analysis
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={bulkLoading}
+            onClick={() => runBulkAction("Company Research", (id) => api.jobs.companyResearch.run(id))}
+          >
+            <Building2 className="size-3.5" />
+            Run Research
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={bulkLoading}
+            title="Run AI Analysis + Company Research for each selected job"
+            onClick={() => runBulkAction("Analysis + Research", async (id) => {
+              await api.jobs.analysis.run(id);
+              await api.jobs.companyResearch.run(id);
+            })}
+          >
+            <Brain className="size-3.5" />
+            <Building2 className="size-3.5 -ml-1" />
+            Analysis + Research
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={bulkLoading}
+            onClick={() => runBulkAction("Generate Resume", (id) => api.resumes.generate(id))}
+          >
+            <FileText className="size-3.5" />
+            Gen Resume
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <CardContent className="p-0">
           {error ? (
-            <div className="flex items-center gap-2 p-6 text-sm text-destructive">
-              <AlertCircle className="size-4 shrink-0" />
-              {error}
+            <div className="p-6">
+              <ErrorBanner message={error} />
             </div>
           ) : loading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
@@ -261,12 +410,22 @@ function JobsPageInner() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10 shrink-0">
+                      <button onClick={toggleAll} className="flex items-center">
+                        {allSelected ? (
+                          <CheckSquare className="size-4 text-primary" />
+                        ) : (
+                          <Square className="size-4 text-muted-foreground" />
+                        )}
+                      </button>
+                    </TableHead>
                     <TableHead className="w-14 shrink-0">Score</TableHead>
                     <TableHead className="min-w-[160px] max-w-[260px]">Title</TableHead>
                     <TableHead className="min-w-[100px] max-w-[180px]">Company</TableHead>
                     <TableHead className="w-24 shrink-0">Status</TableHead>
                     <TableHead className="w-28 shrink-0">Comp</TableHead>
                     <TableHead className="min-w-[80px] max-w-[140px]">Location</TableHead>
+                    <TableHead className="w-20 shrink-0 text-center">Done</TableHead>
                     <TableHead className="w-24 shrink-0">ATS</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -277,6 +436,15 @@ function JobsPageInner() {
                       className="cursor-pointer"
                       onClick={() => router.push(`/jobs/${job.id}`)}
                     >
+                      <TableCell className="w-10 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => toggleJob(job.id)} className="flex items-center">
+                          {selectedIds.has(job.id) ? (
+                            <CheckSquare className="size-4 text-primary" />
+                          ) : (
+                            <Square className="size-4 text-muted-foreground" />
+                          )}
+                        </button>
+                      </TableCell>
                       <TableCell className="whitespace-nowrap font-mono font-medium">
                         {job.score != null ? job.score : "—"}
                       </TableCell>
@@ -298,6 +466,31 @@ function JobsPageInner() {
                         {job.workplace_type && job.workplace_type !== "unknown" && (
                           <span className="ml-1 text-xs">· {job.workplace_type}</span>
                         )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          <span title={job.has_analysis ? `Analysis: ${job.analysis_verdict ?? "done"}` : "No analysis"}>
+                            <Brain className={`size-3.5 ${
+                              !job.has_analysis
+                                ? "text-muted-foreground/30"
+                                : job.analysis_verdict === "APPLY"
+                                  ? "text-emerald-500"
+                                  : job.analysis_verdict === "CONDITIONAL"
+                                    ? "text-amber-500"
+                                    : job.analysis_verdict === "MONITOR"
+                                      ? "text-sky-500"
+                                      : job.analysis_verdict === "SKIP"
+                                        ? "text-red-500"
+                                        : "text-primary"
+                            }`} />
+                          </span>
+                          <span title={job.has_research ? "Research done" : "No research"}>
+                            <Building2 className={`size-3.5 ${job.has_research ? "text-primary" : "text-muted-foreground/30"}`} />
+                          </span>
+                          <span title={job.has_resume ? "Resume generated" : "No resume"}>
+                            <FileText className={`size-3.5 ${job.has_resume ? "text-primary" : "text-muted-foreground/30"}`} />
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {job.ats_source ?? "—"}
