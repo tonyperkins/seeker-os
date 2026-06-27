@@ -346,6 +346,12 @@ MIGRATIONS: list[str | callable] = [
     ALTER TABLE jobs ADD COLUMN run_id TEXT;
     CREATE INDEX IF NOT EXISTS idx_jobs_run_id ON jobs(run_id);
     """,
+    # Migration 18: Add search_query column to search_queries table
+    # Stores the raw search text (e.g. "senior sre remote") used to build
+    # hiring.cafe searchState URLs. Falls back to slug when absent.
+    """
+    ALTER TABLE search_queries ADD COLUMN search_query TEXT;
+    """,
 ]
 
 

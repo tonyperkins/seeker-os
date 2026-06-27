@@ -188,3 +188,52 @@ Senior-ish from Mid/Entry.
   pass through to scoring rather than being rejected.
 - The Staff/Principal distinction is made by the scoring rubric's base_scores patterns
   (which match on title), NOT by the seniority_level field.
+
+## searchState Server-Side Filters
+
+**Verified 2026-06-27** by probing live hiring.cafe with filter fields and comparing `ssrTotalCount`.
+
+The `searchState` JSON object (passed as `?searchState={urlencoded_json}`) supports these filter fields:
+
+| Field | Type | Example | Effect | Null-inclusive? |
+|---|---|---|---|---|
+| `searchQuery` | string | `"senior sre remote"` | Full-text search | N/A |
+| `dateFetchedPastNDays` | int (enum) | `2`, `4`, `14`, `29`, `61`, `365`, `750`, `-1` | Date filter | N/A |
+| `locations` | array | `[{"id":"seo_us",...}]` | Geographic filter | N/A |
+| `workplaceTypes` | array | `["Remote"]` | Workplace type filter | Yes — null `workplace_type` passes |
+| `commitments` | array | `["Full Time"]` | Employment type filter | Yes — null `commitment` passes |
+| `seniorityLevels` | array | `["Senior Level"]` | Seniority filter | Yes — null `seniority_level` passes |
+| `roleTypes` | array | `["Individual Contributor"]` | Role type filter | Yes — null `role_type` passes |
+
+**Not supported server-side:**
+- Compensation range (no field found that affects `ssrTotalCount` — Tier 2 handles this client-side)
+
+**dateFetchedPastNDays enum values:**
+
+| Enum | Meaning |
+|---|---|
+| `2` | 24 hours |
+| `4` | 3 days |
+| `14` | 1 week |
+| `21` | 2 weeks |
+| `29` | 3 weeks |
+| `61` | 1 month |
+| `91` | 2 months |
+| `121` | 3 months |
+| `151` | 4 months |
+| `181` | 5 months |
+| `211` | 6 months |
+| `365` | 1 year |
+| `750` | 2 years |
+| `1095` | 3 years |
+| `-1` | All time |
+
+**Probe results (2026-06-27, query: "senior sre remote", US location):**
+
+| Filter | ssrTotalCount |
+|---|---|
+| None (baseline) | 342 |
+| `workplaceTypes=["Remote"]` + `commitments=["Full Time"]` + `seniorityLevels=["Senior Level"]` | 335 |
+| `roleTypes=["Individual Contributor"]` | 274 |
+| `roleTypes=["People Manager"]` | 68 |
+| `dateFetchedPastNDays=2` | 8 |

@@ -10,13 +10,41 @@ from __future__ import annotations
 import json
 import re
 import time
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 import httpx
 
 from seeker_os.config import SourceConfig
 from seeker_os.discovery.cache import DiskCache
 from seeker_os.models import JobCard, SourcePage, SourceQuery
+
+# hiring.cafe dateFetchedPastNDays enum values (not actual day counts).
+# Discovered from hiring.cafe's client-side JS (eT array).
+# The adapter maps a requested day count to the nearest ceiling enum.
+_HC_DATE_ENUMS: list[tuple[int, int]] = [
+    (2, 2),       # Past 24 hours
+    (4, 4),       # 3 days
+    (14, 14),     # 1 week
+    (21, 21),     # 2 weeks
+    (29, 29),     # 3 weeks
+    (61, 61),     # 1 month
+    (91, 91),     # 2 months
+    (121, 121),   # 3 months
+    (151, 151),   # 4 months
+    (181, 181),   # 5 months
+    (211, 211),   # 6 months
+    (750, 365),   # 1 year
+    (1080, 730),  # 2 years
+    (1440, 1095), # 3 years
+]
+
+
+def _days_to_hc_enum(days: int) -> int:
+    """Map an actual day count to the nearest hiring.cafe enum value (ceiling)."""
+    for enum_val, day_threshold in _HC_DATE_ENUMS:
+        if days <= day_threshold:
+            return enum_val
+    return -1  # All time
 
 
 class HiringCafeAdapter:
@@ -167,20 +195,63 @@ class HiringCafeAdapter:
             detail_url=detail_url,
         )
 
+    def _build_search_state(self, query: SourceQuery) -> dict:
+        """Build the searchState JSON object for hiring.cafe's / endpoint."""
+        state: dict = {
+            "searchQuery": query.search_query or "",
+            "sortBy": "default",
+            "defaultToUserLocation": False,
+            "userLocation": None,
+            "locations": [{
+                "id": "seo_us",
+                "formatted_address": "United States",
+                "types": ["country"],
+                "geometry": {"location": {"lat": 39.8283, "lon": -98.5795}},
+                "address_components": [
+                    {"long_name": "United States", "short_name": "US", "types": ["country"]}
+                ],
+                "options": {"flexible_regions": ["anywhere_in_continent", "anywhere_in_world"]},
+            }],
+        }
+        if query.posted_within_days is not None and query.posted_within_days > 0:
+            state["dateFetchedPastNDays"] = _days_to_hc_enum(query.posted_within_days)
+        if query.workplace_types:
+            state["workplaceTypes"] = query.workplace_types
+        if query.commitments:
+            state["commitments"] = query.commitments
+        if query.seniority_levels:
+            state["seniorityLevels"] = query.seniority_levels
+        if query.role_types:
+            state["roleTypes"] = query.role_types
+        return state
+
     def fetch_jobs(self, query: SourceQuery, page: int = 0) -> SourcePage:
         """Fetch one page from hiring.cafe.
 
-        1. Check disk cache (key: {slug}:{page})
-        2. GET {base_url}/jobs/{slug}?page={page}
+        When query.search_query is set, uses the / endpoint with searchState JSON
+        (supports server-side date filtering via dateFetchedPastNDays).
+        Otherwise falls back to the slug-based /jobs/{slug} URL (backward compat).
+
+        In both cases:
+        1. Check disk cache
+        2. GET the URL (with ?page=N for pagination)
         3. Extract __NEXT_DATA__ JSON
         4. Parse ssrHits[] → JobCard (using source_map for ATS normalization)
         5. Filter pinned jobs
         6. Cache response
         7. Return SourcePage
         """
-        url = f"{self.base_url}/jobs/{query.slug}"
-        if page > 0:
-            url += f"?page={page}"
+        if query.search_query:
+            state = self._build_search_state(query)
+            encoded = quote(json.dumps(state))
+            url = f"{self.base_url}/?searchState={encoded}"
+            if page > 0:
+                url += f"&page={page}"
+        else:
+            url = f"{self.base_url}/jobs/{query.slug}"
+            if page > 0:
+                url += f"?page={page}"
+
         html = self._fetch_html(url)
         data = self._extract_next_data(html)
 

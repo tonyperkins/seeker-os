@@ -628,7 +628,7 @@ function JobsPageInner() {
                         {job.score != null ? job.score : "—"}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        <div className="flex items-center gap-1" title={job.reject_details ? `Manually rejected: ${job.reject_reason}` : job.status}>
+                        <div className="flex items-center gap-1" title={job.reject_reason ? (job.reject_details ? `Manually rejected: ${job.reject_reason}` : job.reject_reason) : job.status}>
                           {statusIcon(job.status, !!job.reject_details)}
                           <span title={job.has_analysis ? `Analysis: ${job.analysis_verdict ?? "done"}` : "No analysis"}>
                             <Brain className={`size-3.5 ${

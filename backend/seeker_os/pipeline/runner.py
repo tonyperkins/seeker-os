@@ -76,6 +76,7 @@ def run_pipeline(
     tiers: list[int] | None = None,
     dry_run: bool = False,
     progress_cb: Callable[[PipelineProgressEvent], None] | None = None,
+    force_full_pull: bool = False,
 ) -> PipelineRunResult:
     """Run the full pipeline (or specific tiers).
 
@@ -87,6 +88,10 @@ def run_pipeline(
 
     If progress_cb is provided, it's called with PipelineProgressEvent objects
     at each step of the pipeline for real-time progress tracking.
+
+    When force_full_pull is False and a query has search_query set, the adapter
+    requests only jobs posted since the query's last_run_at (incremental search).
+    When force_full_pull is True, no date filter is applied (full pull).
     """
 
     def _emit(step: str, label: str, status: str, current: int = 0, total: int = 0, detail: str = ""):
@@ -143,17 +148,66 @@ def run_pipeline(
             all_queries = [q for q in all_queries if q.slug in queries]
 
         from seeker_os.models import SourceQuery
-        source_queries = [
-            SourceQuery(
+        source_queries: list[SourceQuery] = []
+        for q in all_queries:
+            posted_within_days: int | None = None
+            if q.search_query and not force_full_pull:
+                # Compute days since last run for incremental search
+                row = db.execute(
+                    "SELECT last_run_at FROM search_queries WHERE query_slug=? AND source_id=?",
+                    (q.slug, q.source_id),
+                ).fetchone()
+                last_run = row["last_run_at"] if row else None
+                if last_run:
+                    try:
+                        last_dt = datetime.fromisoformat(last_run)
+                        if last_dt.tzinfo is None:
+                            last_dt = last_dt.replace(tzinfo=timezone.utc)
+                        delta = now - last_dt
+                        posted_within_days = max(1, delta.days)
+                    except (ValueError, TypeError):
+                        pass  # Invalid timestamp → no date filter
+
+            # Map FilterConfig → server-side filter hints (Phase 2)
+            # Only set when the query uses structured search (search_query present),
+            # since slug-based URLs don't support server-side filtering.
+            sq_workplace_types: list[str] | None = None
+            sq_commitments: list[str] | None = None
+            sq_seniority_levels: list[str] | None = None
+            sq_role_types: list[str] | None = None
+            if q.search_query and settings.filters:
+                fc = settings.filters.filters
+                if fc.remote_only:
+                    sq_workplace_types = ["Remote"]
+                if fc.commitment_required:
+                    # Map our config value to hiring.cafe's format
+                    commitment_map = {
+                        "full_time": "Full Time",
+                        "full-time": "Full Time",
+                        "part_time": "Part Time",
+                        "part-time": "Part Time",
+                        "contract": "Contract",
+                    }
+                    mapped = commitment_map.get(fc.commitment_required.lower(), fc.commitment_required)
+                    sq_commitments = [mapped]
+                if fc.seniority_floor:
+                    sq_seniority_levels = list(fc.seniority_floor)
+                # role_types: no config field yet, leave as None
+
+            source_queries.append(SourceQuery(
                 source_id=q.source_id,
                 slug=q.slug,
                 label=q.label,
                 commitment=q.commitment,
                 max_pages=q.max_pages,
                 enabled=q.enabled,
-            )
-            for q in all_queries
-        ]
+                search_query=q.search_query,
+                posted_within_days=posted_within_days,
+                workplace_types=sq_workplace_types,
+                commitments=sq_commitments,
+                seniority_levels=sq_seniority_levels,
+                role_types=sq_role_types,
+            ))
 
         _emit("discovery", "Discovery", "started", detail=f"Fetching from {len(source_queries)} queries…")
         cards = fetch_all_queries(source_queries, adapters, cache)
@@ -192,6 +246,16 @@ def run_pipeline(
                           detail=f"Inserted {result.cards_new} new, skipped {result.duplicates_skipped} duplicates")
 
             db.commit()
+
+            # Update last_run_at for each query that was run
+            run_timestamp = datetime.now(timezone.utc).isoformat()
+            for sq in source_queries:
+                db.execute(
+                    "UPDATE search_queries SET last_run_at=? WHERE query_slug=? AND source_id=?",
+                    (run_timestamp, sq.slug, sq.source_id),
+                )
+            db.commit()
+
             print(f"  Total fetched: {result.cards_fetched} cards")
             print(f"  New (after dedup): {result.cards_new}")
             print(f"  Duplicates skipped: {result.duplicates_skipped}")
@@ -460,10 +524,11 @@ def run_pipeline(
         print("\nTier 5: Ranking & Report")
         _emit("ranking", "Ranking", "started", detail="Applying per-company cap and cross-referencing…")
 
-        # Per-company cap
+        # Per-company cap — only applies to jobs from this run
         cap = settings.scoring.per_company_cap
         ready_jobs = db.execute(
-            "SELECT * FROM jobs WHERE status='ready' AND tier_passed=4 ORDER BY score DESC, comp_max DESC, date_posted DESC"
+            "SELECT * FROM jobs WHERE status='ready' AND tier_passed=4 AND run_id=? ORDER BY score DESC, comp_max DESC, date_posted DESC",
+            (run_id,)
         ).fetchall()
 
         # Group by company and apply cap
@@ -479,15 +544,16 @@ def run_pipeline(
 
         db.commit()
 
-        # Cross-reference
+        # Cross-reference — runs on all ready jobs (not just this run)
         if settings.profile and settings.profile.cross_reference.auto_pull:
             sync_repo(settings.profile.cross_reference.repo_path)
 
-        final_jobs = db.execute(
+        all_ready_jobs = db.execute(
             "SELECT * FROM jobs WHERE status='ready' ORDER BY score DESC, comp_max DESC, date_posted DESC"
         ).fetchall()
 
-        for row in final_jobs:
+        run_job_ids = {r["id"] for r in ready_jobs}
+        for row in all_ready_jobs:
             if settings.profile:
                 cross_ref = check_cross_reference(
                     title=row["title"] or "",
@@ -499,10 +565,11 @@ def run_pipeline(
                         "UPDATE jobs SET cross_ref_status=?, cross_ref_date=?, cross_ref_score=? WHERE id=?",
                         (cross_ref.prior_status, cross_ref.prior_date, cross_ref.prior_score, row["id"]),
                     )
-                    result.cross_ref_matches += 1
+                    if row["id"] in run_job_ids:
+                        result.cross_ref_matches += 1
 
         db.commit()
-        result.tier5_ready = len(final_jobs)
+        result.tier5_ready = len(ready_jobs) - result.tier5_capped
         print(f"  Ready for review: {result.tier5_ready}")
         print(f"  Capped (per-company): {result.tier5_capped}")
         print(f"  Cross-ref matches: {result.cross_ref_matches}")
