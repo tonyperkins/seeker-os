@@ -257,6 +257,12 @@ export interface MessageResponse {
   message: string;
 }
 
+export interface RestoreResult {
+  message: string;
+  restored: string[];
+  skipped: string[];
+}
+
 export interface ProfileData {
   user: { name: string; email: string; location: string };
   contact: ContactInfo;
@@ -653,6 +659,31 @@ export const api = {
       fetchAPI<TestConnectionResult>("/api/settings/company-research/test-connection", {
         method: "POST",
       }),
+  },
+
+  // Backup / Restore
+  backup: {
+    download: async (): Promise<Blob> => {
+      const res = await fetch(`${API_BASE}/api/backup`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `API error: ${res.status}`);
+      }
+      return res.blob();
+    },
+    restore: async (file: File): Promise<RestoreResult> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_BASE}/api/backup/restore`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `API error: ${res.status}`);
+      }
+      return res.json();
+    },
   },
 };
 

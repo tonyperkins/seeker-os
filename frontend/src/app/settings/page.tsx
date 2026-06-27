@@ -18,6 +18,7 @@ import { SettingsClient } from "@/components/settings-client";
 import { SettingsConfigCard } from "@/components/settings-config-card";
 import { AccuracyRulesCard } from "@/components/accuracy-rules-card";
 import { CompanyResearchSettingsCard } from "@/components/company-research-settings-card";
+import { BackupRestoreCard } from "@/components/backup-restore-card";
 import { api, type SettingsResponse, type ProfileData, type FiltersData, type AccuracyRule } from "@/lib/api";
 
 export default async function SettingsPage() {
@@ -138,6 +139,11 @@ export default async function SettingsPage() {
         scoring={settings?.scoring ?? null}
         sources={settings?.sources ?? null}
       />
+
+      <Separator />
+
+      {/* Backup & Restore — export/import all non-DB configuration */}
+      <BackupRestoreCard />
     </div>
   );
 }
