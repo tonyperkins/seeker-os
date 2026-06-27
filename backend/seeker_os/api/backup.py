@@ -19,7 +19,8 @@ import logging
 import os
 import sqlite3
 import zipfile
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
@@ -39,6 +40,11 @@ _MASTER_RESUME_PREFIX = "master_resume."
 
 # Allowed restore paths (relative to PROJECT_ROOT) — anything outside is rejected.
 _ALLOWED_RESTORE_DIRS = {"config", "data"}
+
+# Pre-restore safety snapshot settings
+_PRE_RESTORE_DIR = DATA_DIR / "pre-restore-snapshots"
+_PRE_RESTORE_TTL_DAYS = 7
+_PRE_RESTORE_PREFIX = "pre-restore-"
 
 
 class BackupManifest(BaseModel):
@@ -193,6 +199,46 @@ def _reload_env(env_path: Path) -> None:
 # Database backup / restore — uses SQLite Online Backup API (safe under load)
 # ---------------------------------------------------------------------------
 
+def _create_pre_restore_snapshot() -> Path | None:
+    """Snapshot the current DB before a destructive restore.
+
+    Uses the SQLite Online Backup API for a consistent copy. The snapshot
+    is stored in data/pre-restore-snapshots/ with a timestamped name.
+    Returns the snapshot path, or None if the DB doesn't exist yet.
+    """
+    if not DB_PATH.exists():
+        return None
+
+    _PRE_RESTORE_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    snapshot_path = _PRE_RESTORE_DIR / f"{_PRE_RESTORE_PREFIX}{ts}.db"
+
+    source = sqlite3.connect(str(DB_PATH))
+    try:
+        dest = sqlite3.connect(str(snapshot_path))
+        try:
+            source.backup(dest)
+        finally:
+            dest.close()
+    finally:
+        source.close()
+
+    logger.info("Pre-restore snapshot saved to %s", snapshot_path)
+    return snapshot_path
+
+
+def _cleanup_old_snapshots() -> None:
+    """Delete pre-restore snapshots older than _PRE_RESTORE_TTL_DAYS."""
+    if not _PRE_RESTORE_DIR.exists():
+        return
+
+    cutoff = time.time() - (_PRE_RESTORE_TTL_DAYS * 86400)
+    for p in _PRE_RESTORE_DIR.iterdir():
+        if p.is_file() and p.name.startswith(_PRE_RESTORE_PREFIX) and p.suffix == ".db":
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
+                logger.info("Deleted expired pre-restore snapshot %s", p.name)
+
 @router.get("/db")
 def download_db_backup():
     """Download a consistent snapshot of the SQLite database.
@@ -230,6 +276,10 @@ def download_db_backup():
 async def restore_db_backup(file: UploadFile = File(...)):
     """Upload a .db file and restore it into the live database.
 
+    A pre-restore snapshot of the current DB is saved to
+    data/pre-restore-snapshots/ before overwriting. Snapshots older
+    than 7 days are cleaned up automatically.
+
     Uses SQLite's Online Backup API to safely copy the uploaded DB into
     the live seeker.db — no need to stop the server.
     """
@@ -253,6 +303,10 @@ async def restore_db_backup(file: UploadFile = File(...)):
         except sqlite3.DatabaseError:
             raise HTTPException(status_code=400, detail="File is not a valid SQLite database")
 
+        # Safety: snapshot the current DB before overwriting
+        snapshot_path = _create_pre_restore_snapshot()
+        _cleanup_old_snapshots()
+
         # Use the Online Backup API to copy from the temp DB into the live DB.
         # This is safe even while the server has open connections.
         source = sqlite3.connect(str(tmp_path))
@@ -270,4 +324,8 @@ async def restore_db_backup(file: UploadFile = File(...)):
         if tmp_path.exists():
             tmp_path.unlink()
 
-    return {"message": "Database restored successfully"}
+    snapshot_msg = ""
+    if snapshot_path:
+        snapshot_msg = f" A pre-restore snapshot was saved to {snapshot_path.name}."
+
+    return {"message": f"Database restored successfully.{snapshot_msg}"}

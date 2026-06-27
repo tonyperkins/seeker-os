@@ -9,10 +9,20 @@ import {
   CheckCircle2,
   DatabaseBackup,
   Database,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 import { api, type RestoreResult, type MessageResponse } from "@/lib/api";
 
 export function BackupRestoreCard() {
@@ -25,6 +35,10 @@ export function BackupRestoreCard() {
   const [dbResult, setDbResult] = useState<MessageResponse | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dbFileInputRef = useRef<HTMLInputElement>(null);
+
+  // DB restore confirmation state
+  const [pendingDbFile, setPendingDbFile] = useState<File | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -88,23 +102,33 @@ export function BackupRestoreCard() {
     }
   };
 
-  const handleDbRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // When user picks a DB file, open the confirmation dialog instead of restoring immediately
+  const handleDbFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingDbFile(file);
+    setConfirmOpen(true);
+    // Reset the input so the same file can be re-selected if needed
+    if (dbFileInputRef.current) {
+      dbFileInputRef.current.value = "";
+    }
+  };
 
+  const handleDbRestoreConfirmed = async () => {
+    if (!pendingDbFile) return;
+
+    setConfirmOpen(false);
     setDbRestoring(true);
     setError(null);
     setDbResult(null);
     try {
-      const result = await api.backup.restoreDB(file);
+      const result = await api.backup.restoreDB(pendingDbFile);
       setDbResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to restore database");
     } finally {
       setDbRestoring(false);
-      if (dbFileInputRef.current) {
-        dbFileInputRef.current.value = "";
-      }
+      setPendingDbFile(null);
     }
   };
 
@@ -214,7 +238,7 @@ export function BackupRestoreCard() {
               type="file"
               accept=".db,.sqlite,.sqlite3"
               className="hidden"
-              onChange={handleDbRestore}
+              onChange={handleDbFileSelected}
             />
           </div>
         </div>
@@ -226,10 +250,43 @@ export function BackupRestoreCard() {
             <li><strong>DB backup:</strong> <code>data/seeker.db</code> (consistent snapshot via SQLite Online Backup API)</li>
           </ul>
           <p className="pt-1">
-            Both backup and restore are safe to run while the server is active — no restart required.
+            Both backup and restore are safe to run while the server is active. DB restore
+            creates a pre-restore snapshot automatically.
           </p>
         </div>
       </div>
+
+      {/* DB Restore Confirmation Dialog */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-5 text-amber-500" />
+              Confirm Database Restore
+            </DialogTitle>
+            <DialogDescription>
+              This will <strong>replace all data</strong> in the current database with the
+              contents of <code>{pendingDbFile?.name}</code>. Any jobs, analyses, or resumes
+              added after this backup was taken will be lost.
+              <br /><br />
+              A pre-restore snapshot of the current database will be saved automatically
+              to <code>data/pre-restore-snapshots/</code> and kept for 7 days.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              onClick={handleDbRestoreConfirmed}
+              variant="destructive"
+            >
+              <Database className="size-4" />
+              Restore Database
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </CollapsibleCard>
   );
 }
