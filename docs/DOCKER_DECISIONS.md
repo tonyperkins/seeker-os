@@ -30,7 +30,9 @@
 ## Environment Variables
 - `CORS_ORIGINS` — set in compose to `http://localhost:3000,http://127.0.0.1:3000` so the frontend can reach the backend. Override for production.
 - `NEXT_PUBLIC_API_URL` — passed as build arg to frontend. Defaults to `http://localhost:8000` (browser-accessible URL).
-- All other env vars (API keys, retrieval keys) come from the mounted `.env` file.
+- API keys (`ANTHROPIC_API_KEY`, `KILO_API_KEY`, `RETRIEVAL_API_KEY`) — **dual-path**: passed through from host env via compose `environment:` (takes precedence), or loaded from the mounted `.env` file via `load_dotenv(override=False)` if not in the host env. The settings UI can also write keys to `.env` at runtime via `write_env()`.
+- OAuth tokens — stored at `data/.anthropic_oauth.json`, persisted via the `./data` volume mount. Independent of `.env`.
+- All other env vars come from the mounted `.env` file.
 
 ## .dockerignore
 - Excludes `.git`, `.venv`, `node_modules`, `.next`, real config files, data files, logs.
