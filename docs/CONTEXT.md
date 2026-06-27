@@ -1,7 +1,7 @@
 # Seeker OS — Context & Current State
 
-**Last updated:** 2026-06-25
-**Phase:** Phase 3 — company research with live retrieval, config-driven thresholds
+**Last updated:** 2026-06-27
+**Phase:** Phase 3 — complete. Company research, resume generation, cover letters, application answers, JD analysis, net score, application lifecycle events, onboarding wizard, backup/restore, and Kanban board all implemented. Phase 4 (cron, analytics, historical import, Chrome extension) pending.
 
 ---
 
@@ -14,12 +14,18 @@ blacklist, scoring weights, accuracy rules, resume path, location prefs) lives i
 YAML config files.
 
 The design is complete and documented. Phases 1–2 added the core pipeline, web
-dashboard, resume generation, AI-powered JD analysis, and a three-tier AI rules
-layer (identity rules, channel rules, per-application AI policy). Phase 3 adds
-company research with a pluggable retrieval adapter interface (Tavily as one
-adapter), live web search for funding signals and employee sentiment, config-driven
-thresholds (confidence floor, staleness, source trust ordering), and graceful
-degradation when no retrieval provider is configured.
+dashboard, and a three-tier AI rules layer (identity rules, channel rules,
+per-application AI policy). Phase 2.5 added an onboarding wizard (resume ingest →
+AI interview → config synthesis). Phase 3 added resume generation with strict
+accuracy enforcement, cover letter generation, application answer generation,
+AI-powered JD analysis, company research with a pluggable retrieval adapter
+interface (Tavily as one adapter), live web search for funding signals and
+employee sentiment, config-driven thresholds (confidence floor, staleness, source
+trust ordering), research-adjusted scoring, net score (composite of base +
+research + AI verdict cap), an append-only application lifecycle event log,
+Kanban board with drag-and-drop status tracking, manual job entry, backup/restore
+(config files + SQLite DB), and graceful degradation when no retrieval provider
+is configured.
 
 **Product mindset:** The engines (discovery, filtering, scoring, dedup, resume gen)
 are generic. The config files (`profile.yml`, `scoring_rubric.yml`, `accuracy_rules.yml`,
@@ -67,15 +73,21 @@ tracks everything in a dashboard.
 | Document | What's in it | When to read |
 |---|---|---|
 | `docs/PRODUCT_DESIGN.md` | Config-driven architecture, profile/rubric/rules YAML framework, no-hardcode principles | **Read first** — establishes the product mindset |
+| `docs/ARCHITECTURE.md` | Comprehensive system architecture: module map, pipeline flow, data flow, frontend structure | Understanding the full system at HEAD |
+| `docs/API_REFERENCE.md` | All REST API endpoints organized by router | Building or debugging API integrations |
+| `docs/DATABASE_SCHEMA.md` | All SQLite tables, columns, indexes, migration history | Understanding data model |
+| `docs/APPLICATION_LIFECYCLE.md` | Job statuses, event types, transition rules, Kanban board, stale tracking | Understanding the application lifecycle |
+| `docs/FRONTEND_ARCHITECTURE.md` | Next.js pages, components, API client, state management | Working on the frontend |
 | `docs/SOURCE_ADAPTERS.md` | Pluggable source adapter interface, hiring.cafe as one adapter, sources.yml config | Implementing discovery layer |
-| `docs/LLM_ROUTING.md` | Provider abstraction, 3-tier model system, auto-discovery, search, multi-resume | Implementing LLM integration (schema defined in Phase 1) |
-| `docs/PLAN.md` | Full architecture, data model, dashboard design, 4 implementation phases | Understanding the big picture |
-| `docs/PHASE1_SPEC.md` | Exact interfaces, function signatures, CLI contract, acceptance criteria for Phase 1 | Implementing Phase 1 |
-| `docs/SCORING_RUBRIC.md` | Scoring rubric reference (the *values* — the *engine* reads them from YAML) | Implementing the scoring engine |
-| `docs/ACCURACY_RULES.md` | Resume accuracy rules reference (the *values* — the *validator* reads them from YAML). Also documents the identity-rules and channel-rules layers. | Implementing resume generation |
-| `config/company_research.example.yml` | Company research config template — retrieval provider, query templates, thresholds (confidence floor, staleness, source trust order) | Implementing company research (Phase 3) |
+| `docs/LLM_ROUTING.md` | Provider abstraction, 3-tier model system, auto-discovery, search, OAuth, multi-resume | Implementing LLM integration |
+| `docs/PLAN.md` | Full architecture, data model, dashboard design, 4 implementation phases | Understanding the big picture (historical) |
+| `docs/PHASE1_SPEC.md` | Exact interfaces, function signatures, CLI contract, acceptance criteria for Phase 1 | Implementing Phase 1 (historical) |
+| `docs/SCORING_RUBRIC.md` | Scoring rubric reference, net score, verdict caps, research-adjusted score | Implementing the scoring engine |
+| `docs/ACCURACY_RULES.md` | Resume accuracy rules reference, identity-rules and channel-rules layers, AI policy enforcement | Implementing resume/cover letter/application answer generation |
 | `docs/HIRINGCAFE_FIELDS.md` | `__NEXT_DATA__` field reference, source mapping, query counts | Implementing discovery + dedup |
 | `docs/DEDUP_DESIGN.md` | 4-layer dedup with normalization functions and code examples | Implementing dedup |
+| `docs/DOCKER_DECISIONS.md` | Docker containerization decisions, volumes, env vars, production deployment | Running in Docker |
+| `config/company_research.example.yml` | Company research config template — retrieval provider, query templates, thresholds | Implementing company research |
 | `AGENTS.md` | Project rules for AI agents | Always (auto-loaded by agent tools) |
 
 ## User Profile (Quick Reference)
@@ -97,17 +109,19 @@ User profile is configured in `config/profile.yml`. Key fields:
 |---|---|---|
 | 1 | Core pipeline (CLI): discover → filter → fetch JD → score → report. User configures profile, rubric, and rules via YAML. | Complete |
 | 2 | Web dashboard: FastAPI + Next.js, all views | Complete |
-| 2.5 | Onboarding wizard (CLI first, path to dashboard): resume ingest → AI interview → freeform rules → AI synthesis → config review. Generates profile.yml, scoring_rubric.yml, accuracy_rules.yml for new users. | Complete |
-| 3 | Resume generation: LLM + accuracy enforcement + PDF export. Company research with pluggable retrieval adapter, config-driven thresholds, live web search for funding/sentiment signals. | In progress |
+| 2.5 | Onboarding wizard (dashboard): resume ingest → AI parse → config review. Generates profile.yml, scoring_rubric.yml, accuracy_rules.yml for new users. | Complete |
+| 3 | Resume generation (LLM + accuracy enforcement + PDF/DOCX export), cover letter generation, application answer generation, AI-powered JD analysis, company research with pluggable retrieval adapter, config-driven thresholds, live web search for funding/sentiment signals, research-adjusted scoring, net score (verdict cap composite), application lifecycle events, Kanban board, manual job entry, backup/restore. | Complete |
 | 4 | Polish: cron, analytics, historical import, Chrome extension | Pending |
 
 ## LLM Configuration
 
 - **Providers:** 1 to N providers (Anthropic direct + any OpenAI-compatible gateway like Kilo)
+- **Auth:** API key (env var reference) or OAuth token file (Anthropic OAuth flow)
 - **Models:** 1 to N models per provider, with auto-discovery (`GET /models`) and search
 - **3 tiers:** heavy (generation — Opus/Sonnet), moderate (analysis — Sonnet), light (validation — Haiku)
 - **Per-task overrides:** fine-grained control (e.g., Opus for high-value resume gen, Sonnet for standard)
-- **Config:** `config/providers.yml` (schema defined in Phase 1, LLM calls begin Phase 2.5+)
+- **Tasks:** resume_generation, cover_letter, application_answer, application_answer_critique, jd_evaluation, company_research, accuracy_validation, onboarding_interview, onboarding_synthesis, resume_parsing, text_extraction
+- **Config:** `config/providers.yml`
 - See `docs/LLM_ROUTING.md` for full details
 
 ## Critical Constraints (Don't Forget)
@@ -115,8 +129,9 @@ User profile is configured in `config/profile.yml`. Key fields:
 1. **NO HARDCODED PERSONAL VALUES** — all user-specific config (comp, blacklist, scoring
    weights, accuracy rules, paths) lives in YAML config files. Engines are generic.
    See `docs/PRODUCT_DESIGN.md`.
-2. **NO EMBELLISHING** in resume generation — accuracy rules are config-driven validation,
-   not just prompt instructions
+2. **NO EMBELLISHING** in resume/cover letter/application answer generation — accuracy
+   rules are config-driven validation, not just prompt instructions. LLM-judged claim
+   traceability against the master resume is enforced after generation.
 3. **Always `git pull --rebase`** before reading the cross-reference repo (path is configurable)
 4. **3-5 seconds between hiring.cafe requests** — human-like, not aggressive (configurable)
 5. **Skip pinned jobs** (`is_hc_pinned=true` or `source='hiring_cafe_pin'`)
@@ -125,6 +140,10 @@ User profile is configured in `config/profile.yml`. Key fields:
 8. **Structured comp fields** (integers) bypass the regex comp-parser bug
 9. **Ship example configs** — `*.example.yml` templates with placeholder values.
    Real configs (`profile.yml`, etc.) are `.gitignore`d (contain personal data).
+10. **Status changes go through `transition_status()`** — never UPDATE jobs.status
+    directly without also recording an event row. See `docs/APPLICATION_LIFECYCLE.md`.
+11. **Net score never overwrites base score** — `base_score`, `research_adjusted_score`,
+    and `net_score` are all preserved separately in the jobs table.
 
 ## URL Verification (Phase 3)
 

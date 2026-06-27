@@ -24,8 +24,8 @@
 
 ## Volumes & Persistence
 - `./config:/app/config` — real config files (gitignored) mounted at runtime. Only `*.example.yml` templates are baked into the image.
-- `./data:/app/data` — SQLite DB, caches, resumes, logs. Persisted on host.
-- `./.env:/app/.env` — API keys and env vars. Mounted as file volume.
+- `./data:/app/data` — SQLite DB, caches, resumes, logs, and `.env` (symlinked from `/app/.env`). Persisted on host.
+- `.env` is **not** bind-mounted directly. Instead, the Dockerfile symlinks `/app/.env` → `/app/data/.env`, and an entrypoint script ensures the file exists on first run. This avoids the "Docker creates a directory when bind-mount source doesn't exist" problem. UI-written keys persist via the data volume.
 
 ## Environment Variables
 - `CORS_ORIGINS` — set in compose to `http://localhost:3000,http://127.0.0.1:3000` so the frontend can reach the backend. Override for production.

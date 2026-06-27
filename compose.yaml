@@ -8,7 +8,6 @@ services:
     volumes:
       - ./config:/app/config
       - ./data:/app/data
-      - ./.env:/app/.env
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       # API keys — passthrough from host env (optional). If set, they take

@@ -21,7 +21,15 @@ RUN pip install --no-cache-dir -e /app/backend
 # Create data directory (will be overridden by volume mount in compose)
 RUN mkdir -p /app/data
 
+# Symlink .env into the data volume so UI-written keys persist across recreations.
+# The entrypoint ensures /app/data/.env exists before the app starts.
+RUN ln -sf /app/data/.env /app/.env
+
+# Entrypoint ensures the .env file exists (data volume may be empty on first run)
+COPY backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 8000
 
-# uvicorn with --app-dir so the package is importable
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["uvicorn", "seeker_os.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "/app/backend"]

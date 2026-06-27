@@ -117,3 +117,82 @@ Jobs are not penalized in the score for age, but age is a minor factor in rankin
 - Jobs posted 7-14 days: neutral
 - Jobs posted 14-30 days: slight ranking penalty
 - Jobs posted >30 days: hard filter at Tier 2 (configurable)
+
+---
+
+## Research-Adjusted Score
+
+When company research has run, a separate adjusted score is produced from the base
+score plus confidence-gated, deterministic modifiers over dossier fields. This is
+**additive and auditable** and **never overwrites the base score** — both `score`
+(base) and `research_adjusted_score` are preserved in the `jobs` table.
+
+**Implementation:** `seeker_os/scoring/research_adjustment.py` → `compute_research_adjustment()`
+
+### Modifiers (config-driven, from `company_research.yml`)
+
+| Signal | Direction | Condition |
+|---|---|---|
+| Layoffs | Negative | Dossier mentions recent layoffs |
+| Runway | Negative | Short runway reported (< 12 months) |
+| Remote walkback | Negative | Company reversed remote-friendly policy |
+| Recurring negative sentiment | Negative | High-confidence recurring themes in sentiment data |
+
+### Rules
+
+- An `is_stub` or no-retrieval dossier produces **zero adjustment** (delta = 0).
+- Thin-sample sentiment ratings do not move the score; only high-confidence
+  recurring themes do.
+- Modifier thresholds and magnitudes live in `config/company_research.yml`.
+- The breakdown (factor / delta / confidence / section) is stored in
+  `jobs.research_breakdown` as JSON for auditability.
+
+### Formula
+
+```
+research_adjusted_score = clamp(base_score + research_delta, min_score, max_score)
+```
+
+---
+
+## Net Score (Composite)
+
+The Net score is the final composite that combines the base score, research
+adjustment, and AI analysis verdict. It is stored in `jobs.net_score` and is the
+primary score shown in the UI.
+
+**Implementation:** `seeker_os/scoring/net_score.py` → `compute_net_score()`
+
+### Formula (Option B: verdict acts as a CAP, not an addend)
+
+```
+adjusted = clamp(base_score + research_delta, min_score, max_score)
+Net = min(adjusted, verdict_cap)   if analysis exists
+Net = adjusted                      if no analysis (fallback)
+```
+
+### Verdict Caps (config-driven, from `scoring_rubric.yml` `verdict_caps` section)
+
+| Verdict | Cap | Rationale |
+|---|---|---|
+| `APPLY` | `null` (no ceiling) | Full adjusted score shows |
+| `CONDITIONAL` | e.g. `7.0` | Partial-fit cannot present as top |
+| `MONITOR` | e.g. `5.0` | Lower priority |
+| `SKIP` | e.g. `3.0` | Low priority |
+
+### Score Preservation
+
+All three score components are preserved separately in the `jobs` table:
+
+| Column | Description |
+|---|---|
+| `score` | Base heuristic rubric score (Step 5 above) |
+| `research_adjusted_score` | Base + research delta, clamped |
+| `research_delta` | Signed delta from company research |
+| `research_breakdown` | JSON breakdown of research adjustment factors |
+| `net_score` | Final composite: min(adjusted, verdict_cap) |
+| `analysis_verdict` | AI verdict string (`APPLY`, `CONDITIONAL`, `MONITOR`, `SKIP`) |
+| `analysis_delta` | Reserved for future use |
+
+The Net score is never computed if no analysis has run — the UI falls back to
+showing the base or research-adjusted score.

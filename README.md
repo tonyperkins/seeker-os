@@ -45,29 +45,40 @@ queryable interface, no analytics, and no resume automation.
 ## Documentation
 
 - [Product Design](docs/PRODUCT_DESIGN.md) — Config-driven architecture (read first)
-- [Plan & Architecture](docs/PLAN.md)
-- [LLM Routing](docs/LLM_ROUTING.md) — Multi-provider model routing
-- [Scoring Rubric](docs/SCORING_RUBRIC.md)
-- [Resume Accuracy Rules](docs/ACCURACY_RULES.md)
+- [Architecture](docs/ARCHITECTURE.md) — Comprehensive system architecture at HEAD
+- [API Reference](docs/API_REFERENCE.md) — All REST API endpoints
+- [Database Schema](docs/DATABASE_SCHEMA.md) — Tables, columns, indexes, migrations
+- [Application Lifecycle](docs/APPLICATION_LIFECYCLE.md) — Job statuses, events, Kanban, stale tracking
+- [Frontend Architecture](docs/FRONTEND_ARCHITECTURE.md) — Next.js pages, components, API client
+- [LLM Routing](docs/LLM_ROUTING.md) — Multi-provider model routing, OAuth, task tiers
+- [Scoring Rubric](docs/SCORING_RUBRIC.md) — Base score, research-adjusted score, net score
+- [Resume Accuracy Rules](docs/ACCURACY_RULES.md) — Validation, identity rules, channel rules, AI policy
 - [Source Adapters](docs/SOURCE_ADAPTERS.md) — Pluggable source adapter design
 - [hiring.cafe Field Reference](docs/HIRINGCAFE_FIELDS.md)
 - [Dedup Design](docs/DEDUP_DESIGN.md)
+- [Docker Decisions](docs/DOCKER_DECISIONS.md) — Containerization, volumes, production deployment
+- [Plan & Architecture](docs/PLAN.md) — Historical design records
 
 ## Status
 
-**Phases 1-3 complete, Phase 3 company research in progress** — Core pipeline, web
-dashboard, resume generation, AI-powered JD analysis, and company research with live
-retrieval are implemented. Phase 3 adds a pluggable retrieval adapter interface,
-config-driven thresholds, and live web search for funding/sentiment signals. See
+**Phases 1-3 complete** — Core pipeline, web dashboard, resume generation with
+accuracy enforcement, cover letter generation, application answer generation,
+AI-powered JD analysis, company research with live retrieval, research-adjusted
+scoring, net score (verdict cap composite), application lifecycle events, Kanban
+board, onboarding wizard, manual job entry, and backup/restore are all implemented.
+Phase 4 (cron, analytics, historical import, Chrome extension) is pending. See
+[docs/CONTEXT.md](docs/CONTEXT.md) for current state and
 [docs/PLAN.md](docs/PLAN.md) for the full roadmap.
 
 ## Tech Stack
 
 - **Database:** SQLite
 - **Backend:** Python + FastAPI
-- **Frontend:** Next.js + Tailwind CSS
-- **AI:** Multi-provider (Ollama local, Anthropic, OpenAI) with model routing
+- **Frontend:** Next.js + Tailwind CSS + shadcn/ui
+- **AI:** Multi-provider (Anthropic direct + OpenAI-compatible gateways) with 3-tier model routing, OAuth support, and per-task overrides
 - **Job sources:** Pluggable adapter architecture (currently supports hiring.cafe via `__NEXT_DATA__` JSON extraction)
+- **Company research:** Pluggable retrieval adapter (Tavily as one adapter, degrades to Wikipedia/Wikidata when unconfigured)
+- **Deployment:** Docker Compose (backend + frontend containers, shared volume for SQLite + config)
 
 ## Pre-commit Secret Guard
 
@@ -102,4 +113,14 @@ The **Settings** page in the web dashboard provides a no-edit-config-files inter
   source trust order, User-Agent) are available in a collapsible section.
 - **Profile & Filters** — auto-extracted from your master resume, then editable.
 - **Accuracy Rules** — resume validation constraints (disallowed phrases, forbidden tech, etc.).
-- **LLM Providers** — model routing, tier assignments, and provider API keys.
+- **LLM Providers** — model routing, tier assignments, and provider API keys. Supports
+  API key auth and Anthropic OAuth (PKCE flow) for passwordless authentication.
+- **Backup & Restore** — download all config files as a zip, restore from upload,
+  download SQLite DB snapshot, restore DB from upload.
+
+## Onboarding
+
+The **Onboarding** wizard (`/onboarding`) guides new users through initial setup:
+1. **LLM Provider** — configure at least one provider (API key or OAuth).
+2. **Resume Upload** — upload master resume (Markdown or text), parsed by LLM.
+3. **Config Review** — review and edit auto-extracted profile, filters, and accuracy rules.

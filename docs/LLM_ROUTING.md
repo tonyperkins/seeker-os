@@ -62,9 +62,9 @@ class LLMProvider(Protocol):
 
 | Tier | Name | Tasks | What it needs | Typical model |
 |---|---|---|---|---|
-| `heavy` | Generation | Resume tailoring, cover letter | Creative writing quality — output is user-facing prose | Opus (top matches) / Sonnet (standard) |
-| `moderate` | Analysis | Onboarding interview, config synthesis, JD evaluation, company research | Reasoning — output is structured data/config | Sonnet |
-| `light` | Validation | Accuracy checking, text extraction, summarization | Speed — follow rules, check constraints, parse text | Haiku |
+| `heavy` | Generation | Resume tailoring, cover letter, application answers | Creative writing quality — output is user-facing prose | Opus (top matches) / Sonnet (standard) |
+| `moderate` | Analysis | Onboarding interview, config synthesis, JD analysis, company dossier generation, cover letter | Reasoning — output is structured data/config | Sonnet |
+| `light` | Validation | Accuracy checking, claim traceability, text extraction, metadata extraction, resume parsing | Speed — follow rules, check constraints, parse text | Haiku |
 
 **Why 3, not 2:** Generation and analysis are both "heavy" but have different quality
 requirements. Generation output is prose a hiring manager reads — quality matters
@@ -199,10 +199,20 @@ tasks:
     model: claude-sonnet-4
   company_research:
     tier: light
-  cover_letter:
+  cover_letter_generation:
     tier: moderate
-  jd_evaluation:
+  application_answer_generation:
+    tier: heavy
+  application_answer_critique:
     tier: moderate
+  jd_analysis:
+    tier: moderate
+  company_dossier_generation:
+    tier: light
+  metadata_extraction:
+    tier: light
+  resume_parsing:
+    tier: light
   text_extraction:
     tier: light
 ```
@@ -443,22 +453,24 @@ specific tier. Combined with per-task overrides, this allows:
 
 Complete list of tasks and their default tier assignments:
 
-| Task | Tier | Phase | Why |
-|---|---|---|---|
-| `resume_generation_high_value` | heavy | 3 | User-facing prose for top matches — quality critical |
-| `resume_generation_standard` | heavy | 3 | User-facing prose — quality matters |
-| `cover_letter` | moderate | 3 | User-facing prose but lower stakes than resume |
-| `onboarding_interview` | moderate | 2.5 | Conversational reasoning, structured output |
-| `onboarding_synthesis` | moderate | 2.5 | Config generation — reasoning quality matters |
-| `jd_evaluation` | moderate | 1 (optional) | Structured analysis of JD content |
-| `company_research` | light | 2 | Summarization — doesn't need expensive model |
-| `accuracy_validation` | light | 3 | Rule checking — fast, cheap, just follow constraints |
-| `text_extraction` | light | 1 (optional) | Parse JD text into structured fields |
+| Task | Tier | Why |
+|---|---|---|
+| `resume_generation_high_value` | heavy | User-facing prose for top matches — quality critical |
+| `resume_generation_standard` | heavy | User-facing prose — quality matters |
+| `cover_letter_generation` | moderate | User-facing prose but lower stakes than resume |
+| `application_answer_generation` | heavy | User-facing prose — quality matters |
+| `application_answer_critique` | moderate | Critique of user-supplied draft — reasoning, not generation |
+| `jd_analysis` | moderate | Structured analysis of JD content — reasoning quality |
+| `company_dossier_generation` | light | Summarization of retrieved snippets — doesn't need expensive model |
+| `accuracy_validation` | light | Rule checking — fast, cheap, just follow constraints |
+| `traceability_validation` | light | LLM-judged claim traceability — fast, structured output |
+| `onboarding_interview` | moderate | Conversational reasoning, structured output |
+| `onboarding_synthesis` | moderate | Config generation — reasoning quality matters |
+| `resume_parsing` | light | Parse resume text into structured fields |
+| `metadata_extraction` | light | Extract metadata from JD text |
+| `text_extraction` | light | Parse JD text into structured fields |
 
-**Phase 1 note:** Phase 1 does NOT use LLMs. The scoring engine is rules-based (regex
-+ structured fields from hiring.cafe). The LLM config schema is defined now so the
-config files exist and the schema is stable, but no LLM calls are made until Phase 2.5
-(onboarding) and Phase 3 (resume generation).
+An unrecognized task name warns rather than silently defaulting.
 
 ## Error Handling
 
@@ -471,6 +483,43 @@ config files exist and the schema is stable, but no LLM calls are made until Pha
 | Rate limited (429) | Exponential backoff (1s, 2s, 4s, 8s), then fallback provider |
 | Auto-fetch models fails | Use cached model list, log warning |
 
+## Anthropic OAuth Flow
+
+In addition to API key auth, Seeker OS supports Anthropic OAuth (PKCE flow) for
+the `anthropic` provider type. This allows users to authenticate via their Claude
+account without managing API keys manually.
+
+**Implementation:** `seeker_os/llm/anthropic_oauth.py`
+
+### Flow
+
+1. **Initiate** — `POST /api/models/oauth/initiate/{provider_id}` generates a PKCE
+   code_verifier + code_challenge and returns an authorization URL.
+2. **User authorizes** — User opens the URL in their browser, logs into claude.ai,
+   and authorizes the app.
+3. **Callback** — The callback page displays a code. User pastes it back.
+4. **Exchange** — `POST /api/models/oauth/callback/{provider_id}` exchanges the
+   code + verifier for access/refresh tokens.
+5. **Storage** — Tokens are saved to `data/.anthropic_oauth.json` (gitignored).
+   The token file format: `{accessToken, refreshToken, expiresAt}`.
+6. **Auto-refresh** — The `AnthropicProvider` checks token expiry and auto-refreshes
+   using the refresh token before making API calls.
+
+### Configuration
+
+OAuth is used when `api_key` is absent or empty for an `anthropic` provider. The
+provider checks for a valid OAuth token file and uses it as a Bearer token. If both
+API key and OAuth token are present, the API key takes precedence.
+
+### Security
+
+- Token file (`data/.anthropic_oauth.json`) is `.gitignore`d
+- PKCE state is in-memory only (per-process, short-lived)
+- Uses the same client_id as the Claude CLI / Hermes (shared PKCE flow)
+- Scopes: `org:create_api_key user:profile user:inference`
+
+---
+
 ## Security
 
 - API keys are env var references (`${VAR_NAME}`), never literal in config files
@@ -478,3 +527,5 @@ config files exist and the schema is stable, but no LLM calls are made until Pha
 - `providers.yml` with real keys is `.gitignore`d; `providers.example.yml` ships with placeholder env var names
 - API keys are never logged, never included in error messages
 - Model auto-fetch sends only the API key to the provider's own `/models` endpoint — no user data
+- OAuth tokens are stored in `data/.anthropic_oauth.json` (gitignored), never in config files
+- OAuth token refresh happens automatically before API calls when the token is near expiry
