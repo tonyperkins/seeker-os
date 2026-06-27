@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Server,
@@ -14,6 +14,7 @@ import {
   RefreshCw,
   AlertCircle,
   KeyRound,
+  ArchiveRestore,
 } from "lucide-react";
 import {
   Card,
@@ -50,6 +51,9 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // State for each step
   const [providers, setProviders] = useState<ProvidersConfigResponse | null>(null);
@@ -122,6 +126,24 @@ export default function OnboardingPage() {
     return { prof, filt };
   }, []);
 
+  const handleRestore = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRestoring(true);
+    setRestoreError(null);
+    try {
+      await api.backup.restore(file);
+      window.location.reload();
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : "Failed to restore backup");
+    } finally {
+      setRestoring(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }, []);
+
   const hasProvider = (providers?.providers ?? []).some(
     (p) => p.enabled && p.api_key_set && p.models.length > 0,
   );
@@ -166,9 +188,31 @@ export default function OnboardingPage() {
             <h1 className="text-xl font-bold tracking-tight">Seeker OS</h1>
             <p className="text-xs text-muted-foreground">Setup Wizard</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
-            Skip for now
-          </Button>
+          <div className="flex items-center gap-2">
+            {restoreError && (
+              <span className="text-xs text-destructive">{restoreError}</span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={restoring}
+            >
+              {restoring ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <ArchiveRestore className="size-3.5" />
+              )}
+              Restore from Backup
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".zip"
+              className="hidden"
+              onChange={handleRestore}
+            />
+          </div>
         </div>
       </div>
 
