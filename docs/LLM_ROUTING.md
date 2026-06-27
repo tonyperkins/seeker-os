@@ -63,8 +63,8 @@ class LLMProvider(Protocol):
 | Tier | Name | Tasks | What it needs | Typical model |
 |---|---|---|---|---|
 | `heavy` | Generation | Resume tailoring, cover letter, application answers | Creative writing quality — output is user-facing prose | Opus (top matches) / Sonnet (standard) |
-| `moderate` | Analysis | Onboarding interview, config synthesis, JD analysis, company dossier generation, cover letter | Reasoning — output is structured data/config | Sonnet |
-| `light` | Validation | Accuracy checking, claim traceability, text extraction, metadata extraction, resume parsing | Speed — follow rules, check constraints, parse text | Haiku |
+| `moderate` | Analysis | Onboarding interview, JD analysis, application answer critique, resume parsing | Reasoning — output is structured data/config | Sonnet |
+| `light` | Validation | Accuracy checking, claim traceability, metadata extraction, company dossier generation | Speed — follow rules, check constraints, parse text | Haiku |
 
 **Why 3, not 2:** Generation and analysis are both "heavy" but have different quality
 requirements. Generation output is prose a hiring manager reads — quality matters
@@ -193,14 +193,8 @@ tasks:
     tier: light
   onboarding_interview:
     tier: moderate
-  onboarding_synthesis:
-    tier: moderate
-    provider: anthropic_direct           # onboarding synthesis needs good reasoning
-    model: claude-sonnet-4
-  company_research:
-    tier: light
   cover_letter_generation:
-    tier: moderate
+    tier: heavy
   application_answer_generation:
     tier: heavy
   application_answer_critique:
@@ -212,9 +206,7 @@ tasks:
   metadata_extraction:
     tier: light
   resume_parsing:
-    tier: light
-  text_extraction:
-    tier: light
+    tier: moderate
 ```
 
 ### Environment Variables
@@ -457,18 +449,15 @@ Complete list of tasks and their default tier assignments:
 |---|---|---|
 | `resume_generation_high_value` | heavy | User-facing prose for top matches — quality critical |
 | `resume_generation_standard` | heavy | User-facing prose — quality matters |
-| `cover_letter_generation` | moderate | User-facing prose but lower stakes than resume |
+| `cover_letter_generation` | heavy | User-facing prose — quality matters |
 | `application_answer_generation` | heavy | User-facing prose — quality matters |
 | `application_answer_critique` | moderate | Critique of user-supplied draft — reasoning, not generation |
 | `jd_analysis` | moderate | Structured analysis of JD content — reasoning quality |
 | `company_dossier_generation` | light | Summarization of retrieved snippets — doesn't need expensive model |
-| `accuracy_validation` | light | Rule checking — fast, cheap, just follow constraints |
-| `traceability_validation` | light | LLM-judged claim traceability — fast, structured output |
+| `accuracy_validation` | light | Rule checking + LLM-judged claim traceability — fast, structured output |
 | `onboarding_interview` | moderate | Conversational reasoning, structured output |
-| `onboarding_synthesis` | moderate | Config generation — reasoning quality matters |
-| `resume_parsing` | light | Parse resume text into structured fields |
+| `resume_parsing` | moderate | Parse resume text into structured profile data |
 | `metadata_extraction` | light | Extract metadata from JD text |
-| `text_extraction` | light | Parse JD text into structured fields |
 
 An unrecognized task name warns rather than silently defaulting.
 
@@ -493,13 +482,13 @@ account without managing API keys manually.
 
 ### Flow
 
-1. **Initiate** — `POST /api/models/oauth/initiate/{provider_id}` generates a PKCE
+1. **Initiate** — `POST /api/models/anthropic/oauth/initiate` generates a PKCE
    code_verifier + code_challenge and returns an authorization URL.
 2. **User authorizes** — User opens the URL in their browser, logs into claude.ai,
    and authorizes the app.
 3. **Callback** — The callback page displays a code. User pastes it back.
-4. **Exchange** — `POST /api/models/oauth/callback/{provider_id}` exchanges the
-   code + verifier for access/refresh tokens.
+4. **Exchange** — `POST /api/models/anthropic/oauth/callback` exchanges the
+   code + verifier for access/refresh tokens. Body: `{code, state}`.
 5. **Storage** — Tokens are saved to `data/.anthropic_oauth.json` (gitignored).
    The token file format: `{accessToken, refreshToken, expiresAt}`.
 6. **Auto-refresh** — The `AnthropicProvider` checks token expiry and auto-refreshes

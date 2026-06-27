@@ -120,7 +120,7 @@ User profile is configured in `config/profile.yml`. Key fields:
 - **Models:** 1 to N models per provider, with auto-discovery (`GET /models`) and search
 - **3 tiers:** heavy (generation — Opus/Sonnet), moderate (analysis — Sonnet), light (validation — Haiku)
 - **Per-task overrides:** fine-grained control (e.g., Opus for high-value resume gen, Sonnet for standard)
-- **Tasks:** resume_generation, cover_letter, application_answer, application_answer_critique, jd_evaluation, company_research, accuracy_validation, onboarding_interview, onboarding_synthesis, resume_parsing, text_extraction
+- **Tasks:** resume_generation, cover_letter_generation, application_answer_generation, application_answer_critique, jd_analysis, company_dossier_generation, accuracy_validation, onboarding_interview, resume_parsing, metadata_extraction
 - **Config:** `config/providers.yml`
 - See `docs/LLM_ROUTING.md` for full details
 
