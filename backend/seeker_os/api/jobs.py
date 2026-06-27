@@ -217,8 +217,10 @@ def _row_to_summary(
         cross_ref_status=row["cross_ref_status"],
         is_pinned=bool(row["is_pinned"]),
         reject_reason=row["reject_reason"],
+        reject_details=row["reject_details"] if "reject_details" in row.keys() else None,
         source_id=row["source_id"] or "",
         discovered_query=row["discovered_query"] or "",
+        run_id=row["run_id"] if "run_id" in row.keys() else None,
         is_stale=is_stale,
         days_since_last_activity=days_since,
         has_analysis=has_analysis,
@@ -314,7 +316,9 @@ def list_jobs(
     min_score: float | None = Query(None, description="Minimum score"),
     min_tier: int | None = Query(None, description="Minimum tier_passed (e.g. 4 for scored)"),
     company: str | None = Query(None, description="Filter by company (substring)"),
+    search: str | None = Query(None, description="Free-text search across title, company, location, reject_reason, discovered_query"),
     source: str | None = Query(None, description="Filter by source_id (e.g. 'manual', 'hiring_cafe')"),
+    run_id: str | None = Query(None, description="Filter by pipeline run_id"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -336,9 +340,16 @@ def list_jobs(
         if company:
             query += " AND company LIKE ?"
             params.append(f"%{company}%")
+        if search:
+            query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR reject_reason LIKE ? OR discovered_query LIKE ? OR run_id LIKE ?)"
+            pat = f"%{search}%"
+            params.extend([pat, pat, pat, pat, pat, pat])
         if source:
             query += " AND source_id = ?"
             params.append(source)
+        if run_id:
+            query += " AND run_id LIKE ?"
+            params.append(f"%{run_id}%")
 
         query += " ORDER BY"
         if status == "ready":

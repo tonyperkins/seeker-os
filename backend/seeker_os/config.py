@@ -152,7 +152,9 @@ class ContactInfo(BaseModel):
 
 
 class LocationPrefs(BaseModel):
-    remote_only: bool = True
+    # Required — no silent default. User must explicitly choose whether to
+    # filter for remote-only jobs.
+    remote_only: bool
     accepted_cities: list[str] = []
     accepted_states: list[str] = []
     rejected_cities: list[str] = []
@@ -172,7 +174,9 @@ class ExperiencePrefs(BaseModel):
 class EmploymentPrefs(BaseModel):
     commitment: str
     reject_commitments: list[str] = []
-    role_type: str = "Individual Contributor"
+    # Required — no silent default. User must explicitly choose their target
+    # role type (e.g. "Individual Contributor", "Manager", or "" for no filter).
+    role_type: str
     reject_role_types: list[str] = []
 
 
@@ -225,6 +229,7 @@ class BaseScoreRule(BaseModel):
     score: float
     label: str
     check: str | None = None  # for jd_infra_role type rules
+    patterns: list[str] | None = None  # configurable patterns for jd_infra_role check
 
 
 class ModifierRule(BaseModel):
@@ -270,8 +275,10 @@ class ScoringConfig(BaseModel):
 
 
 class FilterConfig(BaseModel):
-    remote_only: bool = True
-    us_only: bool = True
+    # Required — no silent defaults. User must explicitly choose whether to
+    # filter for remote-only and US-only jobs.
+    remote_only: bool
+    us_only: bool
     seniority_floor: list[str] = []
     seniority_reject: list[str] = []
     seniority_unknown_passes: bool = True
@@ -288,6 +295,10 @@ class FilterConfig(BaseModel):
     location_exclude: list[str] = []
     # NEW: if True, only pass jobs that offer visa sponsorship
     visa_sponsorship_required: bool = False
+    # Junior-level title patterns for title-based fallback when seniority_level
+    # is None and seniority_unknown_passes is False. Configurable so users
+    # targeting junior roles can empty or adjust this list.
+    junior_title_patterns: list[str] = ["junior", "entry", "associate", "intern", "new grad", "early career"]
 
 
 class TitleFilters(BaseModel):

@@ -35,8 +35,10 @@ class JobSummary(BaseModel):
     cross_ref_status: str | None = None
     is_pinned: bool = False
     reject_reason: str | None = None
+    reject_details: str | None = None
     source_id: str = ""
     discovered_query: str = ""
+    run_id: str | None = None
 
     # Derived stale flag (computed, never stored)
     is_stale: bool = False

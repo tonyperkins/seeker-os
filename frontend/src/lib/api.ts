@@ -73,9 +73,11 @@ export interface JobSummary {
   cross_ref_status: string | null;
   is_pinned: boolean;
   reject_reason: string | null;
+  reject_details: string | null;
   ai_policy: string | null;
   source_id: string;
   discovered_query: string;
+  run_id: string | null;
   is_stale: boolean;
   days_since_last_activity: number | null;
   has_analysis: boolean;
@@ -425,13 +427,15 @@ export interface MasterResumeInfo {
 export const api = {
   // Jobs
   jobs: {
-    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; source?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; limit?: number; offset?: number }) => {
       const search = new URLSearchParams();
       if (params?.status) search.set("status", params.status);
       if (params?.min_tier) search.set("min_tier", String(params.min_tier));
       if (params?.min_score) search.set("min_score", String(params.min_score));
       if (params?.company) search.set("company", params.company);
+      if (params?.search) search.set("search", params.search);
       if (params?.source) search.set("source", params.source);
+      if (params?.run_id) search.set("run_id", params.run_id);
       if (params?.limit) search.set("limit", String(params.limit));
       if (params?.offset) search.set("offset", String(params.offset));
       const qs = search.toString();

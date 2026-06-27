@@ -100,7 +100,7 @@ def apply_filters(
             has_override = (filters.seniority_title_override and
                             any(kw in title_lower for kw in filters.seniority_title_override))
             if not has_override:
-                junior_patterns = ["junior", "entry", "associate", "intern", "new grad", "early career"]
+                junior_patterns = filters.junior_title_patterns
                 if any(p in title_lower for p in junior_patterns):
                     return FilterResult(passed=False, reason="Title indicates junior level (no seniority tag)")
                 # If no junior signal and unknown_passes, let it through

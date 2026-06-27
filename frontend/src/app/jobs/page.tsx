@@ -2,17 +2,16 @@
 
 import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Loader2, AlertCircle, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown } from "lucide-react";
+import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import {
   Table,
   TableBody,
@@ -34,12 +33,8 @@ import {
 import { ErrorBanner } from "@/components/error-banner";
 
 const STATUS_OPTIONS = [
-  { value: "", label: "All statuses" },
   { value: "ready", label: "Ready" },
   { value: "rejected", label: "Rejected" },
-  { value: "discovered", label: "Discovered" },
-  { value: "filtered", label: "Filtered" },
-  { value: "jd_fetched", label: "JD Fetched" },
   { value: "reviewing", label: "Reviewing" },
   { value: "interested", label: "Interested" },
   { value: "applied", label: "Applied" },
@@ -47,25 +42,33 @@ const STATUS_OPTIONS = [
 ];
 
 const SOURCE_OPTIONS = [
-  { value: "", label: "All sources" },
   { value: "manual", label: "Manual" },
   { value: "hiring_cafe", label: "hiring.cafe" },
 ];
 
-function statusBadgeVariant(status: string) {
+function statusIcon(status: string, isManual?: boolean) {
+  const cls = "size-3.5 shrink-0";
   switch (status) {
     case "ready":
-      return "default";
-    case "rejected":
-    case "filtered":
-      return "destructive";
-    case "reviewing":
     case "interested":
-      return "secondary";
+    case "reviewing":
+      return <CheckCircle2 className={`${cls} text-emerald-500`} />;
+    case "rejected":
+      return isManual
+        ? <UserX className={`${cls} text-red-700 dark:text-red-400`} />
+        : <XCircle className={`${cls} text-red-500`} />;
+    case "skipped":
+      return <MinusCircle className={`${cls} text-muted-foreground`} />;
     case "applied":
-      return "default";
+      return <Send className={`${cls} text-violet-500`} />;
+    case "discovered":
+      return <CircleDashed className={`${cls} text-amber-500`} />;
+    case "filtered":
+      return <Filter className={`${cls} text-orange-500`} />;
+    case "jd_fetched":
+      return <FileSearch className={`${cls} text-blue-500`} />;
     default:
-      return "outline";
+      return <CircleDashed className={`${cls} text-muted-foreground/50`} />;
   }
 }
 
@@ -75,6 +78,30 @@ function formatComp(min: number | null, max: number | null): string {
   if (min != null && max != null) return `${fmt(min)}–${fmt(max)}`;
   if (min != null) return `${fmt(min)}+`;
   return `≤${fmt(max as number)}`;
+}
+
+function statusRowClass(status: string): string {
+  switch (status) {
+    case "ready":
+      return "bg-emerald-500/5 hover:bg-emerald-500/10";
+    case "rejected":
+      return "bg-red-500/5 hover:bg-red-500/10";
+    case "reviewing":
+    case "interested":
+      return "bg-sky-500/5 hover:bg-sky-500/10";
+    case "applied":
+      return "bg-violet-500/5 hover:bg-violet-500/10";
+    case "skipped":
+      return "bg-muted/40 hover:bg-muted/60";
+    case "discovered":
+      return "bg-amber-500/5 hover:bg-amber-500/10";
+    case "filtered":
+      return "bg-orange-500/5 hover:bg-orange-500/10";
+    case "jd_fetched":
+      return "bg-blue-500/5 hover:bg-blue-500/10";
+    default:
+      return "";
+  }
 }
 
 export default function JobsPage() {
@@ -96,9 +123,12 @@ function JobsPageInner() {
 
   const [status, setStatus] = usePersistentState<string>("jobs:filter:status", searchParams.get("status") ?? "");
   const [minScore, setMinScore] = usePersistentState<string>("jobs:filter:minScore", searchParams.get("min_score") ?? "");
-  const [minTier, setMinTier] = usePersistentState<string>("jobs:filter:minTier", searchParams.get("min_tier") ?? "");
   const [company, setCompany] = usePersistentState<string>("jobs:filter:company", searchParams.get("company") ?? "");
+  const [search, setSearch] = usePersistentState<string>("jobs:filter:search", searchParams.get("search") ?? "");
   const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "");
+  const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "");
+  const [sortKey, setSortKey] = usePersistentState<string>("jobs:sort:key", "score");
+  const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("jobs:sort:dir", "desc");
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,16 +141,16 @@ function JobsPageInner() {
     setLoading(true);
     setError(null);
     try {
-      const params: { status?: string; min_score?: number; min_tier?: number; company?: string; source?: string; limit?: number } = {
+      const params: { status?: string; min_score?: number; company?: string; search?: string; source?: string; run_id?: string; limit?: number } = {
         limit: 200,
       };
       if (status) params.status = status;
-      const mt = parseInt(minTier, 10);
-      if (!isNaN(mt)) params.min_tier = mt;
-      const ms = parseInt(minScore, 10);
+      const ms = parseFloat(minScore);
       if (!isNaN(ms)) params.min_score = ms;
       if (company.trim()) params.company = company.trim();
+      if (search.trim()) params.search = search.trim();
       if (source) params.source = source;
+      if (runId.trim()) params.run_id = runId.trim();
       const data = await api.jobs.list(params);
       setJobs(data);
     } catch (err) {
@@ -128,7 +158,7 @@ function JobsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [status, minScore, minTier, company, source]);
+  }, [status, minScore, company, search, source, runId]);
 
   useEffect(() => {
     // Fetch on mount and when filters change — legitimate data-fetching effect.
@@ -140,18 +170,75 @@ function JobsPageInner() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
-    if (minTier) params.set("min_tier", minTier);
     if (minScore) params.set("min_score", minScore);
     if (company) params.set("company", company);
+    if (search) params.set("search", search);
     if (source) params.set("source", source);
+    if (runId) params.set("run_id", runId);
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
-  }, [status, minTier, minScore, company, source, router]);
+  }, [status, minScore, company, search, source, runId, router]);
 
   const sortedJobs = useMemo(() => {
     if (!jobs) return [];
-    return [...jobs].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
-  }, [jobs]);
+    const sorted = [...jobs];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "score":
+          cmp = (a.score ?? -1) - (b.score ?? -1);
+          break;
+        case "status":
+          cmp = a.status.localeCompare(b.status);
+          break;
+        case "run_id":
+          cmp = (a.run_id ?? "").localeCompare(b.run_id ?? "", undefined, { numeric: true });
+          break;
+        case "title":
+          cmp = a.title.localeCompare(b.title);
+          break;
+        case "company":
+          cmp = a.company.localeCompare(b.company);
+          break;
+        case "comp":
+          cmp = (a.comp_min ?? 0) - (b.comp_min ?? 0);
+          break;
+        case "location":
+          cmp = (a.location || "").localeCompare(b.location || "");
+          break;
+        case "ats":
+          cmp = (a.ats_source ?? "").localeCompare(b.ats_source ?? "");
+          break;
+        default:
+          cmp = 0;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [jobs, sortKey, sortDir]);
+
+  function toggleSort(key: string) {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  function sortIcon(key: string) {
+    if (sortKey !== key) return <ArrowUpDown className="size-3 text-muted-foreground/50" />;
+    return sortDir === "asc" ? <ArrowUp className="size-3 text-primary" /> : <ArrowDown className="size-3 text-primary" />;
+  }
+
+  function resetFilters() {
+    setStatus("");
+    setMinScore("");
+    setCompany("");
+    setSearch("");
+    setSource("");
+    setRunId("");
+  }
 
   const allSelected = sortedJobs.length > 0 && sortedJobs.every((j) => selectedIds.has(j.id));
   const someSelected = selectedIds.size > 0;
@@ -212,47 +299,103 @@ function JobsPageInner() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Narrow down the job list</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        title={
+          <div className="flex items-center gap-2">
+            Filters
+            {(status || source || minScore || runId || search || company) && (
+              <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+                {[status, source, minScore, runId, search, company].filter(Boolean).length}
+              </Badge>
+            )}
+          </div>
+        }
+        icon={Filter}
+        defaultOpen={true}
+        action={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetFilters}
+            title="Clear all filters"
+            className="h-7 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="size-3.5" />
+            Reset
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {/* Status + Source pills */}
+          <div className="flex flex-wrap items-start gap-4 sm:gap-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-[48px] text-xs font-semibold text-muted-foreground">Status</span>
+              <button
+                onClick={() => setStatus("")}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  status === ""
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                }`}
+              >
+                All
+              </button>
+              {STATUS_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setStatus(opt.value)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                    status === opt.value
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <Separator orientation="vertical" className="hidden h-6 self-center bg-border/50 sm:block" />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-[44px] text-xs font-semibold text-muted-foreground">Source</span>
+              <button
+                onClick={() => setSource("")}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  source === ""
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                }`}
+              >
+                All
+              </button>
+              {SOURCE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setSource(opt.value)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                    source === opt.value
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Separator className="bg-border/50" />
+
+          {/* Inputs row */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-background text-foreground">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Min tier</label>
-              <select
-                value={minTier}
-                onChange={(e) => setMinTier(e.target.value)}
-                className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              >
-                <option value="" className="bg-background text-foreground">Any tier</option>
-                <option value="2" className="bg-background text-foreground">Passed filters</option>
-                <option value="4" className="bg-background text-foreground">Passed scoring</option>
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Min score</label>
+              <label className="text-xs font-semibold text-muted-foreground">Min score</label>
               <Input
                 type="number"
                 min={0}
                 max={100}
+                step="0.1"
                 placeholder="0"
                 value={minScore}
                 onChange={(e) => setMinScore(e.target.value)}
@@ -261,41 +404,45 @@ function JobsPageInner() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Source</label>
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              >
-                {SOURCE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-background text-foreground">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <label className="text-xs font-semibold text-muted-foreground">Run ID</label>
+              <Input
+                type="text"
+                placeholder="e.g. 0627"
+                value={runId}
+                onChange={(e) => setRunId(e.target.value)}
+                className="w-28"
+              />
             </div>
 
             <div className="flex flex-1 flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Company search</label>
+              <label className="text-xs font-semibold text-muted-foreground">Search</label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Search by company name…"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  className="pl-8"
+                  placeholder="Search title, company, location, reject reason…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8 pr-8"
                 />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
               </div>
             </div>
 
-            <Button variant="outline" size="sm" onClick={fetchJobs} disabled={loading}>
-              {loading ? <Loader2 className="animate-spin" /> : <Search />}
+            <Button size="sm" onClick={fetchJobs} disabled={loading}>
+              {loading ? <Loader2 className="animate-spin" /> : <Search className="size-4" />}
               Refresh
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
       {/* Bulk action toolbar */}
       {someSelected && (
@@ -419,21 +566,53 @@ function JobsPageInner() {
                         )}
                       </button>
                     </TableHead>
-                    <TableHead className="w-14 shrink-0">Score</TableHead>
-                    <TableHead className="min-w-[160px] max-w-[260px]">Title</TableHead>
-                    <TableHead className="min-w-[100px] max-w-[180px]">Company</TableHead>
-                    <TableHead className="w-24 shrink-0">Status</TableHead>
-                    <TableHead className="w-28 shrink-0">Comp</TableHead>
-                    <TableHead className="min-w-[80px] max-w-[140px]">Location</TableHead>
-                    <TableHead className="w-20 shrink-0 text-center">Done</TableHead>
-                    <TableHead className="w-24 shrink-0">ATS</TableHead>
+                    <TableHead className="w-14 shrink-0">
+                      <button onClick={() => toggleSort("score")} className="flex items-center gap-1 hover:text-foreground">
+                        Score {sortIcon("score")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-28 shrink-0">
+                      <button onClick={() => toggleSort("status")} className="flex items-center gap-1 hover:text-foreground">
+                        Status {sortIcon("status")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-20 shrink-0">
+                      <button onClick={() => toggleSort("run_id")} className="flex items-center gap-1 hover:text-foreground">
+                        Run {sortIcon("run_id")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="min-w-[160px] max-w-[260px]">
+                      <button onClick={() => toggleSort("title")} className="flex items-center gap-1 hover:text-foreground">
+                        Title {sortIcon("title")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="min-w-[100px] max-w-[180px]">
+                      <button onClick={() => toggleSort("company")} className="flex items-center gap-1 hover:text-foreground">
+                        Company {sortIcon("company")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-28 shrink-0">
+                      <button onClick={() => toggleSort("comp")} className="flex items-center gap-1 hover:text-foreground">
+                        Comp {sortIcon("comp")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="min-w-[80px] max-w-[140px]">
+                      <button onClick={() => toggleSort("location")} className="flex items-center gap-1 hover:text-foreground">
+                        Location {sortIcon("location")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-24 shrink-0">
+                      <button onClick={() => toggleSort("ats")} className="flex items-center gap-1 hover:text-foreground">
+                        ATS {sortIcon("ats")}
+                      </button>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedJobs.map((job) => (
                     <TableRow
                       key={job.id}
-                      className="cursor-pointer"
+                      className={`cursor-pointer ${statusRowClass(job.status)}`}
                       onClick={() => router.push(`/jobs/${job.id}`)}
                     >
                       <TableCell className="w-10 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -448,27 +627,9 @@ function JobsPageInner() {
                       <TableCell className="whitespace-nowrap font-mono font-medium">
                         {job.score != null ? job.score : "—"}
                       </TableCell>
-                      <TableCell className="max-w-[260px]">
-                        <div className="flex items-center gap-1.5">
-                          {job.is_pinned && <Pin className="size-3.5 shrink-0 text-amber-500" />}
-                          <span className="truncate font-medium">{job.title}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[180px] truncate text-muted-foreground">{job.company}</TableCell>
                       <TableCell className="whitespace-nowrap">
-                        <Badge variant={statusBadgeVariant(job.status)}>{job.status}</Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {formatComp(job.comp_min, job.comp_max)}
-                      </TableCell>
-                      <TableCell className="max-w-[140px] truncate text-muted-foreground">
-                        {job.location || "—"}
-                        {job.workplace_type && job.workplace_type !== "unknown" && (
-                          <span className="ml-1 text-xs">· {job.workplace_type}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center gap-1" title={job.reject_details ? `Manually rejected: ${job.reject_reason}` : job.status}>
+                          {statusIcon(job.status, !!job.reject_details)}
                           <span title={job.has_analysis ? `Analysis: ${job.analysis_verdict ?? "done"}` : "No analysis"}>
                             <Brain className={`size-3.5 ${
                               !job.has_analysis
@@ -491,6 +652,25 @@ function JobsPageInner() {
                             <FileText className={`size-3.5 ${job.has_resume ? "text-primary" : "text-muted-foreground/30"}`} />
                           </span>
                         </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                        {job.run_id ?? "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[260px]">
+                        <div className="flex items-center gap-1.5">
+                          {job.is_pinned && <Pin className="size-3.5 shrink-0 text-amber-500" />}
+                          <span className="truncate font-medium">{job.title}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[180px] truncate text-muted-foreground">{job.company}</TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatComp(job.comp_min, job.comp_max)}
+                      </TableCell>
+                      <TableCell className="max-w-[140px] truncate text-muted-foreground">
+                        {job.location || "—"}
+                        {job.workplace_type && job.workplace_type !== "unknown" && (
+                          <span className="ml-1 text-xs">· {job.workplace_type}</span>
+                        )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {job.ats_source ?? "—"}

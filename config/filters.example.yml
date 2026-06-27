@@ -17,18 +17,29 @@ filters:
 
   freshness_days: 30
   commitment_required: "Full Time"
+  # Junior-level title patterns for fallback filtering when seniority_level
+  # is None and seniority_unknown_passes is False. Empty this list if you
+  # are targeting junior-level roles.
+  junior_title_patterns:
+    - junior
+    - entry
+    - associate
+    - intern
+    - new grad
+    - early career
 
 title_filters:
-  # Customize these for your target role(s)
+  # Customize these for your target role(s) and seniority level
   positive:
     - senior engineer
     - staff engineer
     - principal engineer
   negative:
-    - manager
-    - director
-    - head of
-    - vp
-    - vice president
     - intern
     - junior
+    # Uncomment these if targeting IC roles only:
+    # - manager
+    # - director
+    # - head of
+    # - vp
+    # - vice president

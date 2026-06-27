@@ -45,9 +45,9 @@
 **Decision:** Single `docker-compose.yml` for simplicity. **Assumption:** This is primarily for local/development use. For production, create a `docker-compose.prod.yml` override with different env vars, no port exposure (behind reverse proxy), etc.
 
 ### 1a. Reverse Proxy / Production Deployment
-**Decision:** Ports are bound to `127.0.0.1` only — not publicly exposed. A reverse proxy (nginx, Caddy, Traefik) on the host fronts the services. **Assumption:** For production with a domain (e.g. `seekeros.perkinslab.com`), set these in `.env`:
-- `NEXT_PUBLIC_API_URL=https://seekeros.perkinslab.com` — browser-facing URL (baked into frontend at build time; requires rebuild)
-- `CORS_ORIGINS=https://seekeros.perkinslab.com` — allowed origin for the backend
+**Decision:** Ports are bound to `127.0.0.1` only — not publicly exposed. A reverse proxy (nginx, Caddy, Traefik) on the host fronts the services. **Assumption:** For production with a domain (e.g. `seeker-os.example.com`), set these in `.env`:
+- `NEXT_PUBLIC_API_URL=https://seeker-os.example.com` — browser-facing URL (baked into frontend at build time; requires rebuild)
+- `CORS_ORIGINS=https://seeker-os.example.com` — allowed origin for the backend
 - `BACKEND_PORT` / `FRONTEND_PORT` — pick non-conflicting ports (the reverse proxy proxies to these localhost ports)
 
 The reverse proxy routes:

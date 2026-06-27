@@ -16,7 +16,7 @@ def _make_profile() -> ProfileConfig:
         location=LocationPrefs(remote_only=True, accepted_cities=["austin"]),
         comp=CompPrefs(floor=150000, target=165000, stretch=220000),
         experience=ExperiencePrefs(years=25, anchor_phrase="25+ years"),
-        employment=EmploymentPrefs(commitment="Full Time"),
+        employment=EmploymentPrefs(commitment="Full Time", role_type="Individual Contributor"),
         blacklist=["badcompany"],
         resume=ResumePrefs(master_path="~/resume.md", accuracy_rules_path="config/accuracy_rules.yml", output_dir="data/resumes"),
         cross_reference=CrossReferencePrefs(repo_path="~/projects/job-search"),

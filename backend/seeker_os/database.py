@@ -341,6 +341,11 @@ MIGRATIONS: list[str | callable] = [
     """
     ALTER TABLE jobs ADD COLUMN net_score REAL;
     """,
+    # Migration 17: Link jobs to the pipeline run that discovered them
+    """
+    ALTER TABLE jobs ADD COLUMN run_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_jobs_run_id ON jobs(run_id);
+    """,
 ]
 
 

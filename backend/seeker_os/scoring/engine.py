@@ -104,15 +104,6 @@ def _check_modifier(
             return True
         return False
 
-    elif check == "jd_infra_role":
-        # JD matches infrastructure role but no title match
-        infra_patterns = [
-            "kubernetes", "terraform", "ci/cd", "cicd", "prometheus",
-            "grafana", "observability", "sre", "site reliability",
-            "infrastructure", "platform engineering", "devops",
-        ]
-        return any(p in jd_text.lower() for p in infra_patterns)
-
     return False
 
 
@@ -180,10 +171,9 @@ def score_job(
                 base_label = rule.label
                 break
         elif rule.check == "jd_infra_role":
-            if _check_modifier(
-                ModifierRule(signal=rule.label, pattern=None, points=0, check="jd_infra_role"),
-                title, jd_text, location, comp_min, comp_max,
-            ):
+            # JD matches target-role keywords but no title match.
+            # Patterns are configurable via BaseScoreRule.patterns in scoring_rubric.yml.
+            if rule.patterns and any(p in jd_text.lower() for p in rule.patterns):
                 base_score = rule.score
                 base_label = rule.label
                 break

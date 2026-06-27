@@ -6,7 +6,6 @@ See docs/PHASE1_SPEC.md §3.10 for the full spec.
 from __future__ import annotations
 
 import json
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -32,7 +31,7 @@ from seeker_os.models import JobCard, PipelineProgressEvent, PipelineRunResult
 from seeker_os.events import record_event, transition_status, EventType, Actor
 
 
-def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
+def _insert_job(db: sqlite3.Connection, job: JobCard, run_id: str | None = None) -> int:
     """Insert a new job into the DB. Returns the job ID."""
     now = datetime.now(timezone.utc).isoformat()
     uh = url_hash(job.apply_url)
@@ -47,8 +46,8 @@ def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
             commitment, comp_min, comp_max, comp_currency,
             technical_tools, requirements_summary, date_posted, role_type,
             status, tier_passed, discovered_at, discovered_query, updated_at, is_pinned,
-            detail_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'discovered', 1, ?, ?, ?, ?, ?)
+            detail_url, run_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'discovered', 1, ?, ?, ?, ?, ?, ?)
         """,
         (
             job.source_id, job.source_job_id, job.ats_source, job.ats_board_token, job.ats_job_id,
@@ -59,6 +58,7 @@ def _insert_job(db: sqlite3.Connection, job: JobCard) -> int:
             json_encode(job.technical_tools), job.requirements_summary, job.date_posted, job.role_type,
             now, job.discovered_query, now, job.is_pinned,
             job.detail_url,
+            run_id,
         ),
     )
     job_id = cursor.lastrowid
@@ -102,11 +102,24 @@ def run_pipeline(
                 tier4_hard_rejected=result.tier4_hard_rejected,
                 tier5_ready=result.tier5_ready,
             ))
-    run_id = str(uuid.uuid4())[:8]
+    now = datetime.now(timezone.utc)
+    db = get_connection()
+    date_part = now.strftime("%m%d")
+    existing = db.execute(
+        "SELECT run_id FROM pipeline_runs WHERE run_id LIKE ? ORDER BY run_id DESC",
+        (f"{date_part}-%",),
+    ).fetchall()
+    seq = 1
+    if existing:
+        last_seq = existing[0]["run_id"].split("-")[-1]
+        try:
+            seq = int(last_seq) + 1
+        except ValueError:
+            pass
+    run_id = f"{date_part}-{seq:02d}"
     result = PipelineRunResult(run_id=run_id)
     tier_set = set(tiers) if tiers else {1, 2, 3, 4, 5}
 
-    db = get_connection()
     cache = DiskCache(Path("data/cache"), ttl_hours=settings.sources.sources[0].cache_ttl_hours if settings.sources else 6)
 
     # Get source_map from the first enabled source (hiring.cafe)
@@ -169,7 +182,7 @@ def run_pipeline(
                             )
                     continue
 
-                job_id = _insert_job(db, card)
+                job_id = _insert_job(db, card, run_id=run_id)
                 register_keys(job_id, card, db, source_map)
                 result.cards_new += 1
 

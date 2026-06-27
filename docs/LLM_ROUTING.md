@@ -414,14 +414,14 @@ The config schema supports multiple resumes without Phase 1 changes:
 ```yaml
 # Phase 1 (single resume) — config/profile.yml
 resume:
-  master_path: "~/projects/job-search/resume/Tony_Perkins_Master_Resume.md"
+  master_path: "data/master_resume.md"
   accuracy_rules_path: "config/accuracy_rules.yml"
 
 # Future (multiple resumes) — same file, just a list
 resumes:
   - id: default
-    label: "SRE/DevOps"
-    master_path: "~/projects/job-search/resume/Tony_Perkins_Master_Resume.md"
+    label: "Your Target Role"
+    master_path: "data/master_resume.md"
     accuracy_rules_path: "config/accuracy_rules.yml"
     model_tier: heavy                   # per-resume model selection
   - id: platform

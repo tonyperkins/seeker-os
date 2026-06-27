@@ -21,6 +21,14 @@ scoring:
     - pattern: "engineer"
       score: 2.0
       label: "Engineer title match"
+    # JD-keyword fallback: if no title pattern matched, check the JD text for
+    # your target-role keywords. Customize `patterns` for your target field.
+    # - check: "jd_infra_role"
+    #   patterns:
+    #     - "your_target_keyword_1"
+    #     - "your_target_keyword_2"
+    #   score: 2.0
+    #   label: "JD matches target role (no title match)"
     - score: 0
       label: "No title match"
 
