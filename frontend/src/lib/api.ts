@@ -2,9 +2,10 @@
 
 // Server-side renders (SSR) run inside the container — use the Docker service name.
 // Client-side fetches run in the browser — use the public URL (host-mapped port).
+// Dynamic property access prevents Next.js from inlining process.env at build time.
 const API_BASE =
   typeof window === "undefined"
-    ? process.env.SERVER_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    ? process.env["SERVER_API_URL"] || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
     : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {

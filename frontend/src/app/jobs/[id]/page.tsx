@@ -116,6 +116,8 @@ function InfoRow({
   );
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
   const { id } = await props.params;
   const numericId = Number(id);

@@ -21,6 +21,7 @@ import { RunPipelineButton } from "@/components/run-pipeline-button";
 import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
 
+export const dynamic = "force-dynamic";
 
 function RunStatusBadge({ status }: { status: string }) {
   const variant =

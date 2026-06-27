@@ -21,6 +21,8 @@ import { CompanyResearchSettingsCard } from "@/components/company-research-setti
 import { BackupRestoreCard } from "@/components/backup-restore-card";
 import { api, type SettingsResponse, type ProfileData, type FiltersData, type AccuracyRule } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
   let settings: SettingsResponse | null = null;
   let profile: ProfileData | null = null;
