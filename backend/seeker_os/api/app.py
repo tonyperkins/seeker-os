@@ -25,6 +25,7 @@ from seeker_os.api.profile_routes import router as profile_router
 from seeker_os.api.company_research import router as company_research_router
 from seeker_os.api.company_research_settings import router as company_research_settings_router
 from seeker_os.api.jd_analysis import router as jd_analysis_router
+from seeker_os.api.backup import router as backup_router
 from seeker_os.database import run_migrations
 
 # ---------------------------------------------------------------------------
@@ -90,6 +91,7 @@ app.include_router(models_router)
 app.include_router(profile_router)
 app.include_router(company_research_router)
 app.include_router(jd_analysis_router)
+app.include_router(backup_router)
 
 
 @app.get("/")

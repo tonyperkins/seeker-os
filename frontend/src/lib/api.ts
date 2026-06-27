@@ -1,6 +1,12 @@
 /** API client for Seeker OS backend. */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Server-side renders (SSR) run inside the container — use the Docker service name.
+// Client-side fetches run in the browser — use the public URL (host-mapped port).
+// Dynamic property access prevents Next.js from inlining process.env at build time.
+const API_BASE =
+  typeof window === "undefined"
+    ? process.env["SERVER_API_URL"] || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData;
@@ -255,6 +261,12 @@ export interface ContactInfo {
 
 export interface MessageResponse {
   message: string;
+}
+
+export interface RestoreResult {
+  message: string;
+  restored: string[];
+  skipped: string[];
 }
 
 export interface ProfileData {
@@ -653,6 +665,52 @@ export const api = {
       fetchAPI<TestConnectionResult>("/api/settings/company-research/test-connection", {
         method: "POST",
       }),
+  },
+
+  // Backup / Restore
+  backup: {
+    download: async (): Promise<Blob> => {
+      const res = await fetch(`${API_BASE}/api/backup`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `API error: ${res.status}`);
+      }
+      return res.blob();
+    },
+    restore: async (file: File): Promise<RestoreResult> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_BASE}/api/backup/restore`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `API error: ${res.status}`);
+      }
+      return res.json();
+    },
+    downloadDB: async (): Promise<Blob> => {
+      const res = await fetch(`${API_BASE}/api/backup/db`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `API error: ${res.status}`);
+      }
+      return res.blob();
+    },
+    restoreDB: async (file: File): Promise<MessageResponse> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_BASE}/api/backup/db/restore`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `API error: ${res.status}`);
+      }
+      return res.json();
+    },
   },
 };
 

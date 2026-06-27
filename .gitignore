@@ -43,6 +43,7 @@ htmlcov/
 Thumbs.db
 
 # Seeker OS — Data (runtime, not committed)
+data/pre-restore-snapshots/
 data/seeker.db
 data/cache/
 data/retrieval_cache/
