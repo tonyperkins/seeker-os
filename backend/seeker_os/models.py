@@ -72,6 +72,24 @@ class SourceQuery(BaseModel):
     commitment: str = "full_time"
     max_pages: int = 1
     enabled: bool = True
+    # search_query: raw search text (e.g. "senior sre remote"). When present,
+    # adapters that support structured search (like hiring.cafe searchState) use
+    # it instead of the slug. Falls back to slug-based URL when absent.
+    search_query: str | None = None
+    # posted_within_days: computed at runtime from last_run_at (not a static
+    # config value). When set, the adapter requests only jobs posted within this
+    # many days. None means no date filter (full pull).
+    posted_within_days: int | None = None
+    # Server-side filter hints (Phase 2). Populated by the pipeline runner from
+    # FilterConfig. Each adapter maps these to its own server-side filter format.
+    # Adapters that don't support a given filter simply ignore it. Server-side
+    # filters are inclusive of null/missing values (jobs with no data for a field
+    # still pass the filter), so these are safe pre-filters — Tier 2 remains the
+    # authoritative filter.
+    workplace_types: list[str] | None = None
+    commitments: list[str] | None = None
+    seniority_levels: list[str] | None = None
+    role_types: list[str] | None = None
 
 
 class FilterResult(BaseModel):

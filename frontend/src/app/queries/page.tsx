@@ -61,6 +61,7 @@ export default function QueriesPage() {
   const [newLabel, setNewLabel] = useState("");
   const [newCommitment, setNewCommitment] = useState("full-time");
   const [newMaxPages, setNewMaxPages] = useState("1");
+  const [newSearchQuery, setNewSearchQuery] = useState("");
   const [creating, setCreating] = useState(false);
 
   // Edit state
@@ -69,6 +70,7 @@ export default function QueriesPage() {
   const [editEnabled, setEditEnabled] = useState(true);
   const [editCommitment, setEditCommitment] = useState("full-time");
   const [editMaxPages, setEditMaxPages] = useState("1");
+  const [editSearchQuery, setEditSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Delete state
@@ -104,12 +106,14 @@ export default function QueriesPage() {
         commitment: newCommitment,
         max_pages: parseInt(newMaxPages, 10) || 1,
         enabled: true,
+        search_query: newSearchQuery.trim() || undefined,
       });
       setAddOpen(false);
       setNewSlug("");
       setNewLabel("");
       setNewCommitment("full-time");
       setNewMaxPages("1");
+      setNewSearchQuery("");
       await fetchQueries();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create query");
@@ -125,6 +129,7 @@ export default function QueriesPage() {
     setEditEnabled(q.enabled);
     setEditCommitment(q.commitment);
     setEditMaxPages(String(q.max_pages));
+    setEditSearchQuery(q.search_query ?? "");
   }
 
   async function handleSaveEdit() {
@@ -137,6 +142,7 @@ export default function QueriesPage() {
         enabled: editEnabled,
         commitment: editCommitment,
         max_pages: parseInt(editMaxPages, 10) || 1,
+        search_query: editSearchQuery.trim() || undefined,
       });
       setEditingId(null);
       await fetchQueries();
@@ -160,11 +166,11 @@ export default function QueriesPage() {
     }
   }
 
-  async function handleRun(id: number) {
+  async function handleRun(id: number, forceFullPull?: boolean) {
     setRunningId(id);
     setError(null);
     try {
-      await api.queries.run(id);
+      await api.queries.run(id, forceFullPull);
       await fetchQueries();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to run query");
@@ -237,6 +243,18 @@ export default function QueriesPage() {
                   />
                 </div>
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="q-search">Search query (optional)</Label>
+                <Input
+                  id="q-search"
+                  placeholder="e.g. senior sre remote"
+                  value={newSearchQuery}
+                  onChange={(e) => setNewSearchQuery(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  When set, uses structured search with server-side date filtering instead of slug-based URL.
+                </p>
+              </div>
             </div>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
@@ -275,6 +293,7 @@ export default function QueriesPage() {
                   <TableHead>Label</TableHead>
                   <TableHead className="w-28">Commitment</TableHead>
                   <TableHead className="w-20">Pages</TableHead>
+                  <TableHead>Search query</TableHead>
                   <TableHead className="w-24">Enabled</TableHead>
                   <TableHead className="w-36">Last run</TableHead>
                   <TableHead className="w-48 text-right">Actions</TableHead>
@@ -328,6 +347,20 @@ export default function QueriesPage() {
                       </TableCell>
                       <TableCell>
                         {isEditing ? (
+                          <Input
+                            value={editSearchQuery}
+                            onChange={(e) => setEditSearchQuery(e.target.value)}
+                            placeholder="e.g. senior sre remote"
+                            className="h-7"
+                          />
+                        ) : (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {q.search_query || "—"}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
                           <label className="flex items-center gap-1.5 text-xs">
                             <input
                               type="checkbox"
@@ -373,13 +406,24 @@ export default function QueriesPage() {
                                 variant="ghost"
                                 disabled={q.id == null || runningId === q.id}
                                 onClick={() => q.id != null && handleRun(q.id)}
-                                title="Run query"
+                                title="Run query (incremental)"
                               >
                                 {runningId === q.id ? (
                                   <Loader2 className="animate-spin" />
                                 ) : (
                                   <Play />
                                 )}
+                              </Button>
+                              <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                disabled={q.id == null || runningId === q.id}
+                                onClick={() => q.id != null && handleRun(q.id, true)}
+                                title="Run query (force full pull)"
+                                className="text-xs"
+                              >
+                                <Play className="text-orange-500" />
+                                <span className="sr-only">Force full pull</span>
                               </Button>
                               <Button
                                 size="icon-sm"

@@ -327,8 +327,16 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             action={<CopyButton text={formatScoreBreakdownText(job)} />}
           >
             <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">Tier {job.tier_passed} passed</Badge>
+                {job.status === "rejected" && job.reject_reason && !job.reject_details && (
+                  <Badge variant="destructive">{job.reject_reason}</Badge>
+                )}
+                {job.status === "rejected" && job.reject_details && job.reject_reason && (
+                  <Badge variant="destructive" title={job.reject_details}>
+                    {job.reject_reason}
+                  </Badge>
+                )}
               </div>
               {job.score_reasons.length > 0 && (
                 <div className="flex flex-col gap-1.5">

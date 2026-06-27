@@ -337,6 +337,10 @@ class QueryConfig(BaseModel):
     commitment: str = "full_time"
     max_pages: int = 1
     enabled: bool = True
+    # search_query: raw search text (e.g. "senior sre remote"). When present,
+    # the adapter builds a structured search URL (hiring.cafe searchState) instead
+    # of the slug-based URL. Falls back to slug when absent (backward compat).
+    search_query: str | None = None
 
 
 class QueriesConfig(BaseModel):

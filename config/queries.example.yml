@@ -3,6 +3,13 @@
 # All queries default to max_pages: 1 (page 0 only — stays within robots.txt).
 # Deeper pagination (max_pages: 2+) is explicit opt-in per query and crosses
 # the robots.txt pagination line. Use sparingly with conservative request timing.
+#
+# search_query (optional): When set, the adapter uses hiring.cafe's structured
+# search endpoint (/?searchState=...) instead of the slug-based URL (/jobs/{slug}).
+# This enables server-side date filtering: the pipeline automatically requests
+# only jobs posted since the query's last run (incremental search).
+# Use force_full_pull=true on the run endpoint to bypass the date filter.
+# When search_query is absent, the adapter falls back to the slug-based URL.
 
 queries:
   # Customize these slugs for your target role(s).
@@ -13,15 +20,18 @@ queries:
     commitment: full_time
     max_pages: 1
     enabled: true
+    search_query: "senior engineer remote"
   - source_id: hiring_cafe
     slug: staff-engineer-remote
     label: "Staff Engineer Remote"
     commitment: full_time
     max_pages: 1
     enabled: true
+    search_query: "staff engineer remote"
   - source_id: hiring_cafe
     slug: principal-engineer-remote
     label: "Principal Engineer Remote"
     commitment: full_time
     max_pages: 1
     enabled: true
+    search_query: "principal engineer remote"

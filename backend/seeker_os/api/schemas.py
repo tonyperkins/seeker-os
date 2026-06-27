@@ -298,6 +298,7 @@ class PipelineRunRequest(BaseModel):
     tiers: list[int] | None = None
     queries: list[str] | None = None
     dry_run: bool = False
+    force_full_pull: bool = False
 
 
 class PipelineRunSummary(BaseModel):
@@ -348,6 +349,7 @@ class QuerySummary(BaseModel):
     max_pages: int = 1
     enabled: bool = True
     last_run_at: str | None = None
+    search_query: str | None = None
 
 
 class QueryCreate(BaseModel):
@@ -358,6 +360,7 @@ class QueryCreate(BaseModel):
     commitment: str = "full_time"
     max_pages: int = 1
     enabled: bool = True
+    search_query: str | None = None
 
 
 class QueryUpdate(BaseModel):
@@ -366,6 +369,7 @@ class QueryUpdate(BaseModel):
     commitment: str | None = None
     max_pages: int | None = None
     enabled: bool | None = None
+    search_query: str | None = None
 
 
 # ---------------------------------------------------------------------------

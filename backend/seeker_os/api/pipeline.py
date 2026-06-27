@@ -28,6 +28,7 @@ def run_pipeline(body: PipelineRunRequest):
         queries=body.queries,
         tiers=body.tiers,
         dry_run=body.dry_run,
+        force_full_pull=body.force_full_pull,
     )
     return result.model_dump()
 
@@ -56,6 +57,7 @@ def run_pipeline_stream(body: PipelineRunRequest):
                 tiers=body.tiers,
                 dry_run=body.dry_run,
                 progress_cb=progress_cb,
+                force_full_pull=body.force_full_pull,
             )
             event_queue.put(("done", result))
         except Exception as e:

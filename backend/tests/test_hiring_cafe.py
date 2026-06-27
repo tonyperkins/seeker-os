@@ -137,3 +137,290 @@ class TestHiringCafeAdapter:
 
         assert len(page.jobs) == 1
         assert page.jobs[0].title == "Senior SRE"
+
+    def test_search_query_builds_search_state_url(self, tmp_path):
+        """When search_query is set, adapter uses /?searchState= URL."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        mock_html = _make_mock_html()
+        captured_urls: list[str] = []
+
+        def mock_fetch(url):
+            captured_urls.append(url)
+            return mock_html
+
+        with patch.object(adapter, "_fetch_html", side_effect=mock_fetch):
+            query = SourceQuery(
+                source_id="hiring_cafe",
+                slug="test-query",
+                label="Test",
+                search_query="senior sre remote",
+            )
+            page = adapter.fetch_jobs(query, page=0)
+
+        assert len(captured_urls) == 1
+        assert "searchState=" in captured_urls[0]
+        assert "/jobs/" not in captured_urls[0]
+        assert page.total_count == 2
+
+    def test_search_query_with_date_filter(self, tmp_path):
+        """When posted_within_days is set, searchState includes dateFetchedPastNDays."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        mock_html = _make_mock_html()
+        captured_urls: list[str] = []
+
+        def mock_fetch(url):
+            captured_urls.append(url)
+            return mock_html
+
+        with patch.object(adapter, "_fetch_html", side_effect=mock_fetch):
+            query = SourceQuery(
+                source_id="hiring_cafe",
+                slug="test-query",
+                label="Test",
+                search_query="senior sre remote",
+                posted_within_days=3,
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        assert len(captured_urls) == 1
+        # The URL should contain searchState with dateFetchedPastNDays
+        from urllib.parse import unquote, parse_qs, urlparse
+        parsed = urlparse(captured_urls[0])
+        params = parse_qs(parsed.query)
+        state_json = json.loads(unquote(params["searchState"][0]))
+        assert state_json["searchQuery"] == "senior sre remote"
+        assert "dateFetchedPastNDays" in state_json
+        # 3 days maps to enum 4
+        assert state_json["dateFetchedPastNDays"] == 4
+
+    def test_search_query_without_date_filter(self, tmp_path):
+        """When posted_within_days is None, searchState omits dateFetchedPastNDays."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        mock_html = _make_mock_html()
+        captured_urls: list[str] = []
+
+        def mock_fetch(url):
+            captured_urls.append(url)
+            return mock_html
+
+        with patch.object(adapter, "_fetch_html", side_effect=mock_fetch):
+            query = SourceQuery(
+                source_id="hiring_cafe",
+                slug="test-query",
+                label="Test",
+                search_query="senior sre remote",
+                posted_within_days=None,
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        from urllib.parse import unquote, parse_qs, urlparse
+        parsed = urlparse(captured_urls[0])
+        params = parse_qs(parsed.query)
+        state_json = json.loads(unquote(params["searchState"][0]))
+        assert "dateFetchedPastNDays" not in state_json
+
+    def test_backward_compat_slug_url(self, tmp_path):
+        """When search_query is absent, adapter falls back to /jobs/{slug} URL."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        mock_html = _make_mock_html()
+        captured_urls: list[str] = []
+
+        def mock_fetch(url):
+            captured_urls.append(url)
+            return mock_html
+
+        with patch.object(adapter, "_fetch_html", side_effect=mock_fetch):
+            query = SourceQuery(
+                source_id="hiring_cafe",
+                slug="senior-sre-remote",
+                label="Test",
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        assert len(captured_urls) == 1
+        assert captured_urls[0] == "https://hiring.cafe/jobs/senior-sre-remote"
+
+    def test_search_query_pagination(self, tmp_path):
+        """searchState URL with page > 0 uses &page= param."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        mock_html = _make_mock_html()
+        captured_urls: list[str] = []
+
+        def mock_fetch(url):
+            captured_urls.append(url)
+            return mock_html
+
+        with patch.object(adapter, "_fetch_html", side_effect=mock_fetch):
+            query = SourceQuery(
+                source_id="hiring_cafe",
+                slug="test-query",
+                label="Test",
+                search_query="senior sre remote",
+            )
+            adapter.fetch_jobs(query, page=1)
+
+        assert len(captured_urls) == 1
+        assert "&page=1" in captured_urls[0]
+
+    def test_server_side_workplace_type_filter(self, tmp_path):
+        """workplace_types is included in searchState as workplaceTypes."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        captured_urls: list[str] = []
+        with patch.object(adapter, "_fetch_html", side_effect=lambda url: (captured_urls.append(url), _make_mock_html())[1]):
+            query = SourceQuery(
+                source_id="hiring_cafe", slug="test", label="Test",
+                search_query="senior sre remote", workplace_types=["Remote"],
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        from urllib.parse import unquote, parse_qs, urlparse
+        state = json.loads(unquote(parse_qs(urlparse(captured_urls[0]).query)["searchState"][0]))
+        assert state["workplaceTypes"] == ["Remote"]
+
+    def test_server_side_commitment_filter(self, tmp_path):
+        """commitments is included in searchState."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        captured_urls: list[str] = []
+        with patch.object(adapter, "_fetch_html", side_effect=lambda url: (captured_urls.append(url), _make_mock_html())[1]):
+            query = SourceQuery(
+                source_id="hiring_cafe", slug="test", label="Test",
+                search_query="senior sre remote", commitments=["Full Time"],
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        from urllib.parse import unquote, parse_qs, urlparse
+        state = json.loads(unquote(parse_qs(urlparse(captured_urls[0]).query)["searchState"][0]))
+        assert state["commitments"] == ["Full Time"]
+
+    def test_server_side_seniority_filter(self, tmp_path):
+        """seniority_levels is included in searchState as seniorityLevels."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        captured_urls: list[str] = []
+        with patch.object(adapter, "_fetch_html", side_effect=lambda url: (captured_urls.append(url), _make_mock_html())[1]):
+            query = SourceQuery(
+                source_id="hiring_cafe", slug="test", label="Test",
+                search_query="senior sre remote", seniority_levels=["Senior Level"],
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        from urllib.parse import unquote, parse_qs, urlparse
+        state = json.loads(unquote(parse_qs(urlparse(captured_urls[0]).query)["searchState"][0]))
+        assert state["seniorityLevels"] == ["Senior Level"]
+
+    def test_server_side_role_type_filter(self, tmp_path):
+        """role_types is included in searchState as roleTypes."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        captured_urls: list[str] = []
+        with patch.object(adapter, "_fetch_html", side_effect=lambda url: (captured_urls.append(url), _make_mock_html())[1]):
+            query = SourceQuery(
+                source_id="hiring_cafe", slug="test", label="Test",
+                search_query="senior sre remote", role_types=["Individual Contributor"],
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        from urllib.parse import unquote, parse_qs, urlparse
+        state = json.loads(unquote(parse_qs(urlparse(captured_urls[0]).query)["searchState"][0]))
+        assert state["roleTypes"] == ["Individual Contributor"]
+
+    def test_server_side_filters_omitted_when_none(self, tmp_path):
+        """When server-side filter fields are None, they're omitted from searchState."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        captured_urls: list[str] = []
+        with patch.object(adapter, "_fetch_html", side_effect=lambda url: (captured_urls.append(url), _make_mock_html())[1]):
+            query = SourceQuery(
+                source_id="hiring_cafe", slug="test", label="Test",
+                search_query="senior sre remote",
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        from urllib.parse import unquote, parse_qs, urlparse
+        state = json.loads(unquote(parse_qs(urlparse(captured_urls[0]).query)["searchState"][0]))
+        assert "workplaceTypes" not in state
+        assert "commitments" not in state
+        assert "seniorityLevels" not in state
+        assert "roleTypes" not in state
+
+    def test_server_side_filters_combined(self, tmp_path):
+        """All server-side filters can be combined in one searchState."""
+        cache = DiskCache(tmp_path / "cache", ttl_hours=1)
+        adapter = HiringCafeAdapter(_make_config(), cache)
+
+        captured_urls: list[str] = []
+        with patch.object(adapter, "_fetch_html", side_effect=lambda url: (captured_urls.append(url), _make_mock_html())[1]):
+            query = SourceQuery(
+                source_id="hiring_cafe", slug="test", label="Test",
+                search_query="senior sre remote",
+                posted_within_days=3,
+                workplace_types=["Remote"],
+                commitments=["Full Time"],
+                seniority_levels=["Senior Level"],
+                role_types=["Individual Contributor"],
+            )
+            adapter.fetch_jobs(query, page=0)
+
+        from urllib.parse import unquote, parse_qs, urlparse
+        state = json.loads(unquote(parse_qs(urlparse(captured_urls[0]).query)["searchState"][0]))
+        assert state["searchQuery"] == "senior sre remote"
+        assert state["dateFetchedPastNDays"] == 4
+        assert state["workplaceTypes"] == ["Remote"]
+        assert state["commitments"] == ["Full Time"]
+        assert state["seniorityLevels"] == ["Senior Level"]
+        assert state["roleTypes"] == ["Individual Contributor"]
+
+
+class TestDaysToHcEnum:
+    def test_1_day_maps_to_24h(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(1) == 2
+
+    def test_3_days_maps_to_3_days(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(3) == 4
+
+    def test_5_days_maps_to_1_week(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(5) == 14
+
+    def test_7_days_maps_to_1_week(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(7) == 14
+
+    def test_14_days_maps_to_1_week(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(14) == 14
+
+    def test_30_days_maps_to_1_month(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(30) == 61
+
+    def test_45_days_maps_to_1_month(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(45) == 61
+
+    def test_365_days_maps_to_1_year(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(365) == 750
+
+    def test_beyond_3_years_maps_to_all_time(self):
+        from seeker_os.discovery.sources.hiring_cafe import _days_to_hc_enum
+        assert _days_to_hc_enum(2000) == -1

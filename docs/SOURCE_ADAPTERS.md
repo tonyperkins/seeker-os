@@ -72,6 +72,18 @@ class SourceQuery(BaseModel):
     commitment: str                # full_time, contract, both
     max_pages: int                 # max pages to fetch
     enabled: bool
+    search_query: str | None       # raw search text (e.g. "senior sre remote")
+    posted_within_days: int | None # computed at runtime from last_run_at
+    # Server-side filter hints (Phase 2). Populated by the pipeline runner from
+    # FilterConfig. Each adapter maps these to its own server-side filter format.
+    # Adapters that don't support a given filter simply ignore it. Server-side
+    # filters are inclusive of null/missing values (jobs with no data for a field
+    # still pass the filter), so these are safe pre-filters — Tier 2 remains the
+    # authoritative filter.
+    workplace_types: list[str] | None     # e.g. ["Remote"]
+    commitments: list[str] | None         # e.g. ["Full Time"]
+    seniority_levels: list[str] | None    # e.g. ["Senior Level"]
+    role_types: list[str] | None          # e.g. ["Individual Contributor"]
 ```
 
 ## JobCard — Generic Intermediate Representation
@@ -189,6 +201,12 @@ sources:
 ```yaml
 # Queries now reference a source_id. This allows different queries
 # for different sources. If source_id is omitted, defaults to 'hiring_cafe'.
+# search_query (optional): When set, the adapter uses hiring.cafe's structured
+# search endpoint (/?searchState=...) with server-side date filtering.
+# The pipeline automatically requests only jobs posted since the query's
+# last_run_at (incremental search). Use force_full_pull=true on the run
+# endpoint to bypass the date filter. When search_query is absent, the
+# adapter falls back to the slug-based URL (/jobs/{slug}).
 queries:
   - source_id: hiring_cafe
     slug: senior-sre-remote
@@ -196,12 +214,14 @@ queries:
     commitment: full_time
     max_pages: 1
     enabled: true
+    search_query: "senior sre remote"
   - source_id: hiring_cafe
     slug: staff-sre-remote
     label: "Staff SRE Remote"
     commitment: full_time
     max_pages: 1
     enabled: true
+    search_query: "staff sre remote"
   # ... (rest of queries)
 ```
 
@@ -231,8 +251,12 @@ class HiringCafeAdapter:
     def fetch_jobs(self, query: SourceQuery, page: int = 0) -> SourcePage:
         """Fetch one page from hiring.cafe.
 
+        When query.search_query is set, uses the / endpoint with searchState JSON
+        (supports server-side date filtering via dateFetchedPastNDays).
+        Otherwise falls back to the slug-based /jobs/{slug} URL.
+
         1. Check disk cache
-        2. GET {base_url}/jobs/{slug}?page={page}
+        2. GET URL (searchState or slug-based)
         3. Extract __NEXT_DATA__ JSON
         4. Parse ssrHits[] → JobCard (using source_map for ATS normalization)
         5. Filter pinned jobs
@@ -284,6 +308,9 @@ backend/seeker_os/
 - `__NEXT_DATA__` JSON extraction (in the adapter)
 - `source_map` (grnhse → greenhouse) — now in `sources.yml` config, not code
 - Pinned job filtering (`is_hc_pinned`) — in the adapter
-- URL format (`/jobs/{slug}?page={page}`) — in the adapter
+- URL format (`/jobs/{slug}?page={page}` or `/?searchState={json}`) — in the adapter
+- `dateFetchedPastNDays` enum mapping (actual days → hiring.cafe enum values) — in the adapter
+- searchState JSON construction (location, sort, date filter, workplace types, commitments, seniority levels, role types) — in the adapter
+- Server-side filter field mapping (`workplace_types` → `workplaceTypes`, etc.) — in the adapter
 
 All of this is encapsulated in the adapter. The rest of the system is source-agnostic.

@@ -215,6 +215,7 @@ export interface QuerySummary {
   max_pages: number;
   enabled: boolean;
   last_run_at: string | null;
+  search_query: string | null;
 }
 
 export interface FunnelStage {
@@ -512,14 +513,14 @@ export const api = {
   // Queries
   queries: {
     list: () => fetchAPI<QuerySummary[]>("/api/queries"),
-    create: (data: { slug: string; label: string; commitment?: string; max_pages?: number; enabled?: boolean }) =>
+    create: (data: { slug: string; label: string; commitment?: string; max_pages?: number; enabled?: boolean; search_query?: string }) =>
       fetchAPI<{ message: string }>("/api/queries", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Partial<QuerySummary>) =>
       fetchAPI<{ message: string }>(`/api/queries/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/queries/${id}`, { method: "DELETE" }),
-    run: (id: number) =>
-      fetchAPI<Record<string, unknown>>(`/api/queries/${id}/run`, { method: "POST" }),
+    run: (id: number, forceFullPull?: boolean) =>
+      fetchAPI<Record<string, unknown>>(`/api/queries/${id}/run${forceFullPull ? "?force_full_pull=true" : ""}`, { method: "POST" }),
   },
 
   // Settings
