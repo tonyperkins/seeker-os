@@ -13,6 +13,9 @@ data/seeker.db
 data/cache/
 data/retrieval_cache/
 data/resumes/
+data/pre-restore-snapshots/
+data/master_resume.*
+data/.anthropic_oauth.json
 data/backend.log
 data/frontend.log
 data/checkpoint.json
