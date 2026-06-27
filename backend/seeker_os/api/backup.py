@@ -1,11 +1,14 @@
-"""Backup / restore API — export and import all non-DB configuration.
+"""Backup / restore API — export and import configuration and database.
 
-Backup produces a zip containing:
+Config backup produces a zip containing:
   - config/*.yml and config/blacklist.txt (all real config files)
   - .env (API keys / env vars)
   - data/master_resume.* (if present)
 
-Restore accepts the same zip, validates filenames (no path traversal),
+DB backup uses SQLite's online backup API for a consistent snapshot.
+DB restore uses the same API to safely copy into the live DB.
+
+Restore accepts the same config zip, validates filenames (no path traversal),
 and writes files back to their original locations.
 """
 
@@ -14,6 +17,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import sqlite3
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +27,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from seeker_os.config import CONFIG_DIR, DATA_DIR, PROJECT_ROOT
+from seeker_os.database import DB_PATH
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backup", tags=["backup"])
@@ -182,3 +187,87 @@ def _reload_env(env_path: Path) -> None:
         if "=" in line:
             k, _, v = line.partition("=")
             os.environ[k.strip()] = v.strip()
+
+
+# ---------------------------------------------------------------------------
+# Database backup / restore — uses SQLite Online Backup API (safe under load)
+# ---------------------------------------------------------------------------
+
+@router.get("/db")
+def download_db_backup():
+    """Download a consistent snapshot of the SQLite database.
+
+    Uses sqlite3.Connection.backup() (the SQLite Online Backup API) which
+    produces a consistent copy even while the database is in active use.
+    """
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=404, detail="Database file not found")
+
+    buf = io.BytesIO()
+    # Create an in-memory destination DB and copy from the live DB into it
+    dest = sqlite3.connect(":memory:")
+    try:
+        source = sqlite3.connect(str(DB_PATH))
+        try:
+            source.backup(dest)
+        finally:
+            source.close()
+        # Serialize the in-memory DB to bytes
+        buf.write(dest.serialize())
+    finally:
+        dest.close()
+
+    buf.seek(0)
+    filename = f"seeker-os-db-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.db"
+    return StreamingResponse(
+        buf,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/db/restore")
+async def restore_db_backup(file: UploadFile = File(...)):
+    """Upload a .db file and restore it into the live database.
+
+    Uses SQLite's Online Backup API to safely copy the uploaded DB into
+    the live seeker.db — no need to stop the server.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    # Write uploaded bytes to a temp file
+    tmp_path = DB_PATH.parent / f"_restore_tmp_{os.getpid()}.db"
+    try:
+        tmp_path.write_bytes(raw)
+
+        # Validate it's a real SQLite database
+        try:
+            test_conn = sqlite3.connect(str(tmp_path))
+            test_conn.execute("SELECT 1")
+            test_conn.close()
+        except sqlite3.DatabaseError:
+            raise HTTPException(status_code=400, detail="File is not a valid SQLite database")
+
+        # Use the Online Backup API to copy from the temp DB into the live DB.
+        # This is safe even while the server has open connections.
+        source = sqlite3.connect(str(tmp_path))
+        try:
+            dest = sqlite3.connect(str(DB_PATH))
+            try:
+                source.backup(dest)
+            finally:
+                dest.close()
+        finally:
+            source.close()
+
+        logger.info("Database restored from uploaded file (%d bytes)", len(raw))
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+    return {"message": "Database restored successfully"}

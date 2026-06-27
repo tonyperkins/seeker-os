@@ -684,6 +684,27 @@ export const api = {
       }
       return res.json();
     },
+    downloadDB: async (): Promise<Blob> => {
+      const res = await fetch(`${API_BASE}/api/backup/db`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `API error: ${res.status}`);
+      }
+      return res.blob();
+    },
+    restoreDB: async (file: File): Promise<MessageResponse> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_BASE}/api/backup/db/restore`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `API error: ${res.status}`);
+      }
+      return res.json();
+    },
   },
 };
 
