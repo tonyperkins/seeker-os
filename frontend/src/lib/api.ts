@@ -1,6 +1,11 @@
 /** API client for Seeker OS backend. */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Server-side renders (SSR) run inside the container — use the Docker service name.
+// Client-side fetches run in the browser — use the public URL (host-mapped port).
+const API_BASE =
+  typeof window === "undefined"
+    ? process.env.SERVER_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData;
