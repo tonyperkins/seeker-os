@@ -475,9 +475,9 @@ def run_pipeline(
                         "score": 0,
                         "score_reasons": json_encode(score_result.reasons),
                         "score_gaps": json_encode(score_result.gaps),
+                        "score_modifiers": json_encode(score_result.fired_modifiers),
                         "reject_reason": score_result.reject_reason,
                     },
-                    metadata={"hard_reject": True, "reason": score_result.reject_reason},
                 )
                 result.tier4_hard_rejected += 1
             elif score_result.score >= settings.scoring.post_threshold:
@@ -488,8 +488,8 @@ def run_pipeline(
                         "score": score_result.score,
                         "score_reasons": json_encode(score_result.reasons),
                         "score_gaps": json_encode(score_result.gaps),
+                        "score_modifiers": json_encode(score_result.fired_modifiers),
                     },
-                    metadata={"score": score_result.score},
                 )
                 result.tier4_scored += 1
             else:
@@ -499,9 +499,9 @@ def run_pipeline(
                         "score": score_result.score,
                         "score_reasons": json_encode(score_result.reasons),
                         "score_gaps": json_encode(score_result.gaps),
+                        "score_modifiers": json_encode(score_result.fired_modifiers),
                         "reject_reason": "score below threshold",
                     },
-                    metadata={"hard_reject": False, "reason": "score below threshold"},
                 )
                 result.tier4_rejected += 1
 

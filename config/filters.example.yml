@@ -37,9 +37,11 @@ title_filters:
   negative:
     - intern
     - junior
+    - top secret
+    - ts/sci
+    - polygraph
+    - secret clearance
     # Uncomment these if targeting IC roles only:
     # - manager
-    # - director
-    # - head of
     # - vp
     # - vice president

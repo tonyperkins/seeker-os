@@ -128,8 +128,13 @@ def apply_filters(
             return FilterResult(passed=False, reason=f"Title negative match ({neg_match[0]})")
         return FilterResult(passed=False, reason="Title doesn't match positive patterns")
 
-    # 8. Blacklist
+    # 8. Defense blocklist
     company_lower = (job.company or "").lower()
+    for dc in profile.defense_blocklist:
+        if dc.lower() in company_lower:
+            return FilterResult(passed=False, reason=f"Defense contractor (company blocklist)")
+
+    # 9. Blacklist
     for bl in profile.blacklist:
         if bl.lower() in company_lower:
             return FilterResult(passed=False, reason=f"Blacklisted company ({job.company})")

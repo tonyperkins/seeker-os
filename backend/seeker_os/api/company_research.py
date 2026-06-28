@@ -134,11 +134,14 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
     research_breakdown, research_adjustment_applied — or None if the
     job hasn't been scored yet (no base score to adjust).
     """
-    job = db.execute("SELECT score FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    job = db.execute("SELECT score, score_modifiers FROM jobs WHERE id = ?", (job_id,)).fetchone()
     if not job or job["score"] is None:
         return None
 
     base_score = float(job["score"])
+
+    import json
+    base_modifiers: dict[str, float] = json.loads(job["score_modifiers"]) if job["score_modifiers"] else {}
 
     try:
         from seeker_os.config import Settings
@@ -156,6 +159,9 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
             delta=rm.delta,
             confidence_threshold=rm.confidence_threshold,
             source_section=rm.source_section,
+            headcount_max=rm.headcount_max,
+            headcount_min=rm.headcount_min,
+            suppresses=rm.suppresses,
         )
         for rm in scoring.research_modifiers
     ]
@@ -166,6 +172,7 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
         rules=rules,
         max_score=scoring.max_score,
         min_score=scoring.min_score,
+        base_modifiers=base_modifiers,
     )
 
     breakdown_json = json_encode([

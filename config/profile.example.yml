@@ -26,11 +26,15 @@ employment:
   commitment: "Full Time"     # required commitment type
   reject_commitments: []      # e.g. ["Part Time", "Contract"]
   role_type: "Individual Contributor"
-  reject_role_types: ["Manager", "Director", "VP", "Head of"]
+  reject_role_types: ["Manager", "VP"]
 
 blacklist:
   - example-company-1
   - example-company-2
+
+defense_blocklist:
+  - example-defense-contractor-1
+  - example-defense-contractor-2
 
 resume:
   master_path: "data/master_resume.md"

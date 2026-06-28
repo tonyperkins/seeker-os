@@ -352,6 +352,12 @@ MIGRATIONS: list[str | callable] = [
     """
     ALTER TABLE search_queries ADD COLUMN search_query TEXT;
     """,
+    # Migration 19: Add score_modifiers column for structured fired-modifier data
+    # (signal name → realized points). Used by research-adjustment suppression
+    # to know which base modifiers actually fired for a specific job.
+    """
+    ALTER TABLE jobs ADD COLUMN score_modifiers TEXT;
+    """,
 ]
 
 

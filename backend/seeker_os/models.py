@@ -105,6 +105,9 @@ class ScoreResult(BaseModel):
     gaps: list[str] = []
     hard_reject: bool = False
     reject_reason: str | None = None
+    # Structured fired-modifier data: signal name → realized points.
+    # Persisted to jobs.score_modifiers for use by research-adjustment suppression.
+    fired_modifiers: dict[str, float] = {}
     # Research-adjusted scoring (Phase 3.2)
     research_adjusted_score: float | None = None
     research_delta: float = 0.0

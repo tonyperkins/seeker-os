@@ -25,6 +25,9 @@ def _check_modifier(
     location: str,
     comp_min: int | None,
     comp_max: int | None,
+    workplace_type: str | None = None,
+    seniority_level: str | None = None,
+    accepted_cities: list[str] | None = None,
 ) -> bool:
     """Check if a modifier rule matches. Returns True if the modifier applies."""
 
@@ -70,13 +73,60 @@ def _check_modifier(
             return False
         return _check_pattern(text, mod.pattern)
 
+    elif check == "location_local":
+        # Location-local bonus: applies only when the structured location
+        # matches one of the user's accepted_cities (from profile config)
+        # AND workplace_type is hybrid or on-site (not remote).
+        if not location or not accepted_cities:
+            return False
+        # Remote roles don't get the local bonus — they already get remote_us
+        if workplace_type and _check_pattern(workplace_type, "remote"):
+            return False
+        # Check if the location contains any accepted city
+        for city in accepted_cities:
+            if city.lower() in location.lower():
+                return True
+        return False
+
+    elif check == "hybrid_non_local":
+        # Penalizes hybrid roles that are NOT in an accepted city.
+        # mod.pattern matches the hybrid keyword in JD text.
+        # mod.unless excludes remote JD text (remote roles aren't hybrid-non-local).
+        # accepted_cities exclusion is structural (from profile config) — no
+        # duplicated city list in the rubric. location_local is the sole arbiter
+        # of which cities are local.
+        if not mod.pattern or not _check_pattern(jd_text, mod.pattern):
+            return False
+        if mod.unless and _check_pattern(jd_text, mod.unless):
+            return False
+        if workplace_type and _check_pattern(workplace_type, "remote"):
+            return False
+        if not location:
+            return False  # missing_location handles no-location penalty
+        if accepted_cities:
+            for city in accepted_cities:
+                if city.lower() in location.lower():
+                    return False
+        return True
+
     elif check == "location_only":
-        # Location is a city, JD has no "remote"
+        # Located role that is NOT in an accepted city and NOT remote.
+        # This is the city_only_no_remote penalty — fires when:
+        # 1. There is a location (not empty)
+        # 2. JD does not mention remote
+        # 3. workplace_type is not remote (if known)
+        # 4. The location does NOT match any accepted_city
         if not location:
             return False
         if _check_pattern(jd_text, "remote"):
             return False
-        # Check if location is just a city (not a state/region)
+        if workplace_type and _check_pattern(workplace_type, "remote"):
+            return False
+        # If the location matches an accepted city, this is NOT a city-only-no-remote
+        if accepted_cities:
+            for city in accepted_cities:
+                if city.lower() in location.lower():
+                    return False
         return True
 
     elif check == "structured_comp":
@@ -186,16 +236,24 @@ def score_job(
 
     # Step 4: Positive modifiers (all matching patterns are summed)
     positive_total = 0.0
+    fired_modifiers: dict[str, float] = {}
+    accepted_cities = profile.location.accepted_cities
     for mod in rubric.positive_modifiers:
-        if _check_modifier(mod, title, jd_text, location, comp_min, comp_max):
+        if _check_modifier(mod, title, jd_text, location, comp_min, comp_max,
+                           workplace_type=workplace_type, seniority_level=seniority_level,
+                           accepted_cities=accepted_cities):
             positive_total += mod.points
+            fired_modifiers[mod.signal] = mod.points
             reasons.append(f"+{mod.points} {mod.signal}")
 
     # Step 5: Negative modifiers (all matching patterns are summed)
     negative_total = 0.0
     for mod in rubric.negative_modifiers:
-        if _check_modifier(mod, title, jd_text, location, comp_min, comp_max):
+        if _check_modifier(mod, title, jd_text, location, comp_min, comp_max,
+                           workplace_type=workplace_type, seniority_level=seniority_level,
+                           accepted_cities=accepted_cities):
             negative_total += mod.points
+            fired_modifiers[mod.signal] = mod.points
             reasons.append(f"{mod.points} {mod.signal}")
 
     # Step 6: Clamp
@@ -207,4 +265,5 @@ def score_job(
         reasons=reasons,
         gaps=gaps,
         hard_reject=False,
+        fired_modifiers=fired_modifiers,
     )

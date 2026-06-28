@@ -215,6 +215,7 @@ class ProfileConfig(BaseModel):
     experience: ExperiencePrefs
     employment: EmploymentPrefs
     blacklist: list[str] = []
+    defense_blocklist: list[str] = []
     resume: ResumePrefs
     cross_reference: CrossReferencePrefs
     hard_rejects: list[HardReject] = []
@@ -259,6 +260,12 @@ class ResearchModifierConfig(BaseModel):
     delta: float
     confidence_threshold: float = 0.5
     source_section: str  # "funding" | "sentiment" | "fit"
+    # Optional cutoffs for headcount-based factors (right_size_company, large_company_confirmed)
+    headcount_max: int | None = None
+    headcount_min: int | None = None
+    # Optional: name of a base-modifier signal to suppress when this research factor fires
+    # (e.g. "large_enterprise" — compensates the JD-text penalty already baked into base_score)
+    suppresses: str | None = None
 
 
 class ScoringConfig(BaseModel):

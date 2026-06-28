@@ -129,9 +129,12 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
     dossier = _reconstruct_dossier_from_row(cached_row, confidence_floor)
 
     # Check that the job has a base score to adjust
-    job = db.execute("SELECT score FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    job = db.execute("SELECT score, score_modifiers FROM jobs WHERE id = ?", (job_id,)).fetchone()
     if not job or job["score"] is None:
         return
+
+    import json
+    base_modifiers: dict[str, float] = json.loads(job["score_modifiers"]) if job["score_modifiers"] else {}
 
     rules = [
         ResearchModifierRule(
@@ -139,6 +142,9 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
             delta=rm.delta,
             confidence_threshold=rm.confidence_threshold,
             source_section=rm.source_section,
+            headcount_max=rm.headcount_max,
+            headcount_min=rm.headcount_min,
+            suppresses=rm.suppresses,
         )
         for rm in settings.scoring.research_modifiers
     ]
@@ -149,6 +155,7 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
         rules=rules,
         max_score=settings.scoring.max_score,
         min_score=settings.scoring.min_score,
+        base_modifiers=base_modifiers,
     )
 
     # Recompute net_score since research_delta changed
@@ -676,11 +683,11 @@ def create_job(body: JobCreate):
                 location, workplace_type, workplace_countries, seniority_level,
                 commitment, comp_min, comp_max, comp_currency,
                 technical_tools, requirements_summary, date_posted, role_type,
-                status, tier_passed, score, score_reasons, score_gaps,
+                status, tier_passed, score, score_reasons, score_gaps, score_modifiers,
                 jd_full, jd_fetch_status,
                 discovered_at, discovered_query, updated_at, is_pinned,
                 filter_warnings
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', 4, ?, ?, ?, ?, 'fetched', ?, 'manual', ?, 0, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', 4, ?, ?, ?, ?, ?, 'fetched', ?, 'manual', ?, 0, ?)
             """,
             (
                 "manual", source_job_id,
@@ -693,6 +700,7 @@ def create_job(body: JobCreate):
                 score_result.score,
                 json_encode(score_result.reasons),
                 json_encode(score_result.gaps),
+                json_encode(score_result.fired_modifiers),
                 jd_text,
                 now, now,
                 json_encode(filter_warnings) if filter_warnings else None,
