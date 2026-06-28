@@ -1,0 +1,59 @@
+# Seeker OS — Demo Persona (Fictional)
+# Alex Rivera, SRE — zero real personal data.
+# Loaded only when DEMO_MODE=true.
+
+user:
+  name: "Alex Rivera"
+  email: "alex.rivera.demo@example.com"
+  location: "Austin, TX"
+
+location:
+  remote_only: true
+  accepted_cities:
+    - austin
+  accepted_states:
+    - texas
+  rejected_cities: []
+
+comp:
+  floor: 150000
+  target: 180000
+  stretch: 220000
+
+experience:
+  years: 8
+  anchor_phrase: "8+ years"
+
+employment:
+  commitment: "Full Time"
+  reject_commitments: []
+  role_type: "Individual Contributor"
+  reject_role_types: []
+
+blacklist:
+  - fictional-blacklist-corp
+
+defense_blocklist:
+  - blackthorne defense
+  - global defense systems
+  - classified systems
+  - national security solutions
+
+resume:
+  master_path: "config/demo/master_resume.demo.md"
+  accuracy_rules_path: "config/demo/accuracy_rules.demo.yml"
+  output_dir: "data/resumes"
+  contact_urls:
+    - "https://github.com/alexrivera-demo"
+    - "https://linkedin.com/in/alexrivera-demo"
+
+cross_reference:
+  repo_path: "~/projects/job-search-demo"
+  auto_pull: false
+
+hard_rejects:
+  - reason: "Clearance required"
+    pattern: "security clearance|active clearance|ts/sci|top secret|secret clearance|clearance required"
+
+lifecycle:
+  stale_after_days: 14

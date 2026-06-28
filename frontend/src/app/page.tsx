@@ -73,16 +73,18 @@ export default async function DashboardPage() {
   let settings: SettingsResponse | null = null;
   let resumeInfo: MasterResumeInfo | null = null;
   let providers: ProvidersConfigResponse | null = null;
+  let isDemoMode = false;
   let error: string | null = null;
 
   try {
-    [funnel, runs, topMatches, settings, resumeInfo, providers] = await Promise.all([
+    [funnel, runs, topMatches, settings, resumeInfo, providers, { demo_mode: isDemoMode }] = await Promise.all([
       api.analytics.funnel(),
       api.pipeline.runs(),
       api.jobs.list({ status: "ready", limit: 5 }),
       api.settings.get(),
       api.resumes.getMaster().catch(() => null),
       api.models.getConfig().catch(() => null),
+      api.demoMode.get().catch(() => ({ demo_mode: false })),
     ]);
     // Sort top matches by score desc (defensive — API may already sort)
     topMatches = [...topMatches].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
@@ -119,7 +121,9 @@ export default async function DashboardPage() {
   const hasResume = resumeInfo?.exists ?? false;
   const setupComplete = hasProvider && tiersConfigured && isProfileConfigured && hasResume;
 
-  if (!setupComplete) {
+  // Demo mode ships with a synthetic profile, resume, and zero providers.
+  // It should land directly on the dashboard, not the onboarding wizard.
+  if (!setupComplete && !isDemoMode) {
     redirect("/onboarding");
   }
 

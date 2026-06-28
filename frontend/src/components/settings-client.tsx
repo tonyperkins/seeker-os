@@ -15,6 +15,7 @@ import { MasterResumeUpload } from "@/components/master-resume-upload";
 import { ProfileForm } from "@/components/profile-form";
 import { FilterForm } from "@/components/filter-form";
 import { api, type ProfileData, type FiltersData, type ResumeParseResult } from "@/lib/api";
+import { useDemoMode } from "@/lib/demo";
 
 export function SettingsClient({
   profile: initialProfile,
@@ -23,6 +24,7 @@ export function SettingsClient({
   profile: ProfileData | null;
   filters: FiltersData | null;
 }) {
+  const { demoMode } = useDemoMode();
   const [parseResult, setParseResult] = useState<ResumeParseResult | null>(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -56,12 +58,12 @@ export function SettingsClient({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <MasterResumeUpload onUploaded={() => setResumeUploaded(true)} bare />
+          <MasterResumeUpload onUploaded={() => setResumeUploaded(true)} bare disabled={demoMode} />
           {resumeUploaded && (
             <div className="mt-4 flex flex-col gap-3">
-              <Button onClick={handleParse} disabled={parsing} size="lg">
+              <Button onClick={handleParse} disabled={parsing || demoMode} size="lg">
                 {parsing ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                {parsing ? "Parsing Resume..." : "Parse Resume"}
+                {parsing ? "Parsing Resume..." : demoMode ? "Demo mode" : "Parse Resume"}
               </Button>
               {parseError && (
                 <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -101,11 +103,11 @@ export function SettingsClient({
         description="Upload your master resume. Click &quot;Parse&quot; to auto-extract contact info, experience, and suggested filter parameters."
       >
           <div className="flex flex-col gap-4">
-            <MasterResumeUpload onUploaded={() => setResumeUploaded(true)} bare />
+            <MasterResumeUpload onUploaded={() => setResumeUploaded(true)} bare disabled={demoMode} />
             <div className="flex items-center gap-3">
-              <Button onClick={handleParse} disabled={parsing} variant="outline">
+              <Button onClick={handleParse} disabled={parsing || demoMode} variant="outline">
                 {parsing ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                {parsing ? "Parsing..." : "Parse Resume"}
+                {parsing ? "Parsing..." : demoMode ? "Demo mode" : "Parse Resume"}
               </Button>
               {parseResult && (
                 <span className="text-xs text-muted-foreground">
@@ -147,6 +149,7 @@ export function SettingsClient({
             key={parseResult ? `parsed-${parseResult.contact.name}` : "initial"}
             profile={initialProfile}
             parseResult={parseResult}
+            disabled={demoMode}
           />
       </CollapsibleCard>
 
@@ -160,6 +163,7 @@ export function SettingsClient({
             key={parseResult ? `parsed-${parseResult.suggested_comp_floor}` : "initial"}
             filters={initialFilters}
             parseResult={parseResult}
+            disabled={demoMode}
           />
       </CollapsibleCard>
     </div>

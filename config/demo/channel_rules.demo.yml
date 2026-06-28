@@ -1,0 +1,20 @@
+# Seeker OS — Demo Channel Rules (Fictional)
+# Loaded only when DEMO_MODE=true.
+
+channels:
+  resume:
+    require_visible_urls: false
+    format_hints: "Two-page markdown resume. Use concise bullets. No invented metrics."
+    ai_generation_default: "allowed"
+  cover_letter:
+    require_visible_urls: false
+    format_hints: "Professional, concise cover letter. Reference only resume-supported facts."
+    ai_generation_default: "allowed"
+  application_answer:
+    require_visible_urls: false
+    format_hints: "Concise, specific answer. No unsupported claims."
+    ai_generation_default: "allowed"
+  analysis:
+    require_visible_urls: false
+    format_hints: "Structured JSON. No unsupported candidate facts."
+    ai_generation_default: "allowed"

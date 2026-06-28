@@ -63,6 +63,11 @@ def _row_to_response(
     )
 
     adj = adjustment or {}
+    verification_state = (
+        row["verification_state"]
+        if "verification_state" in row.keys() and row["verification_state"]
+        else "unverified"
+    )
     return CompanyResearchResponse(
         id=row["id"],
         job_id=row["job_id"],
@@ -79,6 +84,7 @@ def _row_to_response(
         sources_used=json_decode(row["sources_used"]) or [],
         errors=json_decode(row["errors"]) or [],
         researched_at=row["researched_at"] or "",
+        verification_state=verification_state,
         retrieval_used=bool(retrieval_sources_data),
         retrieval_sources=[SourceRefSchema(**s) for s in retrieval_sources_data] if retrieval_sources_data else [],
         retrieval_snippets=retrieval_snippets_data,
@@ -395,8 +401,9 @@ def run_company_research(job_id: int, force_refresh: bool = False):
                 wikipedia_data, funding_data, sentiment_data, fit_data,
                 overall_confidence, summary, verdict_flags, gaps,
                 sources_used, errors, researched_at, created_at,
-                retrieval_sources, retrieval_snippets_data, company_norm
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                retrieval_sources, retrieval_snippets_data, company_norm,
+                verification_state
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job_id, company, company_homepage,
@@ -407,6 +414,7 @@ def run_company_research(job_id: int, force_refresh: bool = False):
                 result.researched_at, now,
                 retrieval_sources_json, retrieval_snippets_json,
                 company_norm,
+                result.verification_state.value,
             ),
         )
         db.commit()

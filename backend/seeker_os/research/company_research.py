@@ -1099,4 +1099,5 @@ def research_company(
                 result.fit.sources, source_trust_order,
             )
 
+    result.verification_state = verification_state
     return result

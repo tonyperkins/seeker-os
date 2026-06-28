@@ -1,0 +1,141 @@
+{
+  "id": 10,
+  "title": "Staff SRE",
+  "core_title": "Staff SRE",
+  "company": "Fictive Data",
+  "company_homepage": "https://fictive-data.example.com",
+  "location": "Remote (US)",
+  "workplace_type": "Remote",
+  "workplace_countries": ["US"],
+  "seniority_level": "staff",
+  "commitment": ["Full Time"],
+  "comp_min": 900000,
+  "comp_max": 130000000,
+  "comp_currency": "USD",
+  "comp_source": "parsed",
+  "technical_tools": ["AWS", "Kubernetes", "Terraform"],
+  "date_posted": "2026-06-20",
+  "role_type": "Individual Contributor",
+  "status": "ready",
+  "tier_passed": 4,
+  "score": 6.0,
+  "score_reasons": [
+    "Base: Principal/Staff SRE (4.0)",
+    "+1.0 remote_us",
+    "+0.5 key_cloud",
+    "+0.5 sre_culture",
+    "Comp sanity: comp_max=130000000 exceeds sanity_max=10000000 (untrusted 'parsed') → treated as unknown"
+  ],
+  "score_gaps": [
+    "Compensation data is untrusted parsed output; treated as unknown.",
+    "No comp bonus or floor-clear applied because comp provenance is parsed.",
+    "Job evaluated on other merits; score would be inflated if the 130M value were trusted."
+  ],
+  "score_modifiers": {
+    "remote_us": 1.0,
+    "key_cloud": 0.5,
+    "sre_culture": 0.5
+  },
+  "jd_summary": "Staff SRE, remote US. Compensation parsed as implausible $900k-$130M; system neutralizes it.",
+  "apply_url": "https://fictive-data.example.com/jobs/staff-sre",
+  "detail_url": "https://hiring.cafe/jobs/fictive-data-staff-sre",
+  "discovered_query": "staff sre remote",
+  "ai_policy": "allowed",
+  "reject_reason": null,
+  "research_adjusted_score": 6.0,
+  "research_delta": 0.0,
+  "net_score": 6.0,
+  "research_breakdown": [],
+  "overall_confidence": 0.6,
+  "summary": "Data analytics startup. Comp is a parsed outlier; the system treats it as unknown.",
+  "verdict_flags": {
+    "green": ["remote-first"],
+    "red": ["compensation data is an untrusted parsed outlier"],
+    "watch": []
+  },
+  "funding_data": {
+    "founded": 2020,
+    "hq": "Remote",
+    "public": false,
+    "stage": "Series A",
+    "total_raised_usd": 12000000,
+    "valuation_usd": 60000000,
+    "last_round": {
+      "type": "Series A",
+      "amount_usd": 12000000,
+      "date": "2023-09",
+      "lead_investors": ["Data Demo Fund"]
+    },
+    "headcount": "95",
+    "headcount_trend": "growing",
+    "layoffs": [],
+    "financial_health": "Early stage; runway adequate.",
+    "confidence": 0.6,
+    "sources": [
+      {"url": "https://example.com/fictive-data-funding", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "sentiment_data": {
+    "overall_rating_estimate": 3.8,
+    "rating_scale": "out of 5",
+    "ceo_approval_pct": 70,
+    "recommend_pct": 65,
+    "positives": [
+      {
+        "theme": "modern data stack",
+        "frequency": "med",
+        "paraphrase": "Engineers like working on streaming data infrastructure.",
+        "source": "fictional reviews",
+        "age_months": 6
+      }
+    ],
+    "negatives": [
+      {
+        "theme": "early-stage chaos",
+        "frequency": "med",
+        "paraphrase": "Processes are still forming; on-call can be unpredictable.",
+        "source": "fictional reviews",
+        "age_months": 5
+      }
+    ],
+    "staleness_warning": null,
+    "confidence": 0.55,
+    "sources": [
+      {"url": "https://example.com/fictive-data-sentiment", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "fit_data": {
+    "remote_policy": "remote-first",
+    "remote_walkback": null,
+    "size_bucket": "startup (<200)",
+    "ic_vs_mgmt_culture": "IC-heavy",
+    "comp_band": "unknown (parsed outlier discarded)",
+    "clearance_required": false,
+    "confidence": 0.65,
+    "sources": [
+      {"url": "https://fictive-data.example.com/careers", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "gaps": [
+    "Compensation provenance is parsed; no bonus or floor-clear applied.",
+    "Sentiment confidence is below the strong-negative threshold."
+  ],
+  "sources_used": ["llm_dossier", "retrieval"],
+  "retrieval_used": true,
+  "retrieval_sources": [
+    {"url": "https://example.com/fictive-data-funding", "retrieved": "2026-06-28T12:00:00+00:00"}
+  ],
+  "retrieval_snippets": [
+    {
+      "url": "https://example.com/fictive-data-funding",
+      "title": "Fictive Data fictional Series A",
+      "snippet": "Fictive Data raised a fictional $12M Series A.",
+      "source_domain": "example.com",
+      "score": 0.75
+    }
+  ],
+  "verification_state": "verified"
+}

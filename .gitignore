@@ -45,6 +45,7 @@ Thumbs.db
 # Seeker OS — Data (runtime, not committed)
 data/pre-restore-snapshots/
 data/seeker.*
+!data/seeker.demo.db
 data/cache/
 data/retrieval_cache/
 data/checkpoint.json

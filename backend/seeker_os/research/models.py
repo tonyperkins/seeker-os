@@ -182,3 +182,4 @@ class CompanyResearchResult(BaseModel):
     retrieval_used: bool = False  # True when live retrieval contributed snippets
     retrieval_sources: list[SourceRef] = []  # URLs from retrieval, for display
     retrieval_snippets: list[dict] = []  # Raw snippets: [{url, title, snippet, source_domain, score}]
+    verification_state: VerificationState = VerificationState.UNVERIFIED

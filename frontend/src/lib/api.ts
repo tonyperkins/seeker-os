@@ -441,6 +441,11 @@ export interface MasterResumeInfo {
 // ---------------------------------------------------------------------------
 
 export const api = {
+  // Demo mode
+  demoMode: {
+    get: () => fetchAPI<{ demo_mode: boolean }>("/api/demo-mode"),
+  },
+
   // Jobs
   jobs: {
     list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; limit?: number; offset?: number }) => {
@@ -848,6 +853,7 @@ export interface CompanyResearchResult {
   sources_used: string[];
   errors: string[];
   researched_at: string;
+  verification_state: "verified" | "unverified" | "mismatch";
   retrieval_used: boolean;
   retrieval_sources: SourceRef[];
   retrieval_snippets: RetrievalSnippetData[];

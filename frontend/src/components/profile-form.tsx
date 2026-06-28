@@ -12,10 +12,12 @@ export function ProfileForm({
   profile,
   parseResult,
   onSaved,
+  disabled = false,
 }: {
   profile: ProfileData;
   parseResult?: ResumeParseResult | null;
   onSaved?: () => void;
+  disabled?: boolean;
 }) {
   const [form, setForm] = useState<ProfileData>(profile);
   const [saving, setSaving] = useState(false);
@@ -168,9 +170,9 @@ export function ProfileForm({
 
       {/* Save */}
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving || disabled}>
           {saving ? <Loader2 className="animate-spin" /> : saved ? <CheckCircle2 /> : <Save />}
-          {saving ? "Saving..." : saved ? "Saved!" : "Save Profile"}
+          {saving ? "Saving..." : disabled ? "Demo mode" : saved ? "Saved!" : "Save Profile"}
         </Button>
       </div>
     </div>

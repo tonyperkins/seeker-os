@@ -666,6 +666,7 @@ class CompanyResearchResponse(BaseModel):
     sources_used: list[str] = []
     errors: list[str] = []
     researched_at: str = ""
+    verification_state: str = "unverified"
     retrieval_used: bool = False
     retrieval_sources: list[SourceRefSchema] = []
     retrieval_snippets: list[dict] = []

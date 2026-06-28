@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { api, type JobCreateResponse } from "@/lib/api";
+import { useDemoMode } from "@/lib/demo";
 
 type Phase = "form" | "fetching" | "fetch_failed" | "success" | "exists" | "possible_dup" | "likely_dup";
 
@@ -37,6 +38,7 @@ function toISOString(localDateTime: string): string {
 }
 
 export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
+  const { demoMode } = useDemoMode();
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("form");
   const [error, setError] = useState<string | null>(null);
@@ -158,9 +160,9 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button variant="default" size="sm">
+          <Button variant="default" size="sm" disabled={demoMode} title={demoMode ? "Adding jobs is disabled in demo mode" : undefined}>
             <Plus className="size-4" />
-            Add Job
+            {demoMode ? "Demo mode" : "Add Job"}
           </Button>
         }
       />
