@@ -121,12 +121,13 @@ function JobsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [status, setStatus] = usePersistentState<string>("jobs:filter:status", searchParams.get("status") ?? "");
-  const [minScore, setMinScore] = usePersistentState<string>("jobs:filter:minScore", searchParams.get("min_score") ?? "");
-  const [company, setCompany] = usePersistentState<string>("jobs:filter:company", searchParams.get("company") ?? "");
-  const [search, setSearch] = usePersistentState<string>("jobs:filter:search", searchParams.get("search") ?? "");
-  const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "");
-  const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "");
+  const [status, setStatus] = usePersistentState<string>("jobs:filter:status", searchParams.get("status") ?? "", !searchParams.get("status"));
+  const [minScore, setMinScore] = usePersistentState<string>("jobs:filter:minScore", searchParams.get("min_score") ?? "", !searchParams.get("min_score"));
+  const [company, setCompany] = usePersistentState<string>("jobs:filter:company", searchParams.get("company") ?? "", !searchParams.get("company"));
+  const [search, setSearch] = usePersistentState<string>("jobs:filter:search", searchParams.get("search") ?? "", !searchParams.get("search"));
+  const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "", !searchParams.get("source"));
+  const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "", !searchParams.get("run_id"));
+  const [verdict, setVerdict] = usePersistentState<string>("jobs:filter:verdict", searchParams.get("verdict") ?? "", !searchParams.get("verdict"));
   const [sortKey, setSortKey] = usePersistentState<string>("jobs:sort:key", "score");
   const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("jobs:sort:dir", "desc");
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
@@ -141,7 +142,7 @@ function JobsPageInner() {
     setLoading(true);
     setError(null);
     try {
-      const params: { status?: string; min_score?: number; company?: string; search?: string; source?: string; run_id?: string; limit?: number } = {
+      const params: { status?: string; min_score?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; limit?: number } = {
         limit: 200,
       };
       if (status) params.status = status;
@@ -151,6 +152,7 @@ function JobsPageInner() {
       if (search.trim()) params.search = search.trim();
       if (source) params.source = source;
       if (runId.trim()) params.run_id = runId.trim();
+      if (verdict) params.verdict = verdict;
       const data = await api.jobs.list(params);
       setJobs(data);
     } catch (err) {
@@ -158,7 +160,7 @@ function JobsPageInner() {
     } finally {
       setLoading(false);
     }
-  }, [status, minScore, company, search, source, runId]);
+  }, [status, minScore, company, search, source, runId, verdict]);
 
   useEffect(() => {
     // Fetch on mount and when filters change — legitimate data-fetching effect.
@@ -175,9 +177,10 @@ function JobsPageInner() {
     if (search) params.set("search", search);
     if (source) params.set("source", source);
     if (runId) params.set("run_id", runId);
+    if (verdict) params.set("verdict", verdict);
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
-  }, [status, minScore, company, search, source, runId, router]);
+  }, [status, minScore, company, search, source, runId, verdict, router]);
 
   const sortedJobs = useMemo(() => {
     if (!jobs) return [];
@@ -238,6 +241,7 @@ function JobsPageInner() {
     setSearch("");
     setSource("");
     setRunId("");
+    setVerdict("");
   }
 
   const allSelected = sortedJobs.length > 0 && sortedJobs.every((j) => selectedIds.has(j.id));
@@ -303,9 +307,9 @@ function JobsPageInner() {
         title={
           <div className="flex items-center gap-2">
             Filters
-            {(status || source || minScore || runId || search || company) && (
+            {(status || source || minScore || runId || search || company || verdict) && (
               <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                {[status, source, minScore, runId, search, company].filter(Boolean).length}
+                {[status, source, minScore, runId, search, company, verdict].filter(Boolean).length}
               </Badge>
             )}
           </div>
@@ -387,7 +391,40 @@ function JobsPageInner() {
 
           <Separator className="bg-border/50" />
 
-          {/* Inputs row */}
+          {/* Verdict pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-[48px] text-xs font-semibold text-muted-foreground">Verdict</span>
+            <button
+              onClick={() => setVerdict("")}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                verdict === ""
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+              }`}
+            >
+              All
+            </button>
+            {([
+              { value: "APPLY", label: "Apply", activeClass: "bg-emerald-500 text-white shadow-sm" },
+              { value: "CONDITIONAL", label: "Conditional", activeClass: "bg-amber-500 text-white shadow-sm" },
+              { value: "MONITOR", label: "Monitor", activeClass: "bg-sky-500 text-white shadow-sm" },
+              { value: "SKIP", label: "Skip", activeClass: "bg-red-500 text-white shadow-sm" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setVerdict(opt.value)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  verdict === opt.value
+                    ? opt.activeClass
+                    : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <Separator className="bg-border/50" />
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-muted-foreground">Min score</label>

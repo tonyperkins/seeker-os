@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  XCircle,
+  CheckCircle2,
   Clock,
   ArrowRight,
   Trophy,
+  XCircle,
   FileSearch,
 } from "lucide-react";
 import {
@@ -15,86 +16,54 @@ import {
   CardContent,
   CardAction,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { RunPipelineButton } from "@/components/run-pipeline-button";
+import { RunStrip } from "@/components/run-strip";
+import { VerdictBadge } from "@/components/verdict-badge";
 import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
-function RunStatusBadge({ status }: { status: string }) {
-  const variant =
-    status === "completed"
-      ? "default"
-      : status === "running"
-        ? "secondary"
-        : status === "failed"
-          ? "destructive"
-          : "outline";
-  return <Badge variant={variant}>{status}</Badge>;
-}
-
 const STAGE_COLORS: Record<number, string> = {
-  1: "bg-sky-500/80 dark:bg-sky-600/80",
-  2: "bg-indigo-500/80 dark:bg-indigo-600/80",
-  4: "bg-purple-500/80 dark:bg-purple-600/80",
+  1: "bg-sky-500 dark:bg-sky-600",
+  2: "bg-indigo-500 dark:bg-indigo-600",
+  4: "bg-purple-500 dark:bg-purple-600",
 };
 
 function FunnelChart({ stages }: { stages: FunnelStage[] }) {
-  // Nested funnel: each stage is a subset of the previous one. The full bar is
-  // the largest stage (discovered); smaller stages are left-aligned overlays
-  // sized relative to the largest, layered so the smallest sits on top.
-  const ordered = [...stages].sort((a, b) => b.count - a.count);
+  const ordered = [...stages].sort((a, b) => a.tier - b.tier);
   const max = ordered[0]?.count || 1;
 
-  const n = ordered.length;
-
   return (
-    <div className="flex flex-col gap-4">
-      {/* Nested bar — each stage is narrower AND shorter than its parent,
-          aligned to the bottom so containment reads naturally. */}
-      <div className="relative h-16 w-full">
-        {ordered.map((stage, i) => {
-          const widthPct = (stage.count / max) * 100;
-          const heightPct = n > 1 ? 100 - (i * 60) / (n - 1) : 100;
-          const color = STAGE_COLORS[stage.tier] || "bg-primary/60";
-          return (
-            <div
-              key={stage.label}
-              className={`absolute bottom-0 left-0 flex items-center justify-end rounded-t-md border-x border-t border-background/60 px-2.5 text-sm font-semibold text-white shadow-sm transition-all ${color}`}
-              style={{
-                width: `${widthPct}%`,
-                height: `${heightPct}%`,
-                zIndex: i + 1,
-              }}
-              title={`${stage.label}: ${stage.count}`}
-            >
-              {widthPct > 6 && stage.count}
+    <div className="flex flex-col gap-3">
+      {ordered.map((stage) => {
+        const pct = max > 0 ? (stage.count / max) * 100 : 0;
+        const color = STAGE_COLORS[stage.tier] || "bg-primary";
+        return (
+          <div key={stage.label} className="flex flex-col gap-1">
+            <div className="flex items-baseline justify-between text-sm">
+              <Link
+                href={`/jobs?min_tier=${stage.tier}`}
+                className="text-muted-foreground transition-opacity hover:opacity-70"
+              >
+                {stage.label}
+              </Link>
+              <span className="font-mono text-xs">
+                <span className="font-semibold text-foreground">{stage.count}</span>
+                <span className="ml-1.5 text-muted-foreground">
+                  {pct > 0 ? `${Math.round(pct)}%` : "0%"}
+                </span>
+              </span>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Legend — smallest to largest (scoring → filters → discovered) */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        {[...ordered].reverse().map((stage) => {
-          const color = STAGE_COLORS[stage.tier] || "bg-primary/60";
-          const pctOfTotal = Math.round((stage.count / max) * 100);
-          return (
-            <Link
-              key={stage.label}
-              href={`/jobs?min_tier=${stage.tier}`}
-              className="flex items-center gap-2 text-sm transition-opacity hover:opacity-70"
-            >
-              <span className={`size-3 shrink-0 rounded-sm ${color}`} />
-              <span className="text-muted-foreground">{stage.label}</span>
-              <span className="font-mono font-semibold">{stage.count}</span>
-              <span className="font-mono text-xs text-muted-foreground">({pctOfTotal}%)</span>
-            </Link>
-          );
-        })}
-      </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full rounded-full transition-all ${color}`}
+                style={{ width: `${Math.max(pct, 2)}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -161,70 +130,37 @@ export default async function DashboardPage() {
   const jdFetchSuccess = funnel?.jd_fetch_success ?? 0;
   const jdFetchPct = jdFetchTotal > 0 ? Math.round((jdFetchSuccess / jdFetchTotal) * 100) : 0;
 
+  const lastRun = runs.length > 0 ? runs[0] : null;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            Pipeline funnel, recent runs, and top matches.
-          </p>
-        </div>
+      {/* Page header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">
+          Run the pipeline, review recent runs, act on top matches.
+        </p>
       </div>
 
-      {/* Pipeline funnel */}
-      {funnelStages.length > 0 && (
+      {/* ZONE 1 — Run strip (self-contained, removable) */}
+      <RunStrip
+        lastRun={lastRun ? {
+          started_at: lastRun.started_at,
+          cards_new: lastRun.cards_new,
+          jobs_ready: lastRun.jobs_ready,
+        } : null}
+      />
+
+      {/* ZONE 2 — Recent runs + cumulative funnel (two columns) */}
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+        {/* Left — Recent runs */}
         <Card>
           <CardHeader>
-            <CardTitle>Pipeline Funnel</CardTitle>
-            <CardDescription>
-              Cumulative jobs surviving each stage — narrowing toward scored
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <FunnelChart stages={funnelStages} />
-            <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3 text-sm">
-              <div className="flex items-center gap-2">
-                <XCircle className="size-4 text-destructive" />
-                <span className="text-muted-foreground">Rejected</span>
-                <span className="font-mono font-semibold">{funnel?.rejected ?? 0}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileSearch className="size-4 text-muted-foreground" />
-                <span className="text-muted-foreground">JD Fetch</span>
-                <span className="font-mono font-semibold">
-                  {jdFetchTotal > 0 ? `${jdFetchSuccess}/${jdFetchTotal}` : "—"}
-                </span>
-                {jdFetchTotal > 0 && (
-                  <span className="font-mono text-xs text-muted-foreground">({jdFetchPct}%)</span>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Run pipeline + recent runs */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Run Pipeline</CardTitle>
-            <CardDescription>
-              Execute the full tiered pipeline on demand.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RunPipelineButton />
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Recent Pipeline Runs</CardTitle>
-            <CardDescription>Latest execution history</CardDescription>
+            <CardTitle>Recent Runs</CardTitle>
+            <CardDescription>Latest pipeline execution history</CardDescription>
             <CardAction>
-              <Link href="/queries" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                Manage queries
+              <Link href="/jobs" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                View all
                 <ArrowRight />
               </Link>
             </CardAction>
@@ -236,32 +172,84 @@ export default async function DashboardPage() {
               </p>
             ) : (
               <div className="flex flex-col divide-y divide-border">
-                {runs.slice(0, 8).map((run) => (
-                  <div key={run.id} className="flex items-center gap-3 py-2.5 text-sm">
-                    <Clock className="size-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{formatDateTime(run.started_at)}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {run.run_id.slice(0, 8)}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {run.cards_new} new · {run.jobs_ready} ready
-                    </span>
-                    <span className="ml-auto">
-                      <RunStatusBadge status={run.status} />
-                    </span>
-                  </div>
+                {runs.slice(0, 5).map((run) => (
+                  <Link
+                    key={run.id}
+                    href={`/jobs?run_id=${run.run_id}&status=ready`}
+                    className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
+                  >
+                    {run.status === "completed" ? (
+                      <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                    ) : run.status === "failed" ? (
+                      <XCircle className="size-4 shrink-0 text-destructive" />
+                    ) : (
+                      <Clock className="size-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">{formatDateTime(run.started_at)}</span>
+                      <span className="font-mono text-xs text-muted-foreground/70">
+                        {run.run_id.slice(0, 8)}
+                      </span>
+                    </div>
+                    <div className="ml-auto flex items-center gap-4 font-mono text-xs">
+                      <div className="flex flex-col items-end">
+                        <span className="font-semibold">{run.cards_fetched}</span>
+                        <span className="text-muted-foreground/70">fetched</span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="font-semibold">{run.cards_new}</span>
+                        <span className="text-muted-foreground/70">new</span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{run.jobs_ready}</span>
+                        <span className="text-muted-foreground/70">ready</span>
+                      </div>
+                    </div>
+                  </Link>
                 ))}
               </div>
             )}
           </CardContent>
         </Card>
+
+        {/* Right — Pipeline funnel (fixed) */}
+        {funnelStages.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Pipeline Funnel</CardTitle>
+              <CardDescription>
+                Cumulative jobs surviving each stage
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <FunnelChart stages={funnelStages} />
+              <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <XCircle className="size-4 text-destructive" />
+                  <span className="text-muted-foreground">Rejected</span>
+                  <span className="font-mono font-semibold">{funnel?.rejected ?? 0}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FileSearch className="size-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">JD Fetch</span>
+                  <span className="font-mono font-semibold">
+                    {jdFetchTotal > 0 ? `${jdFetchSuccess}/${jdFetchTotal}` : "—"}
+                  </span>
+                  {jdFetchTotal > 0 && (
+                    <span className="font-mono text-xs text-muted-foreground">({jdFetchPct}%)</span>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Top matches */}
+      {/* ZONE 3 — Top matches with verdict */}
       <Card>
         <CardHeader>
           <CardTitle>Top Matches</CardTitle>
-          <CardDescription>Highest-scoring ready jobs</CardDescription>
+          <CardDescription>Highest-scoring ready jobs with AI verdict</CardDescription>
           <CardAction>
             <Link href="/jobs?status=ready" className={buttonVariants({ variant: "ghost", size: "sm" })}>
               View all
@@ -276,21 +264,30 @@ export default async function DashboardPage() {
             </p>
           ) : (
             <div className="flex flex-col divide-y divide-border">
-              {topMatches.map((job) => (
+              {topMatches.map((job, i) => (
                 <Link
                   key={job.id}
                   href={`/jobs/${job.id}`}
                   className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
                 >
-                  <Trophy className="size-4 text-amber-500" />
-                  <span className="font-medium">{job.title}</span>
-                  <span className="text-muted-foreground">{job.company}</span>
-                  {job.score != null && (
-                    <Badge variant="secondary" className="ml-auto">
-                      {job.score}
-                    </Badge>
+                  {i === 0 ? (
+                    <Trophy className="size-4 shrink-0 text-amber-500" />
+                  ) : (
+                    <span className="w-4 shrink-0 text-center font-mono text-xs text-muted-foreground">
+                      {i + 1}
+                    </span>
                   )}
-                  <ArrowRight className="size-4 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{job.title}</span>
+                    <span className="block truncate text-muted-foreground">{job.company}</span>
+                  </div>
+                  <VerdictBadge verdict={job.analysis_verdict} hasAnalysis={job.has_analysis} />
+                  {job.score != null && (
+                    <span className="w-10 shrink-0 text-right font-mono font-semibold">
+                      {job.score}
+                    </span>
+                  )}
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
                 </Link>
               ))}
             </div>
