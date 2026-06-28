@@ -6,6 +6,7 @@ See docs/PHASE1_SPEC.md §3.4 for the full spec.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from seeker_os.config import FilterConfig, ProfileConfig, TitleFilters
@@ -23,6 +24,17 @@ def _parse_date(date_str: str) -> datetime | None:
         return datetime.fromisoformat(ds)
     except (ValueError, TypeError):
         return None
+
+
+def _title_has_override(title_lower: str, keywords: list[str]) -> bool:
+    """Check if title contains any seniority override keyword (word-boundary match).
+
+    Uses \\b word boundaries so 'staff' doesn't match 'staffing', etc.
+    """
+    for kw in keywords:
+        if re.search(rf"\b{re.escape(kw.lower())}\b", title_lower):
+            return True
+    return False
 
 
 def apply_filters(
@@ -79,7 +91,7 @@ def apply_filters(
         if sen in filters.seniority_reject:
             # Check title override — if title contains a senior keyword, pass anyway
             if filters.seniority_title_override:
-                if any(kw in title_lower for kw in filters.seniority_title_override):
+                if _title_has_override(title_lower, filters.seniority_title_override):
                     pass  # title overrides the seniority tag
                 else:
                     return FilterResult(passed=False, reason=f"Seniority below floor ({sen})")
@@ -90,7 +102,7 @@ def apply_filters(
             if not filters.seniority_unknown_passes:
                 # Check title override
                 if not (filters.seniority_title_override and
-                        any(kw in title_lower for kw in filters.seniority_title_override)):
+                        _title_has_override(title_lower, filters.seniority_title_override)):
                     return FilterResult(passed=False, reason=f"Unrecognized seniority ({sen})")
             # else: passes through to scoring
     else:
@@ -98,7 +110,7 @@ def apply_filters(
         if not filters.seniority_unknown_passes:
             # Check title override first
             has_override = (filters.seniority_title_override and
-                            any(kw in title_lower for kw in filters.seniority_title_override))
+                            _title_has_override(title_lower, filters.seniority_title_override))
             if not has_override:
                 junior_patterns = filters.junior_title_patterns
                 if any(p in title_lower for p in junior_patterns):

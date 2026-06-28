@@ -513,6 +513,13 @@ class CompanyResearchConfig(BaseModel):
     staleness_months: int = 18
     source_trust_order: list[str] = []
 
+    # Phase 3 retrieval disambiguation: confidence floor for mismatch cases.
+    # When Wikidata P856 doesn't match the company domain (wrong entity),
+    # section confidence is clamped to this value via min(). Must be below
+    # the research modifier confidence_threshold (typically 0.5) so
+    # confidence-gated modifiers don't fire on wrong-entity research.
+    mismatch_confidence: float = 0.2
+
     # Research TTL: reuse cached dossier within this many days (default ~30)
     research_ttl_days: int = 30
 

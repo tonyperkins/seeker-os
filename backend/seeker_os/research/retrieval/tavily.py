@@ -41,7 +41,7 @@ class TavilyAdapter:
     def type(self) -> str:
         return self._type
 
-    def search(self, query: str, max_results: int | None = None) -> list[RetrievalSnippet]:
+    def search(self, query: str, max_results: int | None = None, include_domains: list[str] | None = None) -> list[RetrievalSnippet]:
         """Run a Tavily search query and return snippets with URLs."""
         if not self._api_key:
             logger.warning("Tavily adapter has no API key — returning empty results")
@@ -54,6 +54,8 @@ class TavilyAdapter:
             "max_results": limit,
             "include_answer": False,
         }
+        if include_domains:
+            payload["include_domains"] = include_domains
 
         try:
             resp = httpx.post(

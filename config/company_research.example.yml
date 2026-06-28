@@ -58,6 +58,13 @@ user_agent: "SeekerOS/0.1 (product; contact: admin@example.com)"
 confidence_floor: 0.3
 staleness_months: 18
 
+# Phase 3 retrieval disambiguation: confidence floor for mismatch cases.
+# When Wikidata P856 doesn't match the company domain (wrong entity),
+# section confidence is clamped to this value via min(). Must be below
+# the research modifier confidence_threshold (typically 0.5) so
+# confidence-gated modifiers don't fire on wrong-entity research.
+mismatch_confidence: 0.2
+
 # Research TTL: reuse a cached dossier within this many days instead of
 # hitting Tavily again. Company funding/headcount/sentiment don't change daily.
 # Re-research only on explicit user "refresh" or when older than the TTL.

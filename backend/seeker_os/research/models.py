@@ -7,7 +7,24 @@ scores and source references.
 
 from __future__ import annotations
 
+from enum import Enum
+
 from pydantic import BaseModel
+
+
+class VerificationState(str, Enum):
+    """Entity verification state for retrieval disambiguation.
+
+    - VERIFIED: P856 matches company_domain, OR Wikidata/Wikipedia absent
+      but Tavily returned snippets from the company's own domain.
+    - UNVERIFIED: P856 missing (can't verify, can't disprove) OR company_domain
+      absent (manual-add). Data is kept; no hard confidence degradation.
+    - MISMATCH: P856 present but does NOT match company_domain. Wrong entity;
+      Wikipedia/Wikidata discarded; section confidence hard-degraded.
+    """
+    VERIFIED = "verified"
+    UNVERIFIED = "unverified"
+    MISMATCH = "mismatch"
 
 
 # ---------------------------------------------------------------------------
