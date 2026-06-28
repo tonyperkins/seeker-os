@@ -38,6 +38,7 @@ class JobCard(BaseModel):
     comp_min: int | None = None
     comp_max: int | None = None
     comp_currency: str | None = None
+    comp_source: str = "none"  # structured | parsed | manual | none
     technical_tools: list[str] = []
     requirements_summary: str = ""
     date_posted: str             # ISO timestamp

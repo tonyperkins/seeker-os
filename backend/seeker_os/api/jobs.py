@@ -214,6 +214,7 @@ def _row_to_summary(
         tier_passed=row["tier_passed"],
         comp_min=row["comp_min"],
         comp_max=row["comp_max"],
+        comp_source=row["comp_source"] if "comp_source" in row.keys() else None,
         location=row["location"] or "",
         workplace_type=row["workplace_type"] or "",
         seniority_level=row["seniority_level"],
@@ -275,6 +276,7 @@ def _row_to_detail(row, db=None) -> JobDetail:
         comp_min=row["comp_min"],
         comp_max=row["comp_max"],
         comp_currency=row["comp_currency"],
+        comp_source=row["comp_source"] if "comp_source" in row.keys() else None,
         technical_tools=json_decode(row["technical_tools"]) or [],
         requirements_summary=row["requirements_summary"] or "",
         date_posted=row["date_posted"] or "",
@@ -453,6 +455,7 @@ def create_job(body: JobCreate):
         gh_location = None
         gh_comp_min = None
         gh_comp_max = None
+        gh_comp_source = None  # tracks origin: 'structured' (Greenhouse API) or 'parsed' (LLM)
         gh_workplace_type = None
         ats_source = None
         ats_board_token = None
@@ -500,6 +503,7 @@ def create_job(body: JobCreate):
                                 first = ranges[0]
                                 gh_comp_min = first.get("min")
                                 gh_comp_max = first.get("max")
+                                gh_comp_source = "structured"
 
                         # Metadata fields (custom ATS fields)
                         metadata = gh_data.get("metadata", [])
@@ -592,8 +596,12 @@ def create_job(body: JobCreate):
                 gh_workplace_type = extracted.workplace_type
             if not gh_comp_min and not body.comp_min:
                 gh_comp_min = extracted.comp_min
+                if extracted.comp_min is not None:
+                    gh_comp_source = "parsed"
             if not gh_comp_max and not body.comp_max:
                 gh_comp_max = extracted.comp_max
+                if extracted.comp_max is not None:
+                    gh_comp_source = "parsed"
             if not body.seniority_level:
                 body_seniority_extracted = extracted.seniority_level
             else:
@@ -620,6 +628,14 @@ def create_job(body: JobCreate):
         eff_workplace = body.workplace_type or gh_workplace_type or ""
         eff_comp_min = body.comp_min if body.comp_min is not None else gh_comp_min
         eff_comp_max = body.comp_max if body.comp_max is not None else gh_comp_max
+        # Provenance: track which source actually filled the resolved comp value.
+        # Precedence: body (manual) > Greenhouse API (structured) > LLM extraction (parsed).
+        if body.comp_min is not None or body.comp_max is not None:
+            eff_comp_source = "manual"
+        elif gh_comp_source is not None:
+            eff_comp_source = gh_comp_source
+        else:
+            eff_comp_source = "none"
         eff_seniority = body.seniority_level or body_seniority_extracted
         eff_role_type = gh_role_type
         eff_commitment = gh_commitment
@@ -640,6 +656,7 @@ def create_job(body: JobCreate):
             comp_min=eff_comp_min,
             comp_max=eff_comp_max,
             comp_currency=body.comp_currency,
+            comp_source=eff_comp_source,
             date_posted=now,
             discovered_query="manual",
         )
@@ -671,6 +688,7 @@ def create_job(body: JobCreate):
             comp_max=eff_comp_max,
             workplace_type=eff_workplace,
             seniority_level=eff_seniority,
+            comp_source=eff_comp_source,
         )
 
         # Insert — manual jobs always go to 'ready' (DECISION 1)
@@ -681,13 +699,13 @@ def create_job(body: JobCreate):
                 apply_url, url_hash,
                 title, core_title, company, company_homepage,
                 location, workplace_type, workplace_countries, seniority_level,
-                commitment, comp_min, comp_max, comp_currency,
+                commitment, comp_min, comp_max, comp_currency, comp_source,
                 technical_tools, requirements_summary, date_posted, role_type,
                 status, tier_passed, score, score_reasons, score_gaps, score_modifiers,
                 jd_full, jd_fetch_status,
                 discovered_at, discovered_query, updated_at, is_pinned,
                 filter_warnings
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', 4, ?, ?, ?, ?, ?, 'fetched', ?, 'manual', ?, 0, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', 4, ?, ?, ?, ?, ?, 'fetched', ?, 'manual', ?, 0, ?)
             """,
             (
                 "manual", source_job_id,
@@ -695,7 +713,7 @@ def create_job(body: JobCreate):
                 body.url, uh,
                 eff_title, eff_title, eff_company, body.company_homepage,
                 eff_location, eff_workplace, json_encode(eff_countries), eff_seniority,
-                json_encode([eff_commitment] if eff_commitment else []), eff_comp_min, eff_comp_max, body.comp_currency,
+                json_encode([eff_commitment] if eff_commitment else []), eff_comp_min, eff_comp_max, body.comp_currency, eff_comp_source,
                 json_encode([]), "", now, eff_role_type,
                 score_result.score,
                 json_encode(score_result.reasons),

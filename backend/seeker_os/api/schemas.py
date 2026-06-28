@@ -25,6 +25,7 @@ class JobSummary(BaseModel):
     tier_passed: int
     comp_min: int | None = None
     comp_max: int | None = None
+    comp_source: str | None = None
     location: str = ""
     workplace_type: str = ""
     seniority_level: str | None = None
@@ -73,6 +74,7 @@ class JobDetail(BaseModel):
     comp_min: int | None = None
     comp_max: int | None = None
     comp_currency: str | None = None
+    comp_source: str | None = None
     technical_tools: list[str] = []
     requirements_summary: str = ""
     date_posted: str = ""

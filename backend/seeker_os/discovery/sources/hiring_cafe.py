@@ -186,6 +186,7 @@ class HiringCafeAdapter:
             comp_min=v5.get("yearly_min_compensation"),
             comp_max=v5.get("yearly_max_compensation"),
             comp_currency=v5.get("listed_compensation_currency"),
+            comp_source="structured" if v5.get("yearly_min_compensation") is not None or v5.get("yearly_max_compensation") is not None else "none",
             technical_tools=v5.get("technical_tools", []),
             requirements_summary=v5.get("requirements_summary", ""),
             date_posted=v5.get("estimated_publish_date", ""),

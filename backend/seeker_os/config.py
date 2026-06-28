@@ -280,6 +280,14 @@ class ScoringConfig(BaseModel):
     research_modifiers: list[ResearchModifierConfig] = []
     verdict_caps: dict[str, float | None] = {}
 
+    # Comp provenance: values above this are implausible regardless of source.
+    # For parsed/none → treated as comp-unknown (no floor clear, no bonus).
+    # For structured/manual → flagged/logged but still trusted (data error, not
+    #   a parse artifact — the user should investigate).
+    comp_sanity_max: int = 10_000_000
+    # Provenance values that earn full trust (comp_target bonus, floor clearing).
+    trusted_comp_sources: list[str] = ["structured", "manual"]
+
 
 class FilterConfig(BaseModel):
     # Required — no silent defaults. User must explicitly choose whether to
@@ -296,6 +304,11 @@ class FilterConfig(BaseModel):
     comp_floor_margin_pct: int = 0
     # NEW: if True, jobs with no comp data pass; if False, they're rejected
     comp_unknown_passes: bool = True
+    # Comp provenance: values above this are implausible regardless of source.
+    # In the filter, an implausible comp_max from any source is treated as
+    # comp-unknown (does not clear the floor). Prevents the 130000000 misfire
+    # from clearing the comp floor.
+    comp_sanity_max: int = 10_000_000
     freshness_days: int = 30
     commitment_required: str = "Full Time"
     # NEW: locations to exclude even if us_only passes (states or cities)

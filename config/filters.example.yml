@@ -14,6 +14,10 @@ filters:
   # Comp floor is NOT here — it lives in profile.comp.floor (canonical source).
   # comp_floor_margin_pct applies a tolerance below profile.comp.floor.
   # comp_unknown_passes controls whether jobs with no comp data pass or are rejected.
+  # comp_sanity_max: values above this are implausible regardless of source.
+  # Treated as comp-unknown in the filter (does not clear the floor).
+  # Prevents the $130,000 → 130000000 misparse from clearing the comp floor.
+  comp_sanity_max: 10000000
 
   freshness_days: 30
   commitment_required: "Full Time"

@@ -118,17 +118,25 @@ def apply_filters(
                 # If no junior signal and unknown_passes, let it through
 
     # 6. Comp ceiling floor (with margin)
-    if job.comp_max is not None:
+    # Sanity bound: comp above comp_sanity_max is implausible regardless of
+    # source. Treat as comp-unknown so it can't clear the floor. This is the
+    # universal guard — the $130,000 → 130000000 misfire must not pass.
+    sanity_max = filters.comp_sanity_max
+    effective_comp_max = job.comp_max
+    if effective_comp_max is not None and effective_comp_max > sanity_max:
+        effective_comp_max = None  # treat as unknown
+
+    if effective_comp_max is not None:
         effective_floor = profile.comp.floor
         if filters.comp_floor_margin_pct > 0:
             effective_floor = int(effective_floor * (1 - filters.comp_floor_margin_pct / 100))
-        if job.comp_max < effective_floor:
+        if effective_comp_max < effective_floor:
             return FilterResult(
                 passed=False,
                 reason=f"Comp ceiling below floor (comp_max={job.comp_max} < floor={effective_floor})",
             )
     else:
-        # comp is null
+        # comp is null or implausible (sanity-bounded)
         if not filters.comp_unknown_passes:
             return FilterResult(passed=False, reason="Comp not listed (comp_unknown_passes=False)")
 

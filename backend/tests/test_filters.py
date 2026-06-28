@@ -210,3 +210,44 @@ class TestHardFilters:
         job = _make_job(title="Engineering Manager", core_title="Engineering Manager")
         result = apply_filters(job, _make_profile(), _make_filters(), _make_title_filters())
         assert result.passed is False
+
+    # --- Comp provenance sanity bound ---
+
+    def test_misparsed_comp_does_not_clear_floor(self):
+        """The inversion: comp_max=130000000 (misparsed) does NOT clear the
+        comp floor. The sanity bound treats it as comp-unknown, so
+        comp_unknown_passes=True lets it through (not because it cleared
+        the floor, but because comp is treated as missing).
+        """
+        job = _make_job(comp_max=130000000, comp_source="parsed")
+        result = apply_filters(job, _make_profile(), _make_filters(), _make_title_filters())
+        # Passes via comp_unknown_passes, NOT via floor clear
+        assert result.passed is True
+
+    def test_misparsed_comp_rejected_when_unknown_does_not_pass(self):
+        """When comp_unknown_passes=False, a misparsed 130000000 is treated as
+        comp-unknown and rejected — it cannot clear the floor.
+        """
+        filters = _make_filters()
+        filters = filters.model_copy(update={"comp_unknown_passes": False})
+        job = _make_job(comp_max=130000000, comp_source="parsed")
+        result = apply_filters(job, _make_profile(), filters, _make_title_filters())
+        assert result.passed is False
+        assert "Comp not listed" in result.reason
+
+    def test_structured_misparsed_comp_also_bounded(self):
+        """A structured comp above sanity_max is also bounded in the filter —
+        corrupt structured data shouldn't clear the floor either.
+        """
+        filters = _make_filters()
+        filters = filters.model_copy(update={"comp_unknown_passes": False})
+        job = _make_job(comp_max=130000000, comp_source="structured")
+        result = apply_filters(job, _make_profile(), filters, _make_title_filters())
+        assert result.passed is False
+        assert "Comp not listed" in result.reason
+
+    def test_normal_comp_clears_floor(self):
+        """Normal comp above floor passes — sanity bound doesn't interfere."""
+        job = _make_job(comp_max=200000, comp_source="structured")
+        result = apply_filters(job, _make_profile(), _make_filters(), _make_title_filters())
+        assert result.passed is True

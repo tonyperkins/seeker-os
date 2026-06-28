@@ -122,7 +122,7 @@ class TestScoring:
         result = score_job(
             title="Senior SRE", jd_text=jd, location="Remote, US",
             company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
-            comp_min=170000, comp_max=210000,
+            comp_min=170000, comp_max=210000, comp_source="structured",
         )
         # base 4.0 + comp_target 1.0 = 5.0
         assert result.score >= 5.0
@@ -132,7 +132,7 @@ class TestScoring:
         result = score_job(
             title="Senior SRE", jd_text=jd, location="Remote, US",
             company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
-            comp_min=120000, comp_max=130000,
+            comp_min=120000, comp_max=130000, comp_source="structured",
         )
         # base 4.0 - 3.0 (comp_below_floor) = 1.0
         assert result.score <= 2.0
@@ -594,3 +594,110 @@ class TestScoring:
         # Should match director tier (4.0), not senior SRE tier (also 4.0 but director is first)
         assert any("Director" in r for r in result.reasons)
         assert not any("Senior SRE" in r for r in result.reasons)
+
+
+class TestCompProvenance:
+    """Tests for comp provenance tagging and sanity bounds."""
+
+    def _make_jd(self) -> str:
+        return "We are looking for a Senior SRE with AWS and Kubernetes experience. " + "x" * 500
+
+    def test_structured_comp_target_fires(self):
+        """Structured comp at/above target → comp_target fires (unchanged)."""
+        result = score_job(
+            title="Senior SRE", jd_text=self._make_jd(), location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
+            comp_min=170000, comp_max=200000, comp_source="structured",
+        )
+        assert "comp_target" in result.fired_modifiers
+        assert result.fired_modifiers["comp_target"] == 1.0
+
+    def test_parsed_comp_target_does_not_fire(self):
+        """Parsed comp, plausible value → comp_target does NOT fire (untrusted)."""
+        result = score_job(
+            title="Senior SRE", jd_text=self._make_jd(), location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
+            comp_min=170000, comp_max=200000, comp_source="parsed",
+        )
+        assert "comp_target" not in result.fired_modifiers
+
+    def test_inversion_misparsed_comp_treated_as_unknown(self):
+        """The inversion test: comp_max=130000000, provenance parsed → treated as
+        comp-unknown, does NOT earn comp_target, does NOT fire comp_below_floor
+        or comp_marginal (comp is None after sanity bound). The $130,000 →
+        130000000 bug, proven neutralized.
+        """
+        result = score_job(
+            title="Senior SRE", jd_text=self._make_jd(), location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
+            comp_min=130000000, comp_max=130000000, comp_source="parsed",
+        )
+        # comp_target must NOT fire (untrusted + sanity-bounded)
+        assert "comp_target" not in result.fired_modifiers
+        # comp_below_floor must NOT fire (comp is None after sanity bound)
+        assert "comp_below_floor" not in result.fired_modifiers
+        # comp_marginal must NOT fire
+        assert "comp_marginal" not in result.fired_modifiers
+        # Sanity message in reasons
+        assert any("sanity" in r.lower() for r in result.reasons)
+
+    def test_manual_comp_trusted(self):
+        """Manual-add comp → trusted, behaves like structured."""
+        result = score_job(
+            title="Senior SRE", jd_text=self._make_jd(), location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
+            comp_min=170000, comp_max=200000, comp_source="manual",
+        )
+        assert "comp_target" in result.fired_modifiers
+        assert result.fired_modifiers["comp_target"] == 1.0
+
+    def test_backfilled_none_untrusted(self):
+        """Backfilled none row → untrusted, no comp_target bonus."""
+        result = score_job(
+            title="Senior SRE", jd_text=self._make_jd(), location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
+            comp_min=170000, comp_max=200000, comp_source="none",
+        )
+        assert "comp_target" not in result.fired_modifiers
+
+    def test_structured_above_sanity_flagged(self):
+        """Structured comp above comp_sanity_max is flagged, not silently trusted.
+        The comp_target bonus still fires (trusted source), but a warning is
+        added to reasons so the user can investigate the data error.
+        """
+        result = score_job(
+            title="Senior SRE", jd_text=self._make_jd(), location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
+            comp_min=130000000, comp_max=130000000, comp_source="structured",
+        )
+        # Trusted source → comp_target still fires
+        assert "comp_target" in result.fired_modifiers
+        # But a sanity warning is logged
+        assert any("sanity" in r.lower() and "warning" in r.lower() for r in result.reasons)
+
+    def test_parsed_below_floor_still_penalized(self):
+        """Parsed comp with plausible low value → comp_target does NOT fire,
+        but comp_below_floor DOES fire (untrusted comp still penalized —
+        a misparsed low value should not escape the penalty either).
+        """
+        result = score_job(
+            title="Senior SRE", jd_text=self._make_jd(), location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
+            comp_min=80000, comp_max=120000, comp_source="parsed",
+        )
+        # comp_target does NOT fire (untrusted)
+        assert "comp_target" not in result.fired_modifiers
+        # comp_below_floor DOES fire (negative modifiers not gated on trust)
+        assert "comp_below_floor" in result.fired_modifiers
+
+    def test_comp_unknown_still_passes(self):
+        """No comp at all → comp_unknown_passes path not broken."""
+        result = score_job(
+            title="Senior SRE", jd_text=self._make_jd(), location="Remote, US",
+            company="TestCo", rubric=_make_rubric(), profile=_make_profile(),
+            comp_min=None, comp_max=None, comp_source="none",
+        )
+        # No comp modifiers fire
+        assert "comp_target" not in result.fired_modifiers
+        assert "comp_below_floor" not in result.fired_modifiers
+        assert "comp_marginal" not in result.fired_modifiers
