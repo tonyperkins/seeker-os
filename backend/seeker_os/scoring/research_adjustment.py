@@ -12,6 +12,7 @@ research_modifiers section), not hardcoded in Python.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from pydantic import BaseModel
@@ -24,12 +25,35 @@ from seeker_os.research.models import (
 )
 
 
+def _parse_headcount(value: str | int | None) -> int | None:
+    """Parse a headcount value that may be a range string like '501-1000',
+    a plain int, or None. Returns the lower bound for ranges, the int for
+    plain numbers, or None if unparseable."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    # Try to extract numbers from strings like "501-1000", "~500", "1,200"
+    nums = re.findall(r"[\d,]+", value.replace(",", ""))
+    if not nums:
+        return None
+    try:
+        return int(nums[0])
+    except ValueError:
+        return None
+
+
 class ResearchModifierRule(BaseModel):
     """A single research-adjustment rule from config."""
     factor: str
     delta: float
     confidence_threshold: float = 0.5
     source_section: str  # "funding" | "sentiment" | "fit"
+    # Optional cutoffs for headcount-based factors
+    headcount_max: int | None = None
+    headcount_min: int | None = None
+    # Optional: base-modifier signal to suppress when this factor fires
+    suppresses: str | None = None
 
 
 class ResearchBreakdownItem(BaseModel):
@@ -115,15 +139,58 @@ def _has_strong_negative_theme(sentiment: SentimentDossier) -> bool:
     return False
 
 
+def _is_right_size_company(
+    funding: FundingDossier, fit: FitDossier, rule: ResearchModifierRule
+) -> bool:
+    """Company is small/right-size.
+
+    Headcount is authoritative when present: headcount ≤ cutoff → yes, headcount > cutoff → no.
+    Only falls back to fit.size_bucket when headcount is None.
+    """
+    if funding.headcount is not None and rule.headcount_max is not None:
+        hc = _parse_headcount(funding.headcount)
+        if hc is not None:
+            return hc <= rule.headcount_max
+    # Headcount unknown — fall back to size_bucket signal
+    if fit.size_bucket:
+        bucket = fit.size_bucket.lower()
+        if any(w in bucket for w in ("small", "startup")):
+            return True
+    return False
+
+
+def _is_large_company_confirmed(
+    funding: FundingDossier, fit: FitDossier, rule: ResearchModifierRule
+) -> bool:
+    """Company is large.
+
+    Headcount is authoritative when present: headcount ≥ cutoff → yes, headcount < cutoff → no.
+    Only falls back to public + large size_bucket when headcount is None.
+    """
+    if funding.headcount is not None and rule.headcount_min is not None:
+        hc = _parse_headcount(funding.headcount)
+        if hc is not None:
+            return hc >= rule.headcount_min
+    # Headcount unknown — fall back to public + large size_bucket signal
+    if funding.public and fit.size_bucket:
+        bucket = fit.size_bucket.lower()
+        if any(w in bucket for w in ("large", "enterprise")):
+            return True
+    return False
+
+
 # Map of factor name → evaluation function
+# Each function receives (funding, sentiment, fit, rule) and returns bool.
 _FACTOR_CHECKS = {
-    "recent_layoffs": lambda f, s, ft: len(f.layoffs) > 0 and _is_recent_layoff(
+    "recent_layoffs": lambda f, s, ft, r: len(f.layoffs) > 0 and _is_recent_layoff(
         f.layoffs[0].date if f.layoffs else None
     ),
-    "down_round_runway_risk": lambda f, s, ft: _has_down_round_signals(f),
-    "healthy_runway": lambda f, s, ft: _has_healthy_runway(f),
-    "remote_walkback_rto": lambda f, s, ft: _has_remote_walkback(ft),
-    "strong_negative_sentiment": lambda f, s, ft: _has_strong_negative_theme(s),
+    "down_round_runway_risk": lambda f, s, ft, r: _has_down_round_signals(f),
+    "healthy_runway": lambda f, s, ft, r: _has_healthy_runway(f),
+    "remote_walkback_rto": lambda f, s, ft, r: _has_remote_walkback(ft),
+    "strong_negative_sentiment": lambda f, s, ft, r: _has_strong_negative_theme(s),
+    "right_size_company": lambda f, s, ft, r: _is_right_size_company(f, ft, r),
+    "large_company_confirmed": lambda f, s, ft, r: _is_large_company_confirmed(f, ft, r),
 }
 
 
@@ -133,6 +200,7 @@ def compute_research_adjustment(
     rules: list[ResearchModifierRule],
     max_score: float = 10.0,
     min_score: float = 0.0,
+    base_modifiers: dict[str, float] | None = None,
 ) -> ResearchAdjustmentResult:
     """Compute research-adjusted score from base score + dossier.
 
@@ -184,7 +252,7 @@ def compute_research_adjustment(
         if check_fn is None:
             continue  # Unknown factor — skip
 
-        if not check_fn(funding or FundingDossier(), sentiment or SentimentDossier(), fit or FitDossier()):
+        if not check_fn(funding or FundingDossier(), sentiment or SentimentDossier(), fit or FitDossier(), rule):
             continue
 
         # Apply the modifier
@@ -195,6 +263,18 @@ def compute_research_adjustment(
             confidence=section_conf,
             source_section=rule.source_section,
         ))
+
+        # Suppress double-count: if this rule suppresses a base modifier,
+        # add a compensating delta to undo the base modifier's effect on base_score.
+        if rule.suppresses and base_modifiers and rule.suppresses in base_modifiers:
+            suppressed_delta = -base_modifiers[rule.suppresses]
+            total_delta += suppressed_delta
+            breakdown.append(ResearchBreakdownItem(
+                factor=f"suppressed_{rule.suppresses}",
+                delta=suppressed_delta,
+                confidence=section_conf,
+                source_section=rule.source_section,
+            ))
 
     adjusted = max(min_score, min(max_score, base_score + total_delta))
 

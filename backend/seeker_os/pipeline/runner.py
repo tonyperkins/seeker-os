@@ -43,7 +43,7 @@ def _insert_job(db: sqlite3.Connection, job: JobCard, run_id: str | None = None)
             apply_url, url_hash,
             title, core_title, company, company_homepage,
             location, workplace_type, workplace_countries, seniority_level,
-            commitment, comp_min, comp_max, comp_currency,
+            commitment, comp_min, comp_max, comp_currency, comp_source,
             technical_tools, requirements_summary, date_posted, role_type,
             status, tier_passed, discovered_at, discovered_query, updated_at, is_pinned,
             detail_url, run_id
@@ -54,7 +54,7 @@ def _insert_job(db: sqlite3.Connection, job: JobCard, run_id: str | None = None)
             job.apply_url, uh,
             job.title, job.core_title, job.company, job.company_homepage,
             job.location, job.workplace_type, json_encode(job.workplace_countries), job.seniority_level,
-            json_encode(job.commitment), job.comp_min, job.comp_max, job.comp_currency,
+            json_encode(job.commitment), job.comp_min, job.comp_max, job.comp_currency, job.comp_source,
             json_encode(job.technical_tools), job.requirements_summary, job.date_posted, job.role_type,
             now, job.discovered_query, now, job.is_pinned,
             job.detail_url,
@@ -466,6 +466,7 @@ def run_pipeline(
                 comp_max=row["comp_max"],
                 workplace_type=row["workplace_type"],
                 seniority_level=row["seniority_level"],
+                comp_source=row["comp_source"] if "comp_source" in row.keys() else "none",
             )
 
             if score_result.hard_reject:
@@ -475,9 +476,9 @@ def run_pipeline(
                         "score": 0,
                         "score_reasons": json_encode(score_result.reasons),
                         "score_gaps": json_encode(score_result.gaps),
+                        "score_modifiers": json_encode(score_result.fired_modifiers),
                         "reject_reason": score_result.reject_reason,
                     },
-                    metadata={"hard_reject": True, "reason": score_result.reject_reason},
                 )
                 result.tier4_hard_rejected += 1
             elif score_result.score >= settings.scoring.post_threshold:
@@ -488,8 +489,8 @@ def run_pipeline(
                         "score": score_result.score,
                         "score_reasons": json_encode(score_result.reasons),
                         "score_gaps": json_encode(score_result.gaps),
+                        "score_modifiers": json_encode(score_result.fired_modifiers),
                     },
-                    metadata={"score": score_result.score},
                 )
                 result.tier4_scored += 1
             else:
@@ -499,9 +500,9 @@ def run_pipeline(
                         "score": score_result.score,
                         "score_reasons": json_encode(score_result.reasons),
                         "score_gaps": json_encode(score_result.gaps),
+                        "score_modifiers": json_encode(score_result.fired_modifiers),
                         "reject_reason": "score below threshold",
                     },
-                    metadata={"hard_reject": False, "reason": "score below threshold"},
                 )
                 result.tier4_rejected += 1
 

@@ -26,11 +26,14 @@ class RetrievalAdapter(Protocol):
         """Adapter type (e.g. 'tavily', 'serpapi', 'brave')."""
         ...
 
-    def search(self, query: str, max_results: int = 5) -> list[RetrievalSnippet]:
+    def search(self, query: str, max_results: int = 5, include_domains: list[str] | None = None) -> list[RetrievalSnippet]:
         """Run a search query and return snippets with URLs.
 
         Returns a list of RetrievalSnippet, each carrying a URL. If the
         adapter fails or returns no results, returns an empty list.
+
+        When include_domains is provided, the adapter should restrict results
+        to those domains (provider-specific behavior). None = no restriction.
         """
         ...
 

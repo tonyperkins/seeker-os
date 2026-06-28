@@ -6,6 +6,7 @@ See docs/PHASE1_SPEC.md §3.4 for the full spec.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from seeker_os.config import FilterConfig, ProfileConfig, TitleFilters
@@ -23,6 +24,17 @@ def _parse_date(date_str: str) -> datetime | None:
         return datetime.fromisoformat(ds)
     except (ValueError, TypeError):
         return None
+
+
+def _title_has_override(title_lower: str, keywords: list[str]) -> bool:
+    """Check if title contains any seniority override keyword (word-boundary match).
+
+    Uses \\b word boundaries so 'staff' doesn't match 'staffing', etc.
+    """
+    for kw in keywords:
+        if re.search(rf"\b{re.escape(kw.lower())}\b", title_lower):
+            return True
+    return False
 
 
 def apply_filters(
@@ -79,7 +91,7 @@ def apply_filters(
         if sen in filters.seniority_reject:
             # Check title override — if title contains a senior keyword, pass anyway
             if filters.seniority_title_override:
-                if any(kw in title_lower for kw in filters.seniority_title_override):
+                if _title_has_override(title_lower, filters.seniority_title_override):
                     pass  # title overrides the seniority tag
                 else:
                     return FilterResult(passed=False, reason=f"Seniority below floor ({sen})")
@@ -90,7 +102,7 @@ def apply_filters(
             if not filters.seniority_unknown_passes:
                 # Check title override
                 if not (filters.seniority_title_override and
-                        any(kw in title_lower for kw in filters.seniority_title_override)):
+                        _title_has_override(title_lower, filters.seniority_title_override)):
                     return FilterResult(passed=False, reason=f"Unrecognized seniority ({sen})")
             # else: passes through to scoring
     else:
@@ -98,7 +110,7 @@ def apply_filters(
         if not filters.seniority_unknown_passes:
             # Check title override first
             has_override = (filters.seniority_title_override and
-                            any(kw in title_lower for kw in filters.seniority_title_override))
+                            _title_has_override(title_lower, filters.seniority_title_override))
             if not has_override:
                 junior_patterns = filters.junior_title_patterns
                 if any(p in title_lower for p in junior_patterns):
@@ -106,17 +118,25 @@ def apply_filters(
                 # If no junior signal and unknown_passes, let it through
 
     # 6. Comp ceiling floor (with margin)
-    if job.comp_max is not None:
+    # Sanity bound: comp above comp_sanity_max is implausible regardless of
+    # source. Treat as comp-unknown so it can't clear the floor. This is the
+    # universal guard — the $130,000 → 130000000 misfire must not pass.
+    sanity_max = filters.comp_sanity_max
+    effective_comp_max = job.comp_max
+    if effective_comp_max is not None and effective_comp_max > sanity_max:
+        effective_comp_max = None  # treat as unknown
+
+    if effective_comp_max is not None:
         effective_floor = profile.comp.floor
         if filters.comp_floor_margin_pct > 0:
             effective_floor = int(effective_floor * (1 - filters.comp_floor_margin_pct / 100))
-        if job.comp_max < effective_floor:
+        if effective_comp_max < effective_floor:
             return FilterResult(
                 passed=False,
                 reason=f"Comp ceiling below floor (comp_max={job.comp_max} < floor={effective_floor})",
             )
     else:
-        # comp is null
+        # comp is null or implausible (sanity-bounded)
         if not filters.comp_unknown_passes:
             return FilterResult(passed=False, reason="Comp not listed (comp_unknown_passes=False)")
 
@@ -128,8 +148,13 @@ def apply_filters(
             return FilterResult(passed=False, reason=f"Title negative match ({neg_match[0]})")
         return FilterResult(passed=False, reason="Title doesn't match positive patterns")
 
-    # 8. Blacklist
+    # 8. Defense blocklist
     company_lower = (job.company or "").lower()
+    for dc in profile.defense_blocklist:
+        if dc.lower() in company_lower:
+            return FilterResult(passed=False, reason=f"Defense contractor (company blocklist)")
+
+    # 9. Blacklist
     for bl in profile.blacklist:
         if bl.lower() in company_lower:
             return FilterResult(passed=False, reason=f"Blacklisted company ({job.company})")

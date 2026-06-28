@@ -73,6 +73,7 @@ const EVENT_LABELS: Record<string, string> = {
   offer_countered: "Offer Countered",
   followup_sent: "Follow-up Sent",
   contact_received: "Contact Received",
+  refilter_rescored: "Refilter & Rescored",
 };
 
 const POST_APPLY_TRANSITIONS: { status: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [

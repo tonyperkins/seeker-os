@@ -265,6 +265,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
       setError(err instanceof Error ? err.message : "Research failed");
       setRunning(false);
       setResearchDone(false);
+      window.dispatchEvent(new Event("company-research-failed"));
     }
   }, [jobId, data]);
 
@@ -273,11 +274,11 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
   }, [jobId]);
 
   useEffect(() => {
-    function onRunAll() {
+    function onRunResearch() {
       runResearch();
     }
-    window.addEventListener("run-all-triggered", onRunAll);
-    return () => window.removeEventListener("run-all-triggered", onRunAll);
+    window.addEventListener("run-research-triggered", onRunResearch);
+    return () => window.removeEventListener("run-research-triggered", onRunResearch);
   }, [runResearch]);
 
   return (

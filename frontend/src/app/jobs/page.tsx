@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX } from "lucide-react";
+import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX, RefreshCw } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -120,19 +120,21 @@ export default function JobsPage() {
 function JobsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const clearFilters = searchParams.get("clear_filters") === "1";
 
-  const [status, setStatus] = usePersistentState<string>("jobs:filter:status", searchParams.get("status") ?? "", !searchParams.get("status"));
-  const [minScore, setMinScore] = usePersistentState<string>("jobs:filter:minScore", searchParams.get("min_score") ?? "", !searchParams.get("min_score"));
-  const [company, setCompany] = usePersistentState<string>("jobs:filter:company", searchParams.get("company") ?? "", !searchParams.get("company"));
-  const [search, setSearch] = usePersistentState<string>("jobs:filter:search", searchParams.get("search") ?? "", !searchParams.get("search"));
-  const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "", !searchParams.get("source"));
-  const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "", !searchParams.get("run_id"));
-  const [verdict, setVerdict] = usePersistentState<string>("jobs:filter:verdict", searchParams.get("verdict") ?? "", !searchParams.get("verdict"));
+  const [status, setStatus] = usePersistentState<string>("jobs:filter:status", searchParams.get("status") ?? "", !clearFilters && !searchParams.get("status"));
+  const [minScore, setMinScore] = usePersistentState<string>("jobs:filter:minScore", searchParams.get("min_score") ?? "", !clearFilters && !searchParams.get("min_score"));
+  const [company, setCompany] = usePersistentState<string>("jobs:filter:company", searchParams.get("company") ?? "", !clearFilters && !searchParams.get("company"));
+  const [search, setSearch] = usePersistentState<string>("jobs:filter:search", searchParams.get("search") ?? "", !clearFilters && !searchParams.get("search"));
+  const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "", !clearFilters && !searchParams.get("source"));
+  const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "", !clearFilters && !searchParams.get("run_id"));
+  const [verdict, setVerdict] = usePersistentState<string>("jobs:filter:verdict", searchParams.get("verdict") ?? "", !clearFilters && !searchParams.get("verdict"));
   const [sortKey, setSortKey] = usePersistentState<string>("jobs:sort:key", "score");
   const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("jobs:sort:dir", "desc");
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -162,14 +164,24 @@ function JobsPageInner() {
     }
   }, [status, minScore, company, search, source, runId, verdict]);
 
+  // Mark hydration complete after usePersistentState effects have run
   useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    // Skip the first fetch — usePersistentState hasn't hydrated from localStorage yet.
+    // After hydration, filters will have correct values and this effect re-fires.
+    if (!hydrated) return;
     // Fetch on mount and when filters change — legitimate data-fetching effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchJobs();
-  }, [fetchJobs]);
+  }, [fetchJobs, hydrated]);
 
-  // Keep URL in sync (shallow)
+  // Keep URL in sync (shallow) — skip until hydrated to avoid stripping
+  // clear_filters before usePersistentState has stabilized
   useEffect(() => {
+    if (!hydrated) return;
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     if (minScore) params.set("min_score", minScore);
@@ -180,7 +192,7 @@ function JobsPageInner() {
     if (verdict) params.set("verdict", verdict);
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
-  }, [status, minScore, company, search, source, runId, verdict, router]);
+  }, [status, minScore, company, search, source, runId, verdict, router, hydrated]);
 
   const sortedJobs = useMemo(() => {
     if (!jobs) return [];
@@ -553,6 +565,15 @@ function JobsPageInner() {
             <Brain className="size-3.5" />
             <Building2 className="size-3.5 -ml-1" />
             Analysis + Research
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={bulkLoading}
+            onClick={() => runBulkAction("Refilter & Rescore", (id) => api.jobs.refilterRescore({ job_ids: [id] }))}
+          >
+            <RefreshCw className="size-3.5" />
+            Refilter & Rescore
           </Button>
           <Button
             variant="outline"

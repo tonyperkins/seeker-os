@@ -290,7 +290,9 @@ class TestValidator:
             encoding="utf-8",
         )
 
-        # No identity_rules.yml — should not crash, should still check accuracy_rules patterns
+        # Remove identity_rules.yml so no anchor phrase is configured
+        (test_config / "identity_rules.yml").unlink(missing_ok=True)
+
         monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
         settings = Settings()
         settings.config_dir = test_config
@@ -327,7 +329,9 @@ class TestValidator:
             encoding="utf-8",
         )
 
-        # No identity_rules.yml — _load_identity_anchor() returns ("", [])
+        # Remove identity_rules.yml so _load_identity_anchor() returns ("", [])
+        (test_config / "identity_rules.yml").unlink(missing_ok=True)
+
         monkeypatch.setattr("seeker_os.config.CONFIG_DIR", test_config)
         settings = Settings()
         settings.config_dir = test_config

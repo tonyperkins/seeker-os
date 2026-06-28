@@ -352,6 +352,19 @@ MIGRATIONS: list[str | callable] = [
     """
     ALTER TABLE search_queries ADD COLUMN search_query TEXT;
     """,
+    # Migration 19: Add score_modifiers column for structured fired-modifier data
+    # (signal name → realized points). Used by research-adjustment suppression
+    # to know which base modifiers actually fired for a specific job.
+    """
+    ALTER TABLE jobs ADD COLUMN score_modifiers TEXT;
+    """,
+    # Migration 20: Add comp_source column for comp provenance tracking.
+    # Values: structured (hiring.cafe/ATS structured fields), parsed (LLM text
+    # extraction), manual (user-entered), none (unknown/backfilled).
+    # Scoring uses this to gate comp_target bonus and sanity-check floor clearing.
+    """
+    ALTER TABLE jobs ADD COLUMN comp_source TEXT DEFAULT 'none';
+    """,
 ]
 
 

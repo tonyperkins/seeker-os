@@ -97,6 +97,7 @@ class EventType:
     OFFER_COUNTERED = "offer_countered"
     FOLLOWUP_SENT = "followup_sent"
     CONTACT_RECEIVED = "contact_received"
+    REFILTER_RESCORED = "refilter_rescored"
 
     _ALL = frozenset({
         DISCOVERED, FILTER_PASSED, FILTER_REJECTED, JD_FETCHED,
@@ -107,6 +108,7 @@ class EventType:
         OFFER_ACCEPTED, OFFER_DECLINED,
         INTERVIEW, CHALLENGE_ASSIGNED, CHALLENGE_SUBMITTED,
         OFFER_RECEIVED, OFFER_COUNTERED, FOLLOWUP_SENT, CONTACT_RECEIVED,
+        REFILTER_RESCORED,
     })
 
 

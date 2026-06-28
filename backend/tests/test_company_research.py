@@ -14,6 +14,7 @@ from seeker_os.research.models import (
     SentimentDossier,
     SourceRef,
     VerdictFlags,
+    VerificationState,
     WikipediaInfo,
 )
 from seeker_os.research.retrieval.models import RetrievalSnippet
@@ -22,7 +23,57 @@ from seeker_os.research.company_research import (
     fetch_wikidata_info,
     fetch_llm_dossier,
     research_company,
+    _domains_match,
+    _extract_host,
+    _is_generic_host,
 )
+
+
+class TestDomainMatching:
+    """Tests for domain extraction and matching helpers."""
+
+    def test_extract_host_strips_www(self):
+        assert _extract_host("https://www.acme.com/page") == "acme.com"
+
+    def test_extract_host_bare_domain(self):
+        assert _extract_host("https://acme.com") == "acme.com"
+
+    def test_extract_host_subdomain(self):
+        assert _extract_host("https://news.acme.com/article") == "news.acme.com"
+
+    def test_extract_host_none(self):
+        assert _extract_host("") is None
+        assert _extract_host("not-a-url") is None  # no scheme → empty netloc
+
+    def test_domains_match_exact(self):
+        assert _domains_match("https://acme.com", "https://acme.com") is True
+
+    def test_domains_match_www_vs_bare(self):
+        assert _domains_match("https://www.acme.com", "https://acme.com") is True
+
+    def test_domains_match_subdomain(self):
+        assert _domains_match("https://news.acme.com", "https://acme.com") is True
+
+    def test_domains_match_different_tld(self):
+        assert _domains_match("https://acme.com", "https://acme.io") is False
+
+    def test_domains_match_none_input(self):
+        assert _domains_match(None, "https://acme.com") is False
+        assert _domains_match("https://acme.com", None) is False
+
+    def test_is_generic_host_shared_platforms(self):
+        assert _is_generic_host("acme.notion.site") is True
+        assert _is_generic_host("acme.webflow.io") is True
+        assert _is_generic_host("acme.github.io") is True
+        assert _is_generic_host("blog.medium.com") is True
+
+    def test_is_generic_host_real_domain(self):
+        assert _is_generic_host("acme.com") is False
+        assert _is_generic_host("stripe.com") is False
+        assert _is_generic_host("news.acme.com") is False
+
+    def test_is_generic_host_none(self):
+        assert _is_generic_host(None) is True
 
 
 class TestWikipediaAdapter:
@@ -106,6 +157,7 @@ class TestWikidataAdapter:
                     "claims": {
                         "P571": [{"mainsnak": {"datavalue": {"value": {"time": "+2010-00-00T00:00:00Z"}}}}],
                         "P1128": [{"mainsnak": {"datavalue": {"value": {"amount": "+2500"}}}}],
+                        "P856": [{"mainsnak": {"datavalue": {"value": "https://stripe.com"}}}],
                     }
                 }
             }
@@ -113,13 +165,14 @@ class TestWikidataAdapter:
 
         mock_get.side_effect = [id_response, entity_response]
 
-        result = fetch_wikidata_info("Stripe", wikipedia_title="Stripe, Inc.")
-        assert result is not None
-        assert result.founded == 2010
-        assert result.headcount == 2500
-        assert result.confidence == 0.6
-        assert len(result.sources) == 1
-        assert "wikidata.org" in result.sources[0].url
+        dossier, official_website = fetch_wikidata_info("Stripe", wikipedia_title="Stripe, Inc.")
+        assert dossier is not None
+        assert dossier.founded == 2010
+        assert dossier.headcount == "2500"
+        assert dossier.confidence == 0.6
+        assert len(dossier.sources) == 1
+        assert "wikidata.org" in dossier.sources[0].url
+        assert official_website == "https://stripe.com"
 
     @patch("seeker_os.research.company_research.httpx.get")
     def test_fetch_wikidata_no_item_id(self, mock_get):
@@ -131,8 +184,9 @@ class TestWikidataAdapter:
 
         mock_get.return_value = id_response
 
-        result = fetch_wikidata_info("Unknown", wikipedia_title="Unknown")
-        assert result is None
+        dossier, official_website = fetch_wikidata_info("Unknown", wikipedia_title="Unknown")
+        assert dossier is None
+        assert official_website is None
 
     @patch("seeker_os.research.company_research.httpx.get")
     def test_fetch_wikidata_no_useful_data(self, mock_get):
@@ -152,8 +206,9 @@ class TestWikidataAdapter:
 
         mock_get.side_effect = [id_response, entity_response]
 
-        result = fetch_wikidata_info("Test", wikipedia_title="Test")
-        assert result is None
+        dossier, official_website = fetch_wikidata_info("Test", wikipedia_title="Test")
+        assert dossier is None
+        assert official_website is None
 
 
 class TestResearchCompany:
@@ -169,11 +224,14 @@ class TestResearchCompany:
             description="Financial services company",
             extract="Stripe is a payment processing company.",
         )
-        mock_wikidata.return_value = FundingDossier(
-            founded=2010,
-            headcount=2500,
-            confidence=0.6,
-            sources=[SourceRef(url="https://www.wikidata.org/wiki/Q7624104", retrieved="2024-01-01T00:00:00Z")],
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2010,
+                headcount="2500",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q7624104", retrieved="2024-01-01T00:00:00Z")],
+            ),
+            "https://stripe.com",
         )
         mock_llm_dossier.return_value = None
 
@@ -184,7 +242,7 @@ class TestResearchCompany:
         assert result.wikipedia is not None
         assert result.funding is not None
         assert result.funding.founded == 2010
-        assert result.funding.headcount == 2500
+        assert result.funding.headcount == "2500"
         assert "wikipedia" in result.sources_used
         assert "wikidata" in result.sources_used
 
@@ -197,11 +255,14 @@ class TestResearchCompany:
             title="Stripe, Inc.",
             extract="Stripe is a payment processing company.",
         )
-        mock_wikidata.return_value = FundingDossier(
-            founded=2010,
-            headcount=2500,
-            confidence=0.6,
-            sources=[SourceRef(url="https://www.wikidata.org/wiki/Q7624104", retrieved="2024-01-01T00:00:00Z")],
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2010,
+                headcount="2500",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q7624104", retrieved="2024-01-01T00:00:00Z")],
+            ),
+            "https://stripe.com",
         )
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="Stripe",
@@ -213,7 +274,7 @@ class TestResearchCompany:
                 founded=2010,
                 stage="Series D",
                 total_raised_usd=1500000000,
-                headcount=7000,
+                headcount="7000",
                 financial_health="healthy",
                 confidence=0.8,
             ),
@@ -254,7 +315,7 @@ class TestResearchCompany:
             title="Stripe, Inc.",
             extract="Stripe is a payment processing company.",
         )
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = None
 
         result = research_company("Stripe", enable_llm=True)
@@ -268,10 +329,17 @@ class TestResearchCompany:
     @patch("seeker_os.research.company_research.fetch_llm_dossier")
     @patch("seeker_os.research.company_research.fetch_wikidata_info")
     @patch("seeker_os.research.company_research.fetch_wikipedia_info")
-    def test_no_sources(self, mock_wiki, mock_wikidata, mock_llm_dossier):
+    @patch("seeker_os.config.Settings")
+    def test_no_sources(self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier):
         """Should return result with no data when all sources fail."""
+        from seeker_os.config import CompanyResearchConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig()  # no retrieval
+        mock_settings_cls.return_value = mock_settings
+
         mock_wiki.return_value = None
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = None
 
         result = research_company("UnknownCompany")
@@ -287,13 +355,151 @@ class TestResearchCompany:
     def test_llm_disabled(self, mock_wiki, mock_wikidata, mock_llm_dossier):
         """Should skip LLM when enable_llm=False."""
         mock_wiki.return_value = WikipediaInfo(title="Test", extract="Test")
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
 
         result = research_company("Test", enable_llm=False)
 
         assert result.sentiment is None
         assert "llm_dossier" not in result.sources_used
         mock_llm_dossier.assert_not_called()
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    def test_entity_disambiguation_domain_match(self, mock_wiki, mock_wikidata, mock_llm_dossier):
+        """When P856 matches company_homepage, Wikipedia/Wikidata data is trusted."""
+        mock_wiki.return_value = WikipediaInfo(
+            title="Stripe, Inc.",
+            extract="Stripe is a payment processing company.",
+        )
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2010,
+                headcount="2500",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q1", retrieved="2024-01-01")],
+            ),
+            "https://stripe.com",
+        )
+        mock_llm_dossier.return_value = None
+
+        result = research_company("Stripe", company_homepage="https://stripe.com")
+
+        assert result.wikipedia is not None
+        assert result.funding is not None
+        assert result.funding.founded == 2010
+        assert "wikipedia" in result.sources_used
+        assert "wikidata" in result.sources_used
+        assert not any("domain mismatch" in g for g in result.gaps)
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    def test_entity_disambiguation_domain_mismatch(self, mock_wiki, mock_wikidata, mock_llm_dossier):
+        """When P856 does NOT match company_homepage, Wikipedia/Wikidata is discarded."""
+        mock_wiki.return_value = WikipediaInfo(
+            title="Evermore, Inc.",
+            extract="Evermore is a gaming company.",
+        )
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2015,
+                headcount="500",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q2", retrieved="2024-01-01")],
+            ),
+            "https://evermore-gaming.com",
+        )
+        mock_llm_dossier.return_value = None
+
+        result = research_company("Evermore", company_homepage="https://evermore-travel.com")
+
+        assert result.wikipedia is None
+        assert result.funding is None
+        assert "wikipedia" not in result.sources_used
+        assert "wikidata" not in result.sources_used
+        assert any("domain mismatch" in g for g in result.gaps)
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    def test_entity_disambiguation_no_p856(self, mock_wiki, mock_wikidata, mock_llm_dossier):
+        """When P856 is absent but company_homepage is present, data is kept but unverified."""
+        mock_wiki.return_value = WikipediaInfo(
+            title="Acme Corp",
+            extract="Acme makes widgets.",
+        )
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2010,
+                headcount="100",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q3", retrieved="2024-01-01")],
+            ),
+            None,  # no P856 on the entity
+        )
+        mock_llm_dossier.return_value = None
+
+        result = research_company("Acme", company_homepage="https://acme.com")
+
+        # Data is kept (can't verify, but can't disprove either)
+        assert result.wikipedia is not None
+        assert result.funding is not None
+        assert "wikipedia" in result.sources_used
+        assert "wikidata" in result.sources_used
+        assert not any("domain mismatch" in g for g in result.gaps)
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    def test_entity_disambiguation_no_company_domain(self, mock_wiki, mock_wikidata, mock_llm_dossier):
+        """When company_homepage is absent (manual-add), name-only retrieval is kept."""
+        mock_wiki.return_value = WikipediaInfo(
+            title="Acme Corp",
+            extract="Acme makes widgets.",
+        )
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2010,
+                headcount="100",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q4", retrieved="2024-01-01")],
+            ),
+            "https://acme.com",
+        )
+        mock_llm_dossier.return_value = None
+
+        result = research_company("Acme")
+
+        # No domain to verify against — data kept, unverified
+        assert result.wikipedia is not None
+        assert result.funding is not None
+        assert "wikipedia" in result.sources_used
+        assert "wikidata" in result.sources_used
+        assert not any("domain mismatch" in g for g in result.gaps)
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    def test_entity_disambiguation_subdomain_match(self, mock_wiki, mock_wikidata, mock_llm_dossier):
+        """Subdomain of the same registrable domain should match (www vs bare)."""
+        mock_wiki.return_value = WikipediaInfo(title="Acme", extract="Acme.")
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2010,
+                headcount="100",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q5", retrieved="2024-01-01")],
+            ),
+            "https://www.acme.com",
+        )
+        mock_llm_dossier.return_value = None
+
+        result = research_company("Acme", company_homepage="https://acme.com")
+
+        assert result.wikipedia is not None
+        assert result.funding is not None
+        assert not any("domain mismatch" in g for g in result.gaps)
 
 
 class TestCompanyResearchModels:
@@ -315,7 +521,7 @@ class TestCompanyResearchModels:
                 founded=2010,
                 stage="Series D",
                 total_raised_usd=1500000000,
-                headcount=7000,
+                headcount="7000",
                 confidence=0.8,
             ),
             sentiment=SentimentDossier(
@@ -522,7 +728,7 @@ class TestPhase3RetrievalAndThresholds:
         mock_settings_cls.return_value = mock_settings
 
         mock_wiki.return_value = None
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="TestCo",
             researched_at="2024-01-01T00:00:00Z",
@@ -566,7 +772,7 @@ class TestPhase3RetrievalAndThresholds:
         mock_settings_cls.return_value = mock_settings
 
         mock_wiki.return_value = None
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="SmallCo",
             researched_at="2024-01-01T00:00:00Z",
@@ -594,7 +800,7 @@ class TestPhase3RetrievalAndThresholds:
         mock_settings_cls.return_value = mock_settings
 
         mock_wiki.return_value = None
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="GoodCo",
             researched_at="2024-01-01T00:00:00Z",
@@ -622,7 +828,7 @@ class TestPhase3RetrievalAndThresholds:
         mock_settings_cls.return_value = mock_settings
 
         mock_wiki.return_value = WikipediaInfo(title="Test", extract="Test extract")
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="TestCo",
             researched_at="2024-01-01T00:00:00Z",
@@ -658,7 +864,7 @@ class TestPhase3RetrievalAndThresholds:
         mock_settings_cls.return_value = mock_settings
 
         mock_wiki.return_value = None
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="Stripe",
             researched_at="2024-01-01T00:00:00Z",
@@ -867,7 +1073,7 @@ class TestSourceTrustOrderRanking:
         mock_settings_cls.return_value = mock_settings
 
         mock_wiki.return_value = None
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="Stripe",
             researched_at="2024-01-01T00:00:00Z",
@@ -944,7 +1150,7 @@ class TestQueryTemplatesFromConfig:
         mock_settings_cls.return_value = mock_settings
 
         mock_wiki.return_value = None
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="Rally",
             researched_at="2024-01-01T00:00:00Z",
@@ -991,7 +1197,7 @@ class TestQueryTemplatesFromConfig:
         mock_settings_cls.return_value = mock_settings
 
         mock_wiki.return_value = None
-        mock_wikidata.return_value = None
+        mock_wikidata.return_value = (None, None)
         mock_llm_dossier.return_value = CompanyResearchResult(
             company_name="Stripe",
             researched_at="2024-01-01T00:00:00Z",
@@ -1279,3 +1485,554 @@ class TestRetrievalQueryCaching:
         assert cached is not None
         cached_data = json.loads(cached)
         assert cached_data[0]["url"] == "https://fresh.com"
+
+
+class TestPhase2DomainScoping:
+    """Tests for Tavily domain-scoping in retrieval queries."""
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_funding_query_gets_domain_appended(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """When company_domain is present, the funding query has the domain appended."""
+        from seeker_os.config import CompanyResearchConfig, RetrievalProviderConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            retrieval=RetrievalProviderConfig(type="tavily", api_key="fake-key"),
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = None
+        mock_wikidata.return_value = (None, None)
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="Stripe",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.7,
+            summary="Test.",
+        )
+
+        mock_adapter = MagicMock()
+        mock_adapter.search.return_value = []
+
+        with patch(
+            "seeker_os.research.retrieval.registry.build_retrieval_adapter",
+            return_value=mock_adapter,
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
+            research_company("Stripe", company_homepage="https://stripe.com")
+
+        # First call = funding query, should have domain appended
+        first_call = mock_adapter.search.call_args_list[0]
+        funding_query = first_call.args[0]
+        assert "stripe.com" in funding_query
+        assert "Stripe" in funding_query
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_sentiment_query_not_modified_by_domain(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """Sentiment query must NOT have the domain appended — preserves review recall."""
+        from seeker_os.config import CompanyResearchConfig, RetrievalProviderConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            retrieval=RetrievalProviderConfig(type="tavily", api_key="fake-key"),
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = None
+        mock_wikidata.return_value = (None, None)
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="Stripe",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.7,
+            summary="Test.",
+        )
+
+        mock_adapter = MagicMock()
+        mock_adapter.search.return_value = []
+
+        with patch(
+            "seeker_os.research.retrieval.registry.build_retrieval_adapter",
+            return_value=mock_adapter,
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
+            research_company("Stripe", company_homepage="https://stripe.com")
+
+        # Second call = sentiment query, should NOT have domain
+        second_call = mock_adapter.search.call_args_list[1]
+        sentiment_query = second_call.args[0]
+        assert "stripe.com" not in sentiment_query
+        assert "Stripe" in sentiment_query
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_domain_absent_no_query_modification(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """When company_domain is absent, neither query is modified."""
+        from seeker_os.config import CompanyResearchConfig, RetrievalProviderConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            retrieval=RetrievalProviderConfig(type="tavily", api_key="fake-key"),
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = None
+        mock_wikidata.return_value = (None, None)
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="Stripe",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.7,
+            summary="Test.",
+        )
+
+        mock_adapter = MagicMock()
+        mock_adapter.search.return_value = []
+
+        with patch(
+            "seeker_os.research.retrieval.registry.build_retrieval_adapter",
+            return_value=mock_adapter,
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
+            research_company("Stripe")  # no company_homepage
+
+        first_call = mock_adapter.search.call_args_list[0]
+        funding_query = first_call.args[0]
+        assert funding_query == "Stripe funding round investors valuation"
+
+        second_call = mock_adapter.search.call_args_list[1]
+        sentiment_query = second_call.args[0]
+        assert sentiment_query == "Stripe employee reviews sentiment glassdoor culture"
+
+    def test_tavily_adapter_passes_include_domains(self):
+        """TavilyAdapter should pass include_domains to the API payload."""
+        from seeker_os.research.retrieval.tavily import TavilyAdapter
+
+        adapter = TavilyAdapter(api_key="fake-key")
+
+        with patch("seeker_os.research.retrieval.tavily.httpx.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.json.return_value = {"results": []}
+            mock_post.return_value = mock_resp
+
+            adapter.search("test query", include_domains=["example.com"])
+
+            call_args = mock_post.call_args
+            payload = call_args.kwargs["json"]
+            assert payload["include_domains"] == ["example.com"]
+
+    def test_tavily_adapter_no_include_domains_omits_field(self):
+        """TavilyAdapter should not include include_domains in payload when not provided."""
+        from seeker_os.research.retrieval.tavily import TavilyAdapter
+
+        adapter = TavilyAdapter(api_key="fake-key")
+
+        with patch("seeker_os.research.retrieval.tavily.httpx.post") as mock_post:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.json.return_value = {"results": []}
+            mock_post.return_value = mock_resp
+
+            adapter.search("test query")
+
+            call_args = mock_post.call_args
+            payload = call_args.kwargs["json"]
+            assert "include_domains" not in payload
+
+
+class TestPhase3VerificationDegradation:
+    """Integration tests proving entity_verified drives confidence and score."""
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_mismatch_degrades_confidence_below_modifier_threshold(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """Score-8 bug: ambiguous name + mismatched domain → research discarded,
+        confidence degraded, modifiers don't fire."""
+        from seeker_os.config import CompanyResearchConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            mismatch_confidence=0.2,
+            confidence_floor=0.3,
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = WikipediaInfo(
+            title="Evermore, Inc.",
+            extract="Evermore is a gaming company.",
+        )
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2015,
+                headcount="500",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q2", retrieved="2024-01-01")],
+            ),
+            "https://evermore-gaming.com",  # P856 mismatch
+        )
+        # LLM returns high-confidence dossier about the WRONG entity
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="Evermore",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.85,
+            summary="Large enterprise, 5000 employees, healthy runway.",
+            funding=FundingDossier(
+                founded=2015,
+                headcount="5000",
+                stage="Series D",
+                financial_health="healthy",
+                confidence=0.8,
+            ),
+            sentiment=SentimentDossier(
+                overall_rating_estimate=4.2,
+                confidence=0.7,
+            ),
+            fit=FitDossier(
+                size_bucket="large enterprise",
+                confidence=0.6,
+            ),
+        )
+
+        result = research_company("Evermore", company_homepage="https://evermore-travel.com")
+
+        # Wikipedia/Wikidata discarded
+        assert result.wikipedia is None
+        assert "wikipedia" not in result.sources_used
+        assert "wikidata" not in result.sources_used
+        # Section confidence degraded below 0.5 (modifier threshold)
+        assert result.funding is not None
+        assert result.funding.confidence <= 0.2
+        assert result.sentiment is not None
+        assert result.sentiment.confidence <= 0.2
+        assert result.fit is not None
+        assert result.fit.confidence <= 0.2
+        # Overall confidence degraded → is_stub
+        assert result.overall_confidence <= 0.2 + 1e-9  # float tolerance
+        assert result.is_stub is True
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_matching_domain_scores_normally(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """Mirror test: matching domain → no degradation, research applies normally."""
+        from seeker_os.config import CompanyResearchConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            mismatch_confidence=0.2,
+            confidence_floor=0.3,
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = WikipediaInfo(
+            title="Stripe, Inc.",
+            extract="Stripe is a payment processing company.",
+        )
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2010,
+                headcount="7000",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q1", retrieved="2024-01-01")],
+            ),
+            "https://stripe.com",  # P856 match
+        )
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="Stripe",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.85,
+            summary="Series D fintech, healthy runway.",
+            funding=FundingDossier(
+                founded=2010,
+                headcount="7000",
+                stage="Series D",
+                financial_health="healthy",
+                confidence=0.8,
+            ),
+            sentiment=SentimentDossier(
+                overall_rating_estimate=4.1,
+                confidence=0.7,
+            ),
+            fit=FitDossier(
+                size_bucket="large",
+                confidence=0.6,
+            ),
+        )
+
+        result = research_company("Stripe", company_homepage="https://stripe.com")
+
+        # No degradation — confidence preserved
+        assert result.funding is not None
+        assert result.funding.confidence == 0.8  # unchanged
+        assert result.sentiment is not None
+        assert result.sentiment.confidence == 0.7  # unchanged
+        assert result.fit is not None
+        assert result.fit.confidence == 0.6  # unchanged
+        assert result.is_stub is False
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_domain_absent_unverified_no_degradation(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """Domain absent (manual-add) → UNVERIFIED, small-company modifiers still allowed."""
+        from seeker_os.config import CompanyResearchConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            mismatch_confidence=0.2,
+            confidence_floor=0.3,
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = WikipediaInfo(
+            title="SmallCo",
+            extract="SmallCo makes widgets.",
+        )
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2018,
+                headcount="50",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q3", retrieved="2024-01-01")],
+            ),
+            None,  # no P856
+        )
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="SmallCo",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.7,
+            summary="Small startup, 50 employees.",
+            funding=FundingDossier(
+                founded=2018,
+                headcount="50",
+                stage="Seed",
+                confidence=0.6,
+            ),
+            sentiment=SentimentDossier(
+                overall_rating_estimate=4.0,
+                confidence=0.5,
+            ),
+            fit=FitDossier(
+                size_bucket="small startup",
+                confidence=0.5,
+            ),
+        )
+
+        result = research_company("SmallCo")  # no company_homepage
+
+        # UNVERIFIED — no degradation, confidence preserved
+        assert result.funding is not None
+        assert result.funding.confidence == 0.6  # unchanged, above 0.5 threshold
+        assert result.sentiment is not None
+        assert result.sentiment.confidence == 0.5  # unchanged, at threshold
+        assert result.fit is not None
+        assert result.fit.confidence == 0.5  # unchanged
+        assert result.is_stub is False
+        # Modifiers CAN fire (confidence >= 0.5)
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_tavily_only_verification(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """Wikidata absent but Tavily returned snippets from company's domain → VERIFIED."""
+        from seeker_os.config import CompanyResearchConfig, RetrievalProviderConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            retrieval=RetrievalProviderConfig(type="tavily", api_key="fake-key"),
+            mismatch_confidence=0.2,
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = None
+        mock_wikidata.return_value = (None, None)  # no Wikidata
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="NewStartup",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.7,
+            summary="Early-stage startup.",
+            funding=FundingDossier(
+                founded=2023,
+                headcount="20",
+                confidence=0.6,
+            ),
+        )
+
+        mock_adapter = MagicMock()
+        mock_adapter.search.return_value = [
+            RetrievalSnippet(
+                title="NewStartup funding",
+                url="https://newstartup.com/about",
+                snippet="NewStartup raised seed.",
+                source_domain="newstartup.com",
+            ),
+        ]
+
+        with patch(
+            "seeker_os.research.retrieval.registry.build_retrieval_adapter",
+            return_value=mock_adapter,
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
+            result = research_company("NewStartup", company_homepage="https://newstartup.com")
+
+        # Tavily snippet from newstartup.com → VERIFIED, no degradation
+        assert result.funding is not None
+        assert result.funding.confidence == 0.6  # unchanged
+        assert result.is_stub is False
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_generic_host_not_appended_to_funding_query(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """A generic/shared-host homepage (e.g. *.webflow.io) should not inject
+        a misleading domain token into the funding query."""
+        from seeker_os.config import CompanyResearchConfig, RetrievalProviderConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            retrieval=RetrievalProviderConfig(type="tavily", api_key="fake-key"),
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = None
+        mock_wikidata.return_value = (None, None)
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="Acme",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.7,
+            summary="Test.",
+        )
+
+        mock_adapter = MagicMock()
+        mock_adapter.search.return_value = []
+
+        with patch(
+            "seeker_os.research.retrieval.registry.build_retrieval_adapter",
+            return_value=mock_adapter,
+        ), patch("seeker_os.discovery.cache.DiskCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = None
+            mock_cache_cls.return_value = mock_cache
+            research_company("Acme", company_homepage="https://acme.webflow.io")
+
+        # Funding query should NOT contain "webflow.io"
+        first_call = mock_adapter.search.call_args_list[0]
+        funding_query = first_call.args[0]
+        assert "webflow.io" not in funding_query
+        assert "Acme" in funding_query
+
+    @patch("seeker_os.research.company_research.fetch_llm_dossier")
+    @patch("seeker_os.research.company_research.fetch_wikidata_info")
+    @patch("seeker_os.research.company_research.fetch_wikipedia_info")
+    @patch("seeker_os.config.Settings")
+    def test_mismatch_confidence_composition_arithmetic(
+        self, mock_settings_cls, mock_wiki, mock_wikidata, mock_llm_dossier
+    ):
+        """Worst case: mismatch + zero-surviving-sources → one coherent bounded value.
+
+        LLM returns funding.confidence=0.8.
+        _verify_dossier_sources strips all URLs → 0.8 * 0.5 = 0.4.
+        _apply_verification_degradation → min(0.4, 0.2) = 0.2.
+        overall_confidence = mean(0.2, 0.2, 0.2) = 0.2.
+        is_stub: 0.2 < 0.3 → True.
+        Modifier gate: 0.2 < 0.5 → modifier skipped.
+
+        Result: 0.2. One coherent number. Not 0.05 via three multiplications.
+        """
+        from seeker_os.config import CompanyResearchConfig
+
+        mock_settings = MagicMock()
+        mock_settings.company_research = CompanyResearchConfig(
+            mismatch_confidence=0.2,
+            confidence_floor=0.3,
+        )
+        mock_settings_cls.return_value = mock_settings
+
+        mock_wiki.return_value = WikipediaInfo(
+            title="AmbiguousCo",
+            extract="AmbiguousCo is a company.",
+        )
+        mock_wikidata.return_value = (
+            FundingDossier(
+                founded=2010,
+                headcount="1000",
+                confidence=0.6,
+                sources=[SourceRef(url="https://www.wikidata.org/wiki/Q9", retrieved="2024-01-01")],
+            ),
+            "https://wrong-entity.com",  # P856 mismatch
+        )
+        # LLM returns high-confidence dossier with sources that will be stripped
+        # (URLs not in retrieval_snippets and not in extra_verified)
+        mock_llm_dossier.return_value = CompanyResearchResult(
+            company_name="AmbiguousCo",
+            researched_at="2024-01-01T00:00:00Z",
+            overall_confidence=0.9,
+            summary="Large company.",
+            funding=FundingDossier(
+                founded=2010,
+                headcount="5000",
+                confidence=0.8,
+                sources=[SourceRef(url="https://invented-url.com/fake", retrieved="2024-01-01")],
+            ),
+            sentiment=SentimentDossier(
+                overall_rating_estimate=3.5,
+                confidence=0.7,
+                sources=[SourceRef(url="https://invented-url.com/fake2", retrieved="2024-01-01")],
+            ),
+            fit=FitDossier(
+                size_bucket="large",
+                confidence=0.6,
+                sources=[SourceRef(url="https://invented-url.com/fake3", retrieved="2024-01-01")],
+            ),
+        )
+
+        result = research_company("AmbiguousCo", company_homepage="https://right-entity.com")
+
+        # All sections should be at exactly mismatch_confidence (0.2)
+        assert result.funding is not None
+        assert result.funding.confidence == 0.2
+        assert result.sentiment is not None
+        assert result.sentiment.confidence == 0.2
+        assert result.fit is not None
+        assert result.fit.confidence == 0.2
+        # Overall = mean(0.2, 0.2, 0.2) = 0.2
+        assert result.overall_confidence == pytest.approx(0.2)
+        assert result.is_stub is True

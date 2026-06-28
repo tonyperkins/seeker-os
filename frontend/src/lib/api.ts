@@ -147,6 +147,21 @@ export interface JobCreateResponse {
   filter_warnings: string[];
 }
 
+export interface RefilterRescoreResult {
+  job_id: number;
+  status: string;
+  score: number | null;
+  net_score: number | null;
+  previous_score: number | null;
+  previous_status: string | null;
+  score_changed: boolean;
+  status_changed: boolean;
+  filter_passed: boolean;
+  filter_reason: string | null;
+  research_applied: boolean;
+  analysis_verdict: string | null;
+}
+
 export interface PipelineRunSummary {
   run_id: string;
   cards_fetched: number;
@@ -489,6 +504,8 @@ export const api = {
       get: (id: number) => fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`),
       run: (id: number) => fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`, { method: "POST" }),
     },
+    refilterRescore: (data: { job_ids?: number[]; run_id?: string }) =>
+      fetchAPI<RefilterRescoreResult[]>(`/api/jobs/refilter-rescore`, { method: "POST", body: JSON.stringify(data) }),
   },
 
   // Pipeline

@@ -29,6 +29,7 @@ from seeker_os.research.models import (
     SentimentDossier,
     SourceRef,
     VerdictFlags,
+    VerificationState,
     WikipediaInfo,
 )
 from seeker_os.research.retrieval.models import RetrievalSnippet
@@ -164,21 +165,21 @@ def fetch_wikidata_info(
     wikipedia_title: str | None = None,
     timeout: int = 10,
     headers: dict | None = None,
-) -> FundingDossier | None:
+) -> tuple[FundingDossier | None, str | None]:
     """Fetch structured company data from Wikidata.
 
-    Returns a partial FundingDossier with founded year and headcount populated
-    from Wikidata claims. These values are used as context for the LLM dossier
-    call and as fallback when no LLM is configured.
+    Returns a (FundingDossier, official_website) tuple. The official_website
+    comes from Wikidata property P856 and is used for entity disambiguation
+    against the company's known homepage domain. Either element may be None.
     """
     if not wikipedia_title:
         wikipedia_title = _search_wikipedia(company, timeout=timeout, headers=headers)
     if not wikipedia_title:
-        return None
+        return None, None
 
     item_id = _get_wikidata_item_id(wikipedia_title, timeout=timeout, headers=headers)
     if not item_id:
-        return None
+        return None, None
 
     try:
         resp = httpx.get(
@@ -187,7 +188,7 @@ def fetch_wikidata_info(
             timeout=timeout,
         )
         if resp.status_code != 200:
-            return None
+            return None, None
         data = resp.json()
         entity = data.get("entities", {}).get(item_id, {})
         claims = entity.get("claims", {})
@@ -211,19 +212,28 @@ def fetch_wikidata_info(
             if isinstance(emp_val, int):
                 employees = emp_val
 
+        # P856 = official website (used for entity disambiguation)
+        official_website = None
+        if "P856" in claims:
+            p856_val = _extract_wikidata_value(claims["P856"][0])
+            if isinstance(p856_val, str):
+                official_website = p856_val
+
         # Only return if we found something useful
         if founded_year or employees:
             wikidata_url = f"https://www.wikidata.org/wiki/{item_id}"
             now = datetime.now(timezone.utc).isoformat()
             return FundingDossier(
                 founded=founded_year,
-                headcount=employees,
+                headcount=str(employees) if employees is not None else None,
                 confidence=0.6,
                 sources=[SourceRef(url=wikidata_url, retrieved=now)],
-            )
+            ), official_website
+        # Even without founded/employees, return the official_website for verification
+        return None, official_website
     except Exception:
         pass
-    return None
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +261,7 @@ def fetch_llm_dossier(
     careers_url: str | None = None,
     wikipedia_extract: str = "",
     wikidata_founded: int | None = None,
-    wikidata_headcount: int | None = None,
+    wikidata_headcount: str | None = None,
     jd_text: str = "",
     retrieval_snippets: list[RetrievalSnippet] | None = None,
     fit_preferences_text: str = "",
@@ -469,6 +479,7 @@ def _run_retrieval_queries(
     sentiment_query_template: str = "{company} employee reviews sentiment glassdoor culture",
     cache_ttl_days: int = 7,
     force_refresh: bool = False,
+    company_domain: str | None = None,
 ) -> list[RetrievalSnippet]:
     """Run retrieval queries for funding signals and employee sentiment.
 
@@ -478,6 +489,12 @@ def _run_retrieval_queries(
     Query templates come from config (company_research.yml → retrieval.*)
     and use a {company} placeholder. If a template omits the placeholder,
     it is used as-is without crashing.
+
+    When company_domain is provided, the registrable domain is appended to
+    the funding query string to disambiguate the right entity. The sentiment
+    query is NOT modified — review sites (Glassdoor, Reddit) organize by
+    company name, not domain, so appending the domain would suppress real
+    reviews without improving disambiguation.
 
     Results are cached on disk (keyed by query string) to avoid redundant
     paid Tavily API calls. Set force_refresh=True to bypass the cache.
@@ -503,6 +520,14 @@ def _run_retrieval_queries(
         sentiment_query = sentiment_query_template.format(company=company)
     except (KeyError, IndexError):
         sentiment_query = sentiment_query_template
+
+    # Disambiguate funding query by appending the registrable domain.
+    # The domain appears in press coverage and funding announcements,
+    # so this biases Tavily's ranking toward the right entity without
+    # filtering out third-party sources (Crunchbase, TechCrunch, etc.).
+    domain_token = _extract_host(company_domain) if company_domain else None
+    if domain_token:
+        funding_query = f"{funding_query} {domain_token}"
 
     queries = [funding_query, sentiment_query]
 
@@ -572,6 +597,45 @@ def _apply_confidence_floor(
         result.is_stub = True
 
 
+def _apply_verification_degradation(
+    result: CompanyResearchResult,
+    verification_state: VerificationState,
+    mismatch_confidence: float,
+) -> None:
+    """Degrade section confidence for entity-verification failures.
+
+    Only MISMATCH (wrong entity confirmed by P856 mismatch) triggers hard
+    degradation. Section confidence is clamped via min() to mismatch_confidence,
+    applied AFTER the *0.5 zero-source halving in _verify_dossier_sources so
+    the clamp is authoritative — the final value cannot exceed mismatch_confidence.
+
+    VERIFIED and UNVERIFIED states are NOT degraded. UNVERIFIED covers P856
+    missing and domain-absent (manual-add) cases — common for small companies
+    where uniform degradation would over-suppress the small-company funnel.
+
+    After clamping sections, overall_confidence is recomputed as the mean of
+    section confidences (downward only) so is_stub reflects the degradation.
+    """
+    if verification_state != VerificationState.MISMATCH:
+        return
+
+    for section in (result.funding, result.sentiment, result.fit):
+        if section is None:
+            continue
+        section.confidence = min(section.confidence, mismatch_confidence)
+
+    # Recompute overall_confidence: cap to mean of section confidences
+    # (downward only) so _apply_confidence_floor sees the degraded state.
+    section_confs = [
+        s.confidence for s in [result.funding, result.sentiment, result.fit]
+        if s is not None
+    ]
+    if section_confs:
+        mean_section = sum(section_confs) / len(section_confs)
+        if mean_section < result.overall_confidence:
+            result.overall_confidence = mean_section
+
+
 def _domain_matches_trust_entry(url: str, trust_entry: str) -> bool:
     """Check if a URL's domain matches a source_trust_order entry.
 
@@ -590,6 +654,63 @@ def _domain_matches_trust_entry(url: str, trust_entry: str) -> bool:
         return host == entry or host.endswith("." + entry)
     except Exception:
         return False
+
+
+def _extract_host(url: str) -> str | None:
+    """Extract the lowercase hostname from a URL, stripping www. prefix."""
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.lower()
+        if not host:
+            return None
+        return host.removeprefix("www.")
+    except Exception:
+        return None
+
+
+def _domains_match(url_a: str | None, url_b: str | None) -> bool:
+    """Check if two URLs refer to the same registrable domain.
+
+    Bidirectional subdomain-tolerant match: a.acme.com matches acme.com,
+    acme.com matches www.acme.com, but acme.com does NOT match acme.io.
+    """
+    if not url_a or not url_b:
+        return False
+    host_a = _extract_host(url_a)
+    host_b = _extract_host(url_b)
+    if not host_a or not host_b:
+        return False
+    return (
+        host_a == host_b
+        or host_a.endswith("." + host_b)
+        or host_b.endswith("." + host_a)
+    )
+
+
+# Shared-host platforms where a subdomain is not a company-owned domain.
+# Appending these to a funding query would inject a misleading token.
+_GENERIC_HOST_SUFFIXES = (
+    "notion.site",
+    "webflow.io",
+    "github.io",
+    "githubusercontent.com",
+    "medium.com",
+    "wordpress.com",
+    "substack.com",
+    "wixsite.com",
+    "squarespace.com",
+    "shopify.com",
+    "myshopify.com",
+    "carrd.co",
+    "linktr.ee",
+)
+
+
+def _is_generic_host(host: str | None) -> bool:
+    """Check if a host is on a shared-host platform (not company-owned)."""
+    if not host:
+        return True
+    return any(host == suffix or host.endswith("." + suffix) for suffix in _GENERIC_HOST_SUFFIXES)
 
 
 def _rank_sources_by_trust(
@@ -795,8 +916,8 @@ def research_company(
 
     # 2. Wikidata (structured data: founded year, headcount — context + fallback)
     wikidata_founded: int | None = None
-    wikidata_headcount: int | None = None
-    wikidata = fetch_wikidata_info(
+    wikidata_headcount: str | None = None
+    wikidata, wikidata_official_website = fetch_wikidata_info(
         company,
         wikipedia_title=wiki.title if wiki else None,
         headers=headers,
@@ -806,18 +927,59 @@ def research_company(
         wikidata_headcount = wikidata.headcount
         result.sources_used.append("wikidata")
 
+    # 2a. Entity disambiguation — verify Wikipedia/Wikidata against company_domain
+    # Three states:
+    #   VERIFIED: P856 matches company_domain (or Tavily domain-scoped, see below)
+    #   UNVERIFIED: P856 missing, or company_domain absent (manual-add) — no hard degrade
+    #   MISMATCH: P856 present but doesn't match — wrong entity, discard + hard degrade
+    verification_state = VerificationState.UNVERIFIED
+    company_host = _extract_host(company_homepage) if company_homepage else None
+    # Skip verification for generic/shared-host domains (enrichment noise)
+    if company_host and _is_generic_host(company_host):
+        company_host = None
+
+    if company_host:
+        if wikidata_official_website:
+            if _domains_match(wikidata_official_website, company_homepage):
+                verification_state = VerificationState.VERIFIED
+            else:
+                # Domain mismatch — wrong entity. Discard all free-source data.
+                logger.info(
+                    "Entity disambiguation: discarding Wikipedia/Wikidata for '%s' — "
+                    "P856 '%s' does not match company_homepage '%s'",
+                    company, wikidata_official_website, company_homepage,
+                )
+                wiki = None
+                result.wikipedia = None
+                wikidata = None
+                wikidata_founded = None
+                wikidata_headcount = None
+                if "wikipedia" in result.sources_used:
+                    result.sources_used.remove("wikipedia")
+                if "wikidata" in result.sources_used:
+                    result.sources_used.remove("wikidata")
+                result.gaps.append("Wikipedia/Wikidata entity discarded — domain mismatch")
+                verification_state = VerificationState.MISMATCH
+        else:
+            # No P856 on the Wikidata entity — can't verify. Keep data, stay UNVERIFIED.
+            pass
+    # else: no company_domain (or generic host) — name-only retrieval, UNVERIFIED
+
     # 2b. Live retrieval (Phase 3) — funding + sentiment snippets with URLs
     retrieval_snippets: list[RetrievalSnippet] = []
     if retrieval_adapter:
         funding_template = cr_config.retrieval.funding_query_template if cr_config else "{company} funding round investors valuation"
         sentiment_template = cr_config.retrieval.sentiment_query_template if cr_config else "{company} employee reviews sentiment glassdoor culture"
         cache_ttl_days = cr_config.retrieval.retrieval_cache_ttl_days if cr_config else 7
+        # Pass company_domain only if it's a real company host (not generic/shared)
+        retrieval_domain = company_homepage if company_host else None
         retrieval_snippets = _run_retrieval_queries(
             retrieval_adapter, company,
             funding_query_template=funding_template,
             sentiment_query_template=sentiment_template,
             cache_ttl_days=cache_ttl_days,
             force_refresh=force_refresh,
+            company_domain=retrieval_domain,
         )
         if retrieval_snippets:
             result.retrieval_used = True
@@ -837,6 +999,22 @@ def research_company(
                 for s in retrieval_snippets
             ]
 
+    # 2c. Tavily domain verification — if Wikidata was absent but Tavily
+    # returned snippets from the company's own domain, the entity is verified.
+    # A company with no Wikipedia page but a clean domain-scoped Tavily result
+    # is NOT a disambiguation failure and shouldn't be penalized.
+    if (verification_state == VerificationState.UNVERIFIED
+            and company_host and retrieval_snippets):
+        for snip in retrieval_snippets:
+            if _domains_match(snip.url, company_homepage):
+                verification_state = VerificationState.VERIFIED
+                logger.debug(
+                    "Entity verified via Tavily domain match for '%s' "
+                    "(snippet URL %s matches company_host %s)",
+                    company, snip.url, company_host,
+                )
+                break
+
     # 3. LLM dossier generation (comprehensive: funding + sentiment + fit)
     if enable_llm:
         fit_prefs_text = _build_fit_preferences_text(cr_config)
@@ -851,10 +1029,11 @@ def research_company(
             fit_preferences_text=fit_prefs_text,
         )
         if dossier:
-            # Preserve Wikipedia info and merge sources
-            dossier.wikipedia = wiki
-            if "wikipedia" not in dossier.sources_used:
-                dossier.sources_used.insert(0, "wikipedia")
+            # Preserve Wikipedia info and merge sources (only if not discarded)
+            if wiki:
+                dossier.wikipedia = wiki
+                if "wikipedia" not in dossier.sources_used:
+                    dossier.sources_used.insert(0, "wikipedia")
             if "wikidata" not in dossier.sources_used and wikidata:
                 dossier.sources_used.insert(1, "wikidata")
             # Merge Wikidata fallback into funding if LLM didn't populate it
@@ -862,7 +1041,7 @@ def research_company(
                 if dossier.funding.founded is None and wikidata_founded:
                     dossier.funding.founded = wikidata_founded
                 if dossier.funding.headcount is None and wikidata_headcount:
-                    dossier.funding.headcount = wikidata_headcount
+                    dossier.funding.headcount = str(wikidata_headcount)
             elif wikidata and not dossier.funding:
                 dossier.funding = wikidata
             # Preserve retrieval metadata from the pre-dossier result
@@ -893,8 +1072,13 @@ def research_company(
     # 4. Apply Phase 3 thresholds
     staleness_months = cr_config.staleness_months if cr_config else 18
     confidence_floor = cr_config.confidence_floor if cr_config else 0.3
+    mismatch_confidence = cr_config.mismatch_confidence if cr_config else 0.2
     source_trust_order = cr_config.source_trust_order if cr_config else []
     _apply_staleness_flags(result, staleness_months)
+    # Verification degradation runs AFTER _verify_dossier_sources (*0.5 halving)
+    # and BEFORE _apply_confidence_floor (is_stub). The min() clamp ensures
+    # mismatch_confidence is the authoritative ceiling for wrong-entity sections.
+    _apply_verification_degradation(result, verification_state, mismatch_confidence)
     _apply_confidence_floor(result, confidence_floor)
 
     # 5. Rank sources by trust order (ordering only — no filtering, no inflation)

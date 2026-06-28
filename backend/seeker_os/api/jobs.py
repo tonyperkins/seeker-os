@@ -9,6 +9,7 @@ from seeker_os.api.schemas import (
     JobSummary, JobDetail, JobUpdate, JobReject, JobCreate, JobCreateResponse,
     JobOverride, MessageResponse, ApplicationEvent, ApplicationEventCreate,
     PostApplyTransition, EngagedEventCreate, CleanStartCreate,
+    RefilterRescoreRequest, RefilterRescoreResult,
 )
 from seeker_os.database import get_connection, json_decode, json_encode
 from seeker_os.events import (
@@ -129,9 +130,12 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
     dossier = _reconstruct_dossier_from_row(cached_row, confidence_floor)
 
     # Check that the job has a base score to adjust
-    job = db.execute("SELECT score FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    job = db.execute("SELECT score, score_modifiers FROM jobs WHERE id = ?", (job_id,)).fetchone()
     if not job or job["score"] is None:
         return
+
+    import json
+    base_modifiers: dict[str, float] = json.loads(job["score_modifiers"]) if job["score_modifiers"] else {}
 
     rules = [
         ResearchModifierRule(
@@ -139,6 +143,9 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
             delta=rm.delta,
             confidence_threshold=rm.confidence_threshold,
             source_section=rm.source_section,
+            headcount_max=rm.headcount_max,
+            headcount_min=rm.headcount_min,
+            suppresses=rm.suppresses,
         )
         for rm in settings.scoring.research_modifiers
     ]
@@ -149,6 +156,7 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
         rules=rules,
         max_score=settings.scoring.max_score,
         min_score=settings.scoring.min_score,
+        base_modifiers=base_modifiers,
     )
 
     # Recompute net_score since research_delta changed
@@ -207,6 +215,7 @@ def _row_to_summary(
         tier_passed=row["tier_passed"],
         comp_min=row["comp_min"],
         comp_max=row["comp_max"],
+        comp_source=row["comp_source"] if "comp_source" in row.keys() else None,
         location=row["location"] or "",
         workplace_type=row["workplace_type"] or "",
         seniority_level=row["seniority_level"],
@@ -268,6 +277,7 @@ def _row_to_detail(row, db=None) -> JobDetail:
         comp_min=row["comp_min"],
         comp_max=row["comp_max"],
         comp_currency=row["comp_currency"],
+        comp_source=row["comp_source"] if "comp_source" in row.keys() else None,
         technical_tools=json_decode(row["technical_tools"]) or [],
         requirements_summary=row["requirements_summary"] or "",
         date_posted=row["date_posted"] or "",
@@ -446,6 +456,7 @@ def create_job(body: JobCreate):
         gh_location = None
         gh_comp_min = None
         gh_comp_max = None
+        gh_comp_source = None  # tracks origin: 'structured' (Greenhouse API) or 'parsed' (LLM)
         gh_workplace_type = None
         ats_source = None
         ats_board_token = None
@@ -493,6 +504,7 @@ def create_job(body: JobCreate):
                                 first = ranges[0]
                                 gh_comp_min = first.get("min")
                                 gh_comp_max = first.get("max")
+                                gh_comp_source = "structured"
 
                         # Metadata fields (custom ATS fields)
                         metadata = gh_data.get("metadata", [])
@@ -585,8 +597,12 @@ def create_job(body: JobCreate):
                 gh_workplace_type = extracted.workplace_type
             if not gh_comp_min and not body.comp_min:
                 gh_comp_min = extracted.comp_min
+                if extracted.comp_min is not None:
+                    gh_comp_source = "parsed"
             if not gh_comp_max and not body.comp_max:
                 gh_comp_max = extracted.comp_max
+                if extracted.comp_max is not None:
+                    gh_comp_source = "parsed"
             if not body.seniority_level:
                 body_seniority_extracted = extracted.seniority_level
             else:
@@ -613,6 +629,14 @@ def create_job(body: JobCreate):
         eff_workplace = body.workplace_type or gh_workplace_type or ""
         eff_comp_min = body.comp_min if body.comp_min is not None else gh_comp_min
         eff_comp_max = body.comp_max if body.comp_max is not None else gh_comp_max
+        # Provenance: track which source actually filled the resolved comp value.
+        # Precedence: body (manual) > Greenhouse API (structured) > LLM extraction (parsed).
+        if body.comp_min is not None or body.comp_max is not None:
+            eff_comp_source = "manual"
+        elif gh_comp_source is not None:
+            eff_comp_source = gh_comp_source
+        else:
+            eff_comp_source = "none"
         eff_seniority = body.seniority_level or body_seniority_extracted
         eff_role_type = gh_role_type
         eff_commitment = gh_commitment
@@ -633,6 +657,7 @@ def create_job(body: JobCreate):
             comp_min=eff_comp_min,
             comp_max=eff_comp_max,
             comp_currency=body.comp_currency,
+            comp_source=eff_comp_source,
             date_posted=now,
             discovered_query="manual",
         )
@@ -664,6 +689,7 @@ def create_job(body: JobCreate):
             comp_max=eff_comp_max,
             workplace_type=eff_workplace,
             seniority_level=eff_seniority,
+            comp_source=eff_comp_source,
         )
 
         # Insert — manual jobs always go to 'ready' (DECISION 1)
@@ -674,13 +700,13 @@ def create_job(body: JobCreate):
                 apply_url, url_hash,
                 title, core_title, company, company_homepage,
                 location, workplace_type, workplace_countries, seniority_level,
-                commitment, comp_min, comp_max, comp_currency,
+                commitment, comp_min, comp_max, comp_currency, comp_source,
                 technical_tools, requirements_summary, date_posted, role_type,
-                status, tier_passed, score, score_reasons, score_gaps,
+                status, tier_passed, score, score_reasons, score_gaps, score_modifiers,
                 jd_full, jd_fetch_status,
                 discovered_at, discovered_query, updated_at, is_pinned,
                 filter_warnings
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', 4, ?, ?, ?, ?, 'fetched', ?, 'manual', ?, 0, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', 4, ?, ?, ?, ?, ?, 'fetched', ?, 'manual', ?, 0, ?)
             """,
             (
                 "manual", source_job_id,
@@ -688,11 +714,12 @@ def create_job(body: JobCreate):
                 body.url, uh,
                 eff_title, eff_title, eff_company, body.company_homepage,
                 eff_location, eff_workplace, json_encode(eff_countries), eff_seniority,
-                json_encode([eff_commitment] if eff_commitment else []), eff_comp_min, eff_comp_max, body.comp_currency,
+                json_encode([eff_commitment] if eff_commitment else []), eff_comp_min, eff_comp_max, body.comp_currency, eff_comp_source,
                 json_encode([]), "", now, eff_role_type,
                 score_result.score,
                 json_encode(score_result.reasons),
                 json_encode(score_result.gaps),
+                json_encode(score_result.fired_modifiers),
                 jd_text,
                 now, now,
                 json_encode(filter_warnings) if filter_warnings else None,
@@ -1175,5 +1202,279 @@ def clean_start(job_id: int, body: CleanStartCreate):
         )
         db.commit()
         return MessageResponse(message=f"Job {job_id} clean-started to '{target}'")
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Refilter & Rescore
+# ---------------------------------------------------------------------------
+
+def _refilter_rescore_job(db, row, settings) -> RefilterRescoreResult:
+    """Re-run filter + score on an existing job, factoring in analysis + research.
+
+    Does NOT trigger new analysis or research — only uses existing data.
+    Preserves post-apply statuses (applied, engaged, etc.) — those jobs are
+    only rescored, not refiltered.
+    """
+    import json as _json
+    from seeker_os.models import JobCard
+    from seeker_os.filtering.hard_filters import apply_filters
+    from seeker_os.scoring.engine import score_job
+    from seeker_os.scoring.net_score import compute_net_score
+
+    job_id = row["id"]
+    post_apply = row["status"] in JobStatus._POST_APPLY
+    terminal = row["status"] in JobStatus._TERMINAL
+
+    # Capture previous state for change detection
+    previous_score = row["score"] if "score" in row.keys() and row["score"] is not None else None
+    previous_status = row["status"]
+
+    # Reconstruct JobCard from DB row for filtering
+    card = JobCard(
+        source_id=row["source_id"] or "",
+        source_job_id=row["source_job_id"] or "",
+        ats_source=row["ats_source"],
+        ats_board_token=row["ats_board_token"],
+        ats_job_id=row["ats_job_id"],
+        apply_url=row["apply_url"] or "",
+        title=row["title"] or "",
+        core_title=row["core_title"] or "",
+        company=row["company"] or "",
+        company_homepage=row["company_homepage"],
+        location=row["location"] or "",
+        workplace_type=row["workplace_type"] or "",
+        workplace_countries=json_decode(row["workplace_countries"]) or [],
+        seniority_level=row["seniority_level"],
+        commitment=json_decode(row["commitment"]) or [],
+        comp_min=row["comp_min"],
+        comp_max=row["comp_max"],
+        comp_currency=row["comp_currency"],
+        comp_source=row["comp_source"] if "comp_source" in row.keys() else "none",
+        technical_tools=json_decode(row["technical_tools"]) or [],
+        requirements_summary=row["requirements_summary"] or "",
+        date_posted=row["date_posted"] or "",
+        role_type=row["role_type"],
+        is_pinned=bool(row["is_pinned"]),
+        discovered_query=row["discovered_query"] or "",
+    )
+
+    # --- Refilter (skip for post-apply/terminal — don't un-apply someone) ---
+    filter_passed = True
+    filter_reason = None
+    if not post_apply and not terminal:
+        filter_result = apply_filters(
+            card, settings.profile, settings.filters.filters, settings.filters.title_filters,
+        )
+        filter_passed = filter_result.passed
+        filter_reason = filter_result.reason if not filter_result.passed else None
+
+        if not filter_passed:
+            # Job now fails filters — mark rejected if it wasn't already
+            if row["status"] != "rejected":
+                transition_status(
+                    db, job_id, "rejected", EventType.FILTER_REJECTED, Actor.SYSTEM,
+                    extra_sets={
+                        "reject_reason": filter_result.reason,
+                        "tier_passed": 0,
+                    },
+                    metadata={"reason": filter_result.reason, "refilter": True},
+                )
+            else:
+                record_event(
+                    db, job_id, EventType.REFILTER_RESCORED, Actor.SYSTEM,
+                    metadata={"refilter": True, "filter_reason": filter_result.reason},
+                )
+            return RefilterRescoreResult(
+                job_id=job_id,
+                status="rejected",
+                previous_score=previous_score,
+                previous_status=previous_status,
+                status_changed=previous_status != "rejected",
+                filter_passed=False,
+                filter_reason=filter_result.reason,
+            )
+
+    # --- Rescore ---
+    score_result = score_job(
+        title=row["title"] or "",
+        jd_text=row["jd_full"] or "",
+        location=row["location"] or "",
+        company=row["company"] or "",
+        rubric=settings.scoring,
+        profile=settings.profile,
+        comp_min=row["comp_min"],
+        comp_max=row["comp_max"],
+        workplace_type=row["workplace_type"],
+        seniority_level=row["seniority_level"],
+        comp_source=row["comp_source"] if "comp_source" in row.keys() else "none",
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Determine new status based on score (skip for post-apply/terminal)
+    new_status = row["status"]
+    if not post_apply and not terminal:
+        if score_result.hard_reject:
+            new_status = "rejected"
+        elif score_result.score >= settings.scoring.post_threshold:
+            new_status = "ready"
+        else:
+            new_status = "rejected"
+
+    # Update score fields
+    extra_sets = {
+        "score": score_result.score,
+        "score_reasons": json_encode(score_result.reasons),
+        "score_gaps": json_encode(score_result.gaps),
+        "score_modifiers": json_encode(score_result.fired_modifiers),
+    }
+    if not post_apply and not terminal:
+        if score_result.hard_reject:
+            extra_sets["reject_reason"] = score_result.reject_reason
+        elif score_result.score < settings.scoring.post_threshold:
+            extra_sets["reject_reason"] = "score below threshold"
+        extra_sets["tier_passed"] = 4 if new_status == "ready" else row["tier_passed"]
+
+    # --- Factor in existing analysis (verdict cap) ---
+    analysis_verdict = row["analysis_verdict"] if "analysis_verdict" in row.keys() else None
+    research_applied = False
+    research_delta = 0.0
+
+    # --- Factor in existing company research (cache-hit only) ---
+    company = row["company"] or ""
+    if company:
+        try:
+            _try_apply_research_adjustment(db, job_id, company)
+            # Re-read row for updated research_delta
+            updated = db.execute(
+                "SELECT research_delta, research_adjusted_score FROM jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            if updated and updated["research_delta"]:
+                research_delta = float(updated["research_delta"])
+                research_applied = True
+        except Exception:
+            pass  # Research adjustment is best-effort
+
+    # --- Compute net_score (base + research + verdict cap) ---
+    net = compute_net_score(
+        base_score=score_result.score,
+        research_delta=research_delta,
+        analysis_verdict=analysis_verdict,
+        verdict_caps=settings.scoring.verdict_caps,
+        max_score=settings.scoring.max_score,
+        min_score=settings.scoring.min_score,
+    )
+    extra_sets["net_score"] = net
+    extra_sets["updated_at"] = now
+
+    score_changed = (previous_score is None) or (abs(score_result.score - previous_score) > 0.01)
+    status_changed = new_status != previous_status
+
+    # Apply status transition if changed
+    if not post_apply and not terminal and status_changed:
+        if new_status == "ready":
+            transition_status(
+                db, job_id, "ready", EventType.SCORED_READY, Actor.SYSTEM,
+                extra_sets=extra_sets,
+                metadata={"refilter_rescore": True, "previous_score": previous_score},
+            )
+        else:
+            transition_status(
+                db, job_id, "rejected", EventType.SCORED_REJECTED, Actor.SYSTEM,
+                extra_sets=extra_sets,
+                metadata={"refilter_rescore": True, "previous_score": previous_score},
+            )
+    else:
+        # Just update score fields without status change — still record event
+        db.execute(
+            f"UPDATE jobs SET {', '.join(f'{k} = ?' for k in extra_sets)} WHERE id = ?",
+            (*extra_sets.values(), job_id),
+        )
+        record_event(
+            db, job_id, EventType.REFILTER_RESCORED, Actor.SYSTEM,
+            metadata={
+                "refilter_rescore": True,
+                "previous_score": previous_score,
+                "new_score": score_result.score,
+                "net_score": net,
+                "score_changed": score_changed,
+                "research_applied": research_applied,
+                "analysis_verdict": analysis_verdict,
+            },
+        )
+
+    return RefilterRescoreResult(
+        job_id=job_id,
+        status=new_status,
+        score=score_result.score,
+        net_score=net,
+        previous_score=previous_score,
+        previous_status=previous_status,
+        score_changed=score_changed,
+        status_changed=status_changed,
+        filter_passed=True,
+        research_applied=research_applied,
+        analysis_verdict=analysis_verdict,
+    )
+
+
+@router.post("/refilter-rescore", response_model=list[RefilterRescoreResult])
+def refilter_rescore(body: RefilterRescoreRequest):
+    """Refilter & rescore existing jobs with current config.
+
+    Re-runs hard filters and scoring on existing jobs. If an analysis has been
+    run, its verdict is factored into net_score. If company research has been
+    run (cached dossier), the research adjustment is factored in.
+
+    Accepts either:
+    - job_ids: list of specific job IDs
+    - run_id: all jobs from a specific pipeline run
+
+    Post-apply jobs (applied, engaged, etc.) are only rescored, not refiltered —
+    we don't un-apply someone because a config change would have filtered the job.
+    """
+    from seeker_os.config import Settings
+
+    settings = Settings()
+    if not settings.profile or not settings.scoring or not settings.filters:
+        raise HTTPException(status_code=500, detail="Config not loaded")
+
+    db = get_connection()
+    try:
+        if body.job_ids:
+            placeholders = ",".join("?" * len(body.job_ids))
+            rows = db.execute(
+                f"SELECT * FROM jobs WHERE id IN ({placeholders})",
+                body.job_ids,
+            ).fetchall()
+        elif body.run_id:
+            rows = db.execute(
+                "SELECT * FROM jobs WHERE run_id = ?",
+                (body.run_id,),
+            ).fetchall()
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide either job_ids or run_id",
+            )
+
+        results = []
+        for row in rows:
+            try:
+                result = _refilter_rescore_job(db, row, settings)
+                results.append(result)
+            except Exception as e:
+                results.append(RefilterRescoreResult(
+                    job_id=row["id"],
+                    status=row["status"],
+                    filter_passed=False,
+                    filter_reason=f"Error: {e}",
+                ))
+
+        db.commit()
+        return results
     finally:
         db.close()

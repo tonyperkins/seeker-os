@@ -215,6 +215,7 @@ class ProfileConfig(BaseModel):
     experience: ExperiencePrefs
     employment: EmploymentPrefs
     blacklist: list[str] = []
+    defense_blocklist: list[str] = []
     resume: ResumePrefs
     cross_reference: CrossReferencePrefs
     hard_rejects: list[HardReject] = []
@@ -259,6 +260,12 @@ class ResearchModifierConfig(BaseModel):
     delta: float
     confidence_threshold: float = 0.5
     source_section: str  # "funding" | "sentiment" | "fit"
+    # Optional cutoffs for headcount-based factors (right_size_company, large_company_confirmed)
+    headcount_max: int | None = None
+    headcount_min: int | None = None
+    # Optional: name of a base-modifier signal to suppress when this research factor fires
+    # (e.g. "large_enterprise" — compensates the JD-text penalty already baked into base_score)
+    suppresses: str | None = None
 
 
 class ScoringConfig(BaseModel):
@@ -272,6 +279,14 @@ class ScoringConfig(BaseModel):
     freshness: FreshnessConfig = FreshnessConfig()
     research_modifiers: list[ResearchModifierConfig] = []
     verdict_caps: dict[str, float | None] = {}
+
+    # Comp provenance: values above this are implausible regardless of source.
+    # For parsed/none → treated as comp-unknown (no floor clear, no bonus).
+    # For structured/manual → flagged/logged but still trusted (data error, not
+    #   a parse artifact — the user should investigate).
+    comp_sanity_max: int = 10_000_000
+    # Provenance values that earn full trust (comp_target bonus, floor clearing).
+    trusted_comp_sources: list[str] = ["structured", "manual"]
 
 
 class FilterConfig(BaseModel):
@@ -289,6 +304,11 @@ class FilterConfig(BaseModel):
     comp_floor_margin_pct: int = 0
     # NEW: if True, jobs with no comp data pass; if False, they're rejected
     comp_unknown_passes: bool = True
+    # Comp provenance: values above this are implausible regardless of source.
+    # In the filter, an implausible comp_max from any source is treated as
+    # comp-unknown (does not clear the floor). Prevents the 130000000 misfire
+    # from clearing the comp floor.
+    comp_sanity_max: int = 10_000_000
     freshness_days: int = 30
     commitment_required: str = "Full Time"
     # NEW: locations to exclude even if us_only passes (states or cities)
@@ -505,6 +525,13 @@ class CompanyResearchConfig(BaseModel):
     confidence_floor: float = 0.3
     staleness_months: int = 18
     source_trust_order: list[str] = []
+
+    # Phase 3 retrieval disambiguation: confidence floor for mismatch cases.
+    # When Wikidata P856 doesn't match the company domain (wrong entity),
+    # section confidence is clamped to this value via min(). Must be below
+    # the research modifier confidence_threshold (typically 0.5) so
+    # confidence-gated modifiers don't fire on wrong-entity research.
+    mismatch_confidence: float = 0.2
 
     # Research TTL: reuse cached dossier within this many days (default ~30)
     research_ttl_days: int = 30

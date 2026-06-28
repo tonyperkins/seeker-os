@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 
 from seeker_os.config import Settings
-from seeker_os.database import get_connection, json_encode
+from seeker_os.database import get_connection, json_decode, json_encode
 
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -150,6 +150,116 @@ def _load_identity_text(settings: Settings) -> str:
     return "\n".join(lines) if lines else "(no identity rules configured)"
 
 
+def _load_company_research_text(db, company: str) -> str:
+    """Load the most recent cached company research dossier as a text block.
+
+    Returns '(no company research available)' if no cached dossier exists.
+    This is best-effort — analysis should still work without research.
+    """
+    if not company:
+        return "(no company research available)"
+
+    from seeker_os.dedup.normalize import normalize_company
+
+    company_norm = normalize_company(company)
+    if not company_norm:
+        return "(no company research available)"
+
+    row = db.execute(
+        "SELECT * FROM company_research WHERE company_norm = ? ORDER BY researched_at DESC LIMIT 1",
+        (company_norm,),
+    ).fetchone()
+    if not row:
+        return "(no company research available)"
+
+    lines: list[str] = []
+
+    summary = row["summary"] if "summary" in row.keys() else ""
+    if summary:
+        lines.append(f"Summary: {summary}")
+
+    overall_conf = row["overall_confidence"] if "overall_confidence" in row.keys() else 0.0
+    lines.append(f"Overall confidence: {overall_conf:.2f}")
+
+    # Funding section
+    funding_data = json_decode(row["funding_data"]) if row["funding_data"] else None
+    if funding_data:
+        lines.append("")
+        lines.append("Funding / company stage:")
+        if funding_data.get("stage"):
+            lines.append(f"  Stage: {funding_data['stage']}")
+        if funding_data.get("founded"):
+            lines.append(f"  Founded: {funding_data['founded']}")
+        if funding_data.get("headcount"):
+            lines.append(f"  Headcount: {funding_data['headcount']}")
+        if funding_data.get("public"):
+            lines.append(f"  Public company: yes")
+        if funding_data.get("total_raised_usd"):
+            lines.append(f"  Total raised: ${funding_data['total_raised_usd']:,}")
+        if funding_data.get("financial_health"):
+            lines.append(f"  Financial health: {funding_data['financial_health']}")
+        if funding_data.get("headcount_trend"):
+            lines.append(f"  Headcount trend: {funding_data['headcount_trend']}")
+        layoffs = funding_data.get("layoffs", [])
+        if layoffs:
+            lines.append(f"  Layoffs: {len(layoffs)} event(s)")
+            for lay in layoffs:
+                lines.append(f"    - {lay.get('date', '?')}: {lay.get('detail', '')}")
+
+    # Sentiment section
+    sentiment_data = json_decode(row["sentiment_data"]) if row["sentiment_data"] else None
+    if sentiment_data:
+        lines.append("")
+        lines.append("Employee sentiment:")
+        if sentiment_data.get("overall_rating_estimate"):
+            lines.append(f"  Overall rating: {sentiment_data['overall_rating_estimate']}")
+        if sentiment_data.get("ceo_approval_pct") is not None:
+            lines.append(f"  CEO approval: {sentiment_data['ceo_approval_pct']}%")
+        positives = sentiment_data.get("positives", [])
+        negatives = sentiment_data.get("negatives", [])
+        if positives:
+            pos_items = [
+                p.get("theme", str(p)) if isinstance(p, dict) else str(p)
+                for p in positives[:5]
+            ]
+            lines.append(f"  Positives: {', '.join(pos_items)}")
+        if negatives:
+            neg_items = [
+                n.get("theme", str(n)) if isinstance(n, dict) else str(n)
+                for n in negatives[:5]
+            ]
+            lines.append(f"  Negatives: {', '.join(neg_items)}")
+
+    # Fit section
+    fit_data = json_decode(row["fit_data"]) if "fit_data" in row.keys() and row["fit_data"] else None
+    if fit_data:
+        lines.append("")
+        lines.append("Company fit:")
+        if fit_data.get("remote_policy"):
+            lines.append(f"  Remote policy: {fit_data['remote_policy']}")
+        if fit_data.get("size_bucket"):
+            lines.append(f"  Size: {fit_data['size_bucket']}")
+        if fit_data.get("comp_band"):
+            lines.append(f"  Comp band: {fit_data['comp_band']}")
+        if fit_data.get("clearance_required"):
+            lines.append(f"  Clearance required: yes")
+
+    # Verdict flags
+    verdict_data = json_decode(row["verdict_flags"]) if "verdict_flags" in row.keys() and row["verdict_flags"] else None
+    if verdict_data:
+        greens = verdict_data.get("green", [])
+        reds = verdict_data.get("red", [])
+        watches = verdict_data.get("watch", [])
+        if greens:
+            lines.append(f"  Green flags: {', '.join(greens)}")
+        if reds:
+            lines.append(f"  Red flags: {', '.join(reds)}")
+        if watches:
+            lines.append(f"  Watch items: {', '.join(watches)}")
+
+    return "\n".join(lines) if lines else "(company research returned no structured data)"
+
+
 def _build_user_prompt(
     master_resume: str,
     prefs_text: str,
@@ -163,6 +273,7 @@ def _build_user_prompt(
     comp_min: int | None,
     comp_max: int | None,
     url: str,
+    company_research_text: str = "",
 ) -> str:
     """Build the user prompt with all injected context."""
     comp_str = "Not posted"
@@ -185,6 +296,7 @@ def _build_user_prompt(
         location=location,
         comp_str=comp_str,
         url=url,
+        company_research_text=company_research_text,
     )
 
 
@@ -227,6 +339,7 @@ def analyze_job(
     rules_text = _load_accuracy_rules_text(settings)
     rubric_text = _load_rubric_text(settings)
     identity_text = _load_identity_text(settings)
+    company_research_text = _load_company_research_text(db, job["company"] or "")
 
     # 3. Build prompt
     user_prompt = _build_user_prompt(
@@ -242,6 +355,7 @@ def analyze_job(
         comp_min=job["comp_min"],
         comp_max=job["comp_max"],
         url=job["apply_url"] or "",
+        company_research_text=company_research_text,
     )
 
     # 4. Call LLM

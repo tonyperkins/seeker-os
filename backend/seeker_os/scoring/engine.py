@@ -25,6 +25,10 @@ def _check_modifier(
     location: str,
     comp_min: int | None,
     comp_max: int | None,
+    workplace_type: str | None = None,
+    seniority_level: str | None = None,
+    accepted_cities: list[str] | None = None,
+    comp_trusted: bool = True,
 ) -> bool:
     """Check if a modifier rule matches. Returns True if the modifier applies."""
 
@@ -70,18 +74,69 @@ def _check_modifier(
             return False
         return _check_pattern(text, mod.pattern)
 
+    elif check == "location_local":
+        # Location-local bonus: applies only when the structured location
+        # matches one of the user's accepted_cities (from profile config)
+        # AND workplace_type is hybrid or on-site (not remote).
+        if not location or not accepted_cities:
+            return False
+        # Remote roles don't get the local bonus — they already get remote_us
+        if workplace_type and _check_pattern(workplace_type, "remote"):
+            return False
+        # Check if the location contains any accepted city
+        for city in accepted_cities:
+            if city.lower() in location.lower():
+                return True
+        return False
+
+    elif check == "hybrid_non_local":
+        # Penalizes hybrid roles that are NOT in an accepted city.
+        # mod.pattern matches the hybrid keyword in JD text.
+        # mod.unless excludes remote JD text (remote roles aren't hybrid-non-local).
+        # accepted_cities exclusion is structural (from profile config) — no
+        # duplicated city list in the rubric. location_local is the sole arbiter
+        # of which cities are local.
+        if not mod.pattern or not _check_pattern(jd_text, mod.pattern):
+            return False
+        if mod.unless and _check_pattern(jd_text, mod.unless):
+            return False
+        if workplace_type and _check_pattern(workplace_type, "remote"):
+            return False
+        if not location:
+            return False  # missing_location handles no-location penalty
+        if accepted_cities:
+            for city in accepted_cities:
+                if city.lower() in location.lower():
+                    return False
+        return True
+
     elif check == "location_only":
-        # Location is a city, JD has no "remote"
+        # Located role that is NOT in an accepted city and NOT remote.
+        # This is the city_only_no_remote penalty — fires when:
+        # 1. There is a location (not empty)
+        # 2. JD does not mention remote
+        # 3. workplace_type is not remote (if known)
+        # 4. The location does NOT match any accepted_city
         if not location:
             return False
         if _check_pattern(jd_text, "remote"):
             return False
-        # Check if location is just a city (not a state/region)
+        if workplace_type and _check_pattern(workplace_type, "remote"):
+            return False
+        # If the location matches an accepted city, this is NOT a city-only-no-remote
+        if accepted_cities:
+            for city in accepted_cities:
+                if city.lower() in location.lower():
+                    return False
         return True
 
     elif check == "structured_comp":
         if mod.threshold is not None:
-            # Positive: comp_min >= threshold
+            # Positive: comp_min >= threshold (e.g. comp_target bonus).
+            # Gated on trusted provenance — untrusted comp (parsed/none) cannot
+            # earn the bonus. A misparsed 130000000 must not get +1.0.
+            if not comp_trusted:
+                return False
             return comp_min is not None and comp_min >= mod.threshold
         if mod.threshold_max is not None:
             # Negative: comp_max below threshold_max
@@ -118,6 +173,7 @@ def score_job(
     comp_max: int | None = None,
     workplace_type: str | None = None,
     seniority_level: str | None = None,
+    comp_source: str = "none",
 ) -> ScoreResult:
     """Score a job against a config-driven rubric.
 
@@ -184,18 +240,48 @@ def score_job(
 
     reasons.append(f"Base: {base_label} ({base_score})")
 
+    # Comp provenance: determine trust and apply sanity bound.
+    # Trusted sources (structured, manual) can earn comp_target and clear floor.
+    # Untrusted sources (parsed, none) cannot earn comp_target; implausible values
+    # (above comp_sanity_max) are treated as comp-unknown (None) so they can't
+    # clear the floor or earn any comp modifier.
+    comp_trusted = comp_source in rubric.trusted_comp_sources
+    sanity_max = rubric.comp_sanity_max
+    effective_comp_min = comp_min
+    effective_comp_max = comp_max
+    if comp_min is not None and comp_min > sanity_max:
+        if not comp_trusted:
+            effective_comp_min = None
+            reasons.append(f"Comp sanity: comp_min={comp_min} exceeds sanity_max={sanity_max} (untrusted '{comp_source}') → treated as unknown")
+        else:
+            reasons.append(f"Comp sanity WARNING: comp_min={comp_min} exceeds sanity_max={sanity_max} (trusted '{comp_source}') — possible data error")
+    if comp_max is not None and comp_max > sanity_max:
+        if not comp_trusted:
+            effective_comp_max = None
+            reasons.append(f"Comp sanity: comp_max={comp_max} exceeds sanity_max={sanity_max} (untrusted '{comp_source}') → treated as unknown")
+        else:
+            reasons.append(f"Comp sanity WARNING: comp_max={comp_max} exceeds sanity_max={sanity_max} (trusted '{comp_source}') — possible data error")
+
     # Step 4: Positive modifiers (all matching patterns are summed)
     positive_total = 0.0
+    fired_modifiers: dict[str, float] = {}
+    accepted_cities = profile.location.accepted_cities
     for mod in rubric.positive_modifiers:
-        if _check_modifier(mod, title, jd_text, location, comp_min, comp_max):
+        if _check_modifier(mod, title, jd_text, location, effective_comp_min, effective_comp_max,
+                           workplace_type=workplace_type, seniority_level=seniority_level,
+                           accepted_cities=accepted_cities, comp_trusted=comp_trusted):
             positive_total += mod.points
+            fired_modifiers[mod.signal] = mod.points
             reasons.append(f"+{mod.points} {mod.signal}")
 
     # Step 5: Negative modifiers (all matching patterns are summed)
     negative_total = 0.0
     for mod in rubric.negative_modifiers:
-        if _check_modifier(mod, title, jd_text, location, comp_min, comp_max):
+        if _check_modifier(mod, title, jd_text, location, effective_comp_min, effective_comp_max,
+                           workplace_type=workplace_type, seniority_level=seniority_level,
+                           accepted_cities=accepted_cities, comp_trusted=comp_trusted):
             negative_total += mod.points
+            fired_modifiers[mod.signal] = mod.points
             reasons.append(f"{mod.points} {mod.signal}")
 
     # Step 6: Clamp
@@ -207,4 +293,5 @@ def score_job(
         reasons=reasons,
         gaps=gaps,
         hard_reject=False,
+        fired_modifiers=fired_modifiers,
     )

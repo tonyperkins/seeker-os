@@ -7,7 +7,24 @@ scores and source references.
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from enum import Enum
+
+from pydantic import BaseModel, field_validator
+
+
+class VerificationState(str, Enum):
+    """Entity verification state for retrieval disambiguation.
+
+    - VERIFIED: P856 matches company_domain, OR Wikidata/Wikipedia absent
+      but Tavily returned snippets from the company's own domain.
+    - UNVERIFIED: P856 missing (can't verify, can't disprove) OR company_domain
+      absent (manual-add). Data is kept; no hard confidence degradation.
+    - MISMATCH: P856 present but does NOT match company_domain. Wrong entity;
+      Wikipedia/Wikidata discarded; section confidence hard-degraded.
+    """
+    VERIFIED = "verified"
+    UNVERIFIED = "unverified"
+    MISMATCH = "mismatch"
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +80,14 @@ class FundingDossier(BaseModel):
     total_raised_usd: int | None = None
     valuation_usd: int | None = None
     last_round: LastRound | None = None
-    headcount: int | None = None
+    headcount: str | None = None
+
+    @field_validator("headcount", mode="before")
+    @classmethod
+    def _coerce_headcount(cls, v):
+        if isinstance(v, int):
+            return str(v)
+        return v
     headcount_trend: str | None = None
     layoffs: list[LayoffEvent] = []
     financial_health: str | None = None

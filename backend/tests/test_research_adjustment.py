@@ -241,6 +241,365 @@ class TestResearchAdjustedScore:
         assert len(result.breakdown) == 0
 
 
+class TestRightSizeCompany:
+    """Phase 1: right_size_company research modifier — confirmed headcount ≤ 600 or small size_bucket."""
+
+    def _rules(self) -> list[ResearchModifierRule]:
+        return [
+            ResearchModifierRule(
+                factor="right_size_company",
+                delta=0.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_max=600,
+            ),
+        ]
+
+    def test_small_headcount_gets_bonus(self):
+        """Confirmed headcount ≤ 600 gets +0.5."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="200"),
+        )
+        result = compute_research_adjustment(6.0, dossier, self._rules())
+        assert result.research_delta == 0.5
+        assert result.adjusted_score == 6.5
+        assert len(result.breakdown) == 1
+        assert result.breakdown[0].factor == "right_size_company"
+
+    def test_headcount_at_cutoff_passes(self):
+        """Headcount exactly at cutoff (600) passes."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="600"),
+        )
+        result = compute_research_adjustment(6.0, dossier, self._rules())
+        assert result.research_delta == 0.5
+
+    def test_large_headcount_no_bonus(self):
+        """Confirmed headcount > 600 does NOT get the bonus."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
+        )
+        result = compute_research_adjustment(6.0, dossier, self._rules())
+        assert result.research_delta == 0.0
+        assert len(result.breakdown) == 0
+
+    def test_small_size_bucket_gets_bonus(self):
+        """fit.size_bucket indicating small gets the bonus even without headcount."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8),
+            fit=FitDossier(confidence=0.6, size_bucket="small"),
+        )
+        result = compute_research_adjustment(6.0, dossier, self._rules())
+        assert result.research_delta == 0.5
+
+    def test_low_confidence_no_bonus(self):
+        """Funding confidence below threshold skips the modifier."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.3, headcount="200"),
+        )
+        result = compute_research_adjustment(6.0, dossier, self._rules())
+        assert result.research_delta == 0.0
+
+    def test_no_headcount_no_size_bucket_no_bonus(self):
+        """Neither headcount nor size_bucket → no bonus."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8),
+            fit=FitDossier(confidence=0.6),
+        )
+        result = compute_research_adjustment(6.0, dossier, self._rules())
+        assert result.research_delta == 0.0
+
+    def test_headcount_authoritative_over_small_size_bucket(self):
+        """headcount=5000 + size_bucket='small' → right_size_company does NOT fire.
+        Headcount is authoritative when present; size_bucket is only a fallback when headcount is None."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="5000"),
+            fit=FitDossier(confidence=0.6, size_bucket="small"),
+        )
+        result = compute_research_adjustment(6.0, dossier, self._rules())
+        assert result.research_delta == 0.0
+        assert len(result.breakdown) == 0
+
+
+class TestLargeCompanyConfirmed:
+    """Phase 1: large_company_confirmed research modifier — headcount ≥ 3000 or public + large size_bucket."""
+
+    def _rules(self) -> list[ResearchModifierRule]:
+        return [
+            ResearchModifierRule(
+                factor="large_company_confirmed",
+                delta=-1.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_min=3000,
+                suppresses="large_enterprise",
+            ),
+        ]
+
+    def test_large_headcount_gets_penalty(self):
+        """Confirmed headcount ≥ 3000 gets -1.5."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
+        )
+        result = compute_research_adjustment(7.0, dossier, self._rules())
+        assert result.research_delta == -1.5
+        assert result.adjusted_score == 5.5
+        assert result.breakdown[0].factor == "large_company_confirmed"
+
+    def test_headcount_at_threshold(self):
+        """Headcount exactly 3000 triggers the penalty."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="3000"),
+        )
+        result = compute_research_adjustment(7.0, dossier, self._rules())
+        assert result.research_delta == -1.5
+
+    def test_small_headcount_no_penalty(self):
+        """Headcount < 3000 does NOT trigger the penalty."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="500"),
+        )
+        result = compute_research_adjustment(7.0, dossier, self._rules())
+        assert result.research_delta == 0.0
+
+    def test_public_large_size_bucket_gets_penalty(self):
+        """Public company with large size_bucket gets the penalty even without headcount."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, public=True),
+            fit=FitDossier(confidence=0.6, size_bucket="large enterprise"),
+        )
+        result = compute_research_adjustment(7.0, dossier, self._rules())
+        assert result.research_delta == -1.5
+
+    def test_private_large_size_bucket_no_penalty(self):
+        """Non-public company with large size_bucket does NOT trigger (needs public)."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, public=False),
+            fit=FitDossier(confidence=0.6, size_bucket="large"),
+        )
+        result = compute_research_adjustment(7.0, dossier, self._rules())
+        assert result.research_delta == 0.0
+
+    def test_low_confidence_no_penalty(self):
+        """Funding confidence below threshold skips the modifier."""
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.3, headcount="7000"),
+        )
+        result = compute_research_adjustment(7.0, dossier, self._rules())
+        assert result.research_delta == 0.0
+
+
+class TestDoubleCountSuppression:
+    """Phase 1: large_company_confirmed suppresses the large_enterprise JD-text penalty."""
+
+    def test_suppression_compensates_base_modifier(self):
+        """When large_company_confirmed fires and base_modifiers includes large_enterprise,
+        a compensating +0.5 delta is added to undo the JD-text penalty already in base_score."""
+        rules = [
+            ResearchModifierRule(
+                factor="large_company_confirmed",
+                delta=-1.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_min=3000,
+                suppresses="large_enterprise",
+            ),
+        ]
+        base_modifiers = {"large_enterprise": -0.5}
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
+        )
+        result = compute_research_adjustment(
+            4.5, dossier, rules, base_modifiers=base_modifiers,
+        )
+        # base 4.5 (already includes -0.5 large_enterprise)
+        # research: -1.5 (large_company_confirmed) + +0.5 (suppressed large_enterprise) = -1.0
+        # adjusted = 4.5 - 1.0 = 3.5
+        assert result.research_delta == -1.0
+        assert result.adjusted_score == 3.5
+        # Breakdown has both items
+        factors = [b.factor for b in result.breakdown]
+        assert "large_company_confirmed" in factors
+        assert "suppressed_large_enterprise" in factors
+
+    def test_no_suppression_without_base_modifiers(self):
+        """When base_modifiers is None or doesn't include large_enterprise, no compensating delta."""
+        rules = [
+            ResearchModifierRule(
+                factor="large_company_confirmed",
+                delta=-1.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_min=3000,
+                suppresses="large_enterprise",
+            ),
+        ]
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
+        )
+        # No base_modifiers passed
+        result = compute_research_adjustment(5.0, dossier, rules)
+        assert result.research_delta == -1.5
+        assert len(result.breakdown) == 1
+        assert result.breakdown[0].factor == "large_company_confirmed"
+
+    def test_no_suppression_when_factor_does_not_fire(self):
+        """Suppression only applies when the research factor actually fires."""
+        rules = [
+            ResearchModifierRule(
+                factor="large_company_confirmed",
+                delta=-1.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_min=3000,
+                suppresses="large_enterprise",
+            ),
+        ]
+        base_modifiers = {"large_enterprise": -0.5}
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="200"),  # small — doesn't fire
+        )
+        result = compute_research_adjustment(
+            5.0, dossier, rules, base_modifiers=base_modifiers,
+        )
+        assert result.research_delta == 0.0
+        assert len(result.breakdown) == 0
+
+    def test_no_compensation_when_large_enterprise_not_fired(self):
+        """large_company_confirmed fires + large_enterprise configured but NOT in
+        base_modifiers (didn't match this job's JD) → no compensating delta, net -1.5.
+
+        This confirms base_modifiers contains only modifiers that actually fired,
+        not the full configured list.
+        """
+        rules = [
+            ResearchModifierRule(
+                factor="large_company_confirmed",
+                delta=-1.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_min=3000,
+                suppresses="large_enterprise",
+            ),
+        ]
+        # base_modifiers does NOT include large_enterprise — it wasn't matched
+        base_modifiers = {"aws": 1.0}
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
+        )
+        result = compute_research_adjustment(
+            5.0, dossier, rules, base_modifiers=base_modifiers,
+        )
+        # Only -1.5 from large_company_confirmed, no +0.5 compensation
+        assert result.research_delta == -1.5
+        assert result.adjusted_score == 3.5
+        factors = [b.factor for b in result.breakdown]
+        assert "large_company_confirmed" in factors
+        assert "suppressed_large_enterprise" not in factors
+
+
+class TestPhase1Integration:
+    """Phase 1 integration: 7k public company with 'startup' in JD + dossier with headcount."""
+
+    def test_7k_public_with_dossier_no_small_bonus_large_penalty(self):
+        """A 7k-employee public company with 'startup' in the JD must NOT net the small
+        bonus and MUST take the large penalty once a dossier with headcount is present.
+        The JD-text large_enterprise penalty is suppressed (compensated)."""
+        rules = [
+            ResearchModifierRule(
+                factor="right_size_company",
+                delta=0.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_max=600,
+            ),
+            ResearchModifierRule(
+                factor="large_company_confirmed",
+                delta=-1.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_min=3000,
+                suppresses="large_enterprise",
+            ),
+        ]
+        base_modifiers = {"large_enterprise": -0.5}
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="7000", public=True),
+        )
+        # base_score = 4.5 (e.g. base 4.0 + aws 1.0 + large_enterprise -0.5)
+        result = compute_research_adjustment(
+            4.5, dossier, rules, base_modifiers=base_modifiers,
+        )
+        # right_size_company: headcount 7000 > 600 → no
+        # large_company_confirmed: headcount 7000 >= 3000 → yes, delta -1.5
+        # suppression: large_enterprise -0.5 in base → compensating +0.5
+        # total_delta = -1.5 + 0.5 = -1.0
+        # adjusted = 4.5 - 1.0 = 3.5
+        assert result.research_delta == -1.0
+        assert result.adjusted_score == 3.5
+        factors = [b.factor for b in result.breakdown]
+        assert "large_company_confirmed" in factors
+        assert "suppressed_large_enterprise" in factors
+        assert "right_size_company" not in factors
+
+    def test_7k_no_dossier_falls_back_to_jd_text_stopgap(self):
+        """With no dossier (stub/no retrieval), only the JD-text stopgap applies.
+        No research adjustment, no suppression."""
+        rules = [
+            ResearchModifierRule(
+                factor="large_company_confirmed",
+                delta=-1.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_min=3000,
+                suppresses="large_enterprise",
+            ),
+        ]
+        base_modifiers = {"large_enterprise": -0.5}
+        dossier = _make_grounded_dossier(is_stub=True)
+        result = compute_research_adjustment(
+            4.5, dossier, rules, base_modifiers=base_modifiers,
+        )
+        # Stub → no adjustment at all
+        assert result.research_delta == 0.0
+        assert result.adjusted_score == 4.5
+        assert result.applied is False
+
+    def test_headcount_authoritative_factors_mutually_exclusive(self):
+        """headcount=5000 + size_bucket='small' with both rules → only large_company_confirmed
+        fires, right_size_company does NOT. Headcount is authoritative; factors are mutually
+        exclusive when headcount is present."""
+        rules = [
+            ResearchModifierRule(
+                factor="right_size_company",
+                delta=0.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_max=600,
+            ),
+            ResearchModifierRule(
+                factor="large_company_confirmed",
+                delta=-1.5,
+                confidence_threshold=0.5,
+                source_section="funding",
+                headcount_min=3000,
+                suppresses="large_enterprise",
+            ),
+        ]
+        dossier = _make_grounded_dossier(
+            funding=FundingDossier(confidence=0.8, headcount="5000"),
+            fit=FitDossier(confidence=0.6, size_bucket="small"),
+        )
+        result = compute_research_adjustment(6.0, dossier, rules)
+        # right_size_company: headcount 5000 > 600 → NO (headcount authoritative, size_bucket ignored)
+        # large_company_confirmed: headcount 5000 >= 3000 → YES
+        assert result.research_delta == -1.5
+        assert result.adjusted_score == 4.5
+        factors = [b.factor for b in result.breakdown]
+        assert "large_company_confirmed" in factors
+        assert "right_size_company" not in factors
+
+
 class TestCompanyKeyedCaching:
     """Tests for company-keyed research caching with TTL reuse."""
 

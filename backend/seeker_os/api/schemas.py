@@ -25,6 +25,7 @@ class JobSummary(BaseModel):
     tier_passed: int
     comp_min: int | None = None
     comp_max: int | None = None
+    comp_source: str | None = None
     location: str = ""
     workplace_type: str = ""
     seniority_level: str | None = None
@@ -73,6 +74,7 @@ class JobDetail(BaseModel):
     comp_min: int | None = None
     comp_max: int | None = None
     comp_currency: str | None = None
+    comp_source: str | None = None
     technical_tools: list[str] = []
     requirements_summary: str = ""
     date_posted: str = ""
@@ -217,6 +219,28 @@ class JobReject(BaseModel):
 class MessageResponse(BaseModel):
     """Generic message response."""
     message: str
+
+
+class RefilterRescoreRequest(BaseModel):
+    """POST /api/jobs/refilter-rescore."""
+    job_ids: list[int] | None = None
+    run_id: str | None = None
+
+
+class RefilterRescoreResult(BaseModel):
+    """Result of a refilter&rescore operation."""
+    job_id: int
+    status: str
+    score: float | None = None
+    net_score: float | None = None
+    previous_score: float | None = None
+    previous_status: str | None = None
+    score_changed: bool = False
+    status_changed: bool = False
+    filter_passed: bool
+    filter_reason: str | None = None
+    research_applied: bool = False
+    analysis_verdict: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -565,7 +589,15 @@ class FundingDossierSchema(BaseModel):
     total_raised_usd: int | None = None
     valuation_usd: int | None = None
     last_round: LastRoundSchema | None = None
-    headcount: int | None = None
+    headcount: str | None = None
+
+    @field_validator("headcount", mode="before")
+    @classmethod
+    def _coerce_headcount(cls, v):
+        if isinstance(v, int):
+            return str(v)
+        return v
+
     headcount_trend: str | None = None
     layoffs: list[LayoffEventSchema] = []
     financial_health: str | None = None

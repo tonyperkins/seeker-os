@@ -57,14 +57,14 @@ rules:
     severity: medium
 
   # --- Experience anchor: flag non-standard experience phrasing ---
-  # Matches a regex pattern family — use when a single literal phrase isn't enough.
-  # The canonical experience anchor will live in identity_rules.yml once that exists;
-  # this rule is the resume-output guard against inflated variants.
+  # The canonical anchor phrase + disallowed_variants live in identity_rules.yml.
+  # This rule merges its patterns with identity_rules.yml disallowed_variants at
+  # validation time. Set patterns: [] here to avoid duplication — let
+  # identity_rules.yml be the single source of truth for disallowed variants.
   - id: experience_anchor
     description: "Use the standard experience anchor from your profile, not arbitrary counts"
     type: experience_anchor
-    patterns:
-      - "(NN|NN)\\+\\s*years"  # Replace NN with year counts that would be inflated for you
+    patterns: []
     severity: medium
 
   # --- Education omission: flag education mentions if you choose to omit ---

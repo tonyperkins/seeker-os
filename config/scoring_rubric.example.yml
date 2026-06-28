@@ -150,3 +150,10 @@ scoring:
     CONDITIONAL: 7.0
     MONITOR: 5.0
     SKIP: 3.0
+
+  # Comp provenance: values above this are implausible regardless of source.
+  # For parsed/none → treated as comp-unknown (no floor clear, no bonus).
+  # For structured/manual → flagged/logged but still trusted.
+  comp_sanity_max: 10000000
+  # Provenance values that earn full trust (comp_target bonus, floor clearing).
+  trusted_comp_sources: ["structured", "manual"]
