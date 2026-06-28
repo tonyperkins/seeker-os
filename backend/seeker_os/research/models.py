@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class VerificationState(str, Enum):
@@ -80,7 +80,14 @@ class FundingDossier(BaseModel):
     total_raised_usd: int | None = None
     valuation_usd: int | None = None
     last_round: LastRound | None = None
-    headcount: int | None = None
+    headcount: str | None = None
+
+    @field_validator("headcount", mode="before")
+    @classmethod
+    def _coerce_headcount(cls, v):
+        if isinstance(v, int):
+            return str(v)
+        return v
     headcount_trend: str | None = None
     layoffs: list[LayoffEvent] = []
     financial_health: str | None = None

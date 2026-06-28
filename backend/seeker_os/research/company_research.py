@@ -225,7 +225,7 @@ def fetch_wikidata_info(
             now = datetime.now(timezone.utc).isoformat()
             return FundingDossier(
                 founded=founded_year,
-                headcount=employees,
+                headcount=str(employees) if employees is not None else None,
                 confidence=0.6,
                 sources=[SourceRef(url=wikidata_url, retrieved=now)],
             ), official_website
@@ -261,7 +261,7 @@ def fetch_llm_dossier(
     careers_url: str | None = None,
     wikipedia_extract: str = "",
     wikidata_founded: int | None = None,
-    wikidata_headcount: int | None = None,
+    wikidata_headcount: str | None = None,
     jd_text: str = "",
     retrieval_snippets: list[RetrievalSnippet] | None = None,
     fit_preferences_text: str = "",
@@ -916,7 +916,7 @@ def research_company(
 
     # 2. Wikidata (structured data: founded year, headcount — context + fallback)
     wikidata_founded: int | None = None
-    wikidata_headcount: int | None = None
+    wikidata_headcount: str | None = None
     wikidata, wikidata_official_website = fetch_wikidata_info(
         company,
         wikipedia_title=wiki.title if wiki else None,
@@ -1041,7 +1041,7 @@ def research_company(
                 if dossier.funding.founded is None and wikidata_founded:
                     dossier.funding.founded = wikidata_founded
                 if dossier.funding.headcount is None and wikidata_headcount:
-                    dossier.funding.headcount = wikidata_headcount
+                    dossier.funding.headcount = str(wikidata_headcount)
             elif wikidata and not dossier.funding:
                 dossier.funding = wikidata
             # Preserve retrieval metadata from the pre-dossier result

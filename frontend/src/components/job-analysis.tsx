@@ -146,11 +146,11 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
   }, [jobId]);
 
   useEffect(() => {
-    function onRunAll() {
+    function onRunAnalysis() {
       runAnalysis();
     }
-    window.addEventListener("run-all-triggered", onRunAll);
-    return () => window.removeEventListener("run-all-triggered", onRunAll);
+    window.addEventListener("run-analysis-triggered", onRunAnalysis);
+    return () => window.removeEventListener("run-analysis-triggered", onRunAnalysis);
   }, [runAnalysis]);
 
   const verdictStyle = data ? VERDICT_STYLES[data.verdict] || VERDICT_STYLES.SKIP : null;

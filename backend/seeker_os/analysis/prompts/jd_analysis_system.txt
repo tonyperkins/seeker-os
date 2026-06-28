@@ -18,7 +18,11 @@ nothing else. No prose outside the JSON.
 5. Check POSITIONING. The candidate's positioning is provided below in the injected
    context. Roles that mismatch the candidate's positioning should be called out,
    even if the stack overlaps.
-6. Produce tailoring guidance — but tailoring is REORDER and REFRAME ONLY.
+6. Use COMPANY_RESEARCH (if available) to inform company_fit, red_flags, and comp
+   assessment. The dossier contains funding stage, headcount, sentiment, remote
+   policy, and verdict flags from web research. If no research is available, assess
+   company_fit from the JD alone.
+7. Produce tailoring guidance — but tailoring is REORDER and REFRAME ONLY.
 
 ## Accuracy guardrails (NON-NEGOTIABLE — override helpfulness)
 - NEVER invent or upgrade a competency to match the JD. Do not mirror JD language

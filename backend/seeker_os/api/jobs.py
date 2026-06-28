@@ -1227,6 +1227,10 @@ def _refilter_rescore_job(db, row, settings) -> RefilterRescoreResult:
     post_apply = row["status"] in JobStatus._POST_APPLY
     terminal = row["status"] in JobStatus._TERMINAL
 
+    # Capture previous state for change detection
+    previous_score = row["score"] if "score" in row.keys() and row["score"] is not None else None
+    previous_status = row["status"]
+
     # Reconstruct JobCard from DB row for filtering
     card = JobCard(
         source_id=row["source_id"] or "",
@@ -1277,9 +1281,17 @@ def _refilter_rescore_job(db, row, settings) -> RefilterRescoreResult:
                     },
                     metadata={"reason": filter_result.reason, "refilter": True},
                 )
+            else:
+                record_event(
+                    db, job_id, EventType.REFILTER_RESCORED, Actor.SYSTEM,
+                    metadata={"refilter": True, "filter_reason": filter_result.reason},
+                )
             return RefilterRescoreResult(
                 job_id=job_id,
                 status="rejected",
+                previous_score=previous_score,
+                previous_status=previous_status,
+                status_changed=previous_status != "rejected",
                 filter_passed=False,
                 filter_reason=filter_result.reason,
             )
@@ -1358,25 +1370,40 @@ def _refilter_rescore_job(db, row, settings) -> RefilterRescoreResult:
     extra_sets["net_score"] = net
     extra_sets["updated_at"] = now
 
+    score_changed = (previous_score is None) or (abs(score_result.score - previous_score) > 0.01)
+    status_changed = new_status != previous_status
+
     # Apply status transition if changed
-    if not post_apply and not terminal and new_status != row["status"]:
+    if not post_apply and not terminal and status_changed:
         if new_status == "ready":
             transition_status(
                 db, job_id, "ready", EventType.SCORED_READY, Actor.SYSTEM,
                 extra_sets=extra_sets,
-                metadata={"refilter_rescore": True},
+                metadata={"refilter_rescore": True, "previous_score": previous_score},
             )
         else:
             transition_status(
                 db, job_id, "rejected", EventType.SCORED_REJECTED, Actor.SYSTEM,
                 extra_sets=extra_sets,
-                metadata={"refilter_rescore": True},
+                metadata={"refilter_rescore": True, "previous_score": previous_score},
             )
     else:
-        # Just update score fields without status change
+        # Just update score fields without status change — still record event
         db.execute(
             f"UPDATE jobs SET {', '.join(f'{k} = ?' for k in extra_sets)} WHERE id = ?",
             (*extra_sets.values(), job_id),
+        )
+        record_event(
+            db, job_id, EventType.REFILTER_RESCORED, Actor.SYSTEM,
+            metadata={
+                "refilter_rescore": True,
+                "previous_score": previous_score,
+                "new_score": score_result.score,
+                "net_score": net,
+                "score_changed": score_changed,
+                "research_applied": research_applied,
+                "analysis_verdict": analysis_verdict,
+            },
         )
 
     return RefilterRescoreResult(
@@ -1384,6 +1411,10 @@ def _refilter_rescore_job(db, row, settings) -> RefilterRescoreResult:
         status=new_status,
         score=score_result.score,
         net_score=net,
+        previous_score=previous_score,
+        previous_status=previous_status,
+        score_changed=score_changed,
+        status_changed=status_changed,
         filter_passed=True,
         research_applied=research_applied,
         analysis_verdict=analysis_verdict,

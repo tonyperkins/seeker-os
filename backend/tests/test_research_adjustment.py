@@ -258,7 +258,7 @@ class TestRightSizeCompany:
     def test_small_headcount_gets_bonus(self):
         """Confirmed headcount ≤ 600 gets +0.5."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=200),
+            funding=FundingDossier(confidence=0.8, headcount="200"),
         )
         result = compute_research_adjustment(6.0, dossier, self._rules())
         assert result.research_delta == 0.5
@@ -269,7 +269,7 @@ class TestRightSizeCompany:
     def test_headcount_at_cutoff_passes(self):
         """Headcount exactly at cutoff (600) passes."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=600),
+            funding=FundingDossier(confidence=0.8, headcount="600"),
         )
         result = compute_research_adjustment(6.0, dossier, self._rules())
         assert result.research_delta == 0.5
@@ -277,7 +277,7 @@ class TestRightSizeCompany:
     def test_large_headcount_no_bonus(self):
         """Confirmed headcount > 600 does NOT get the bonus."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=7000),
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
         )
         result = compute_research_adjustment(6.0, dossier, self._rules())
         assert result.research_delta == 0.0
@@ -295,7 +295,7 @@ class TestRightSizeCompany:
     def test_low_confidence_no_bonus(self):
         """Funding confidence below threshold skips the modifier."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.3, headcount=200),
+            funding=FundingDossier(confidence=0.3, headcount="200"),
         )
         result = compute_research_adjustment(6.0, dossier, self._rules())
         assert result.research_delta == 0.0
@@ -313,7 +313,7 @@ class TestRightSizeCompany:
         """headcount=5000 + size_bucket='small' → right_size_company does NOT fire.
         Headcount is authoritative when present; size_bucket is only a fallback when headcount is None."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=5000),
+            funding=FundingDossier(confidence=0.8, headcount="5000"),
             fit=FitDossier(confidence=0.6, size_bucket="small"),
         )
         result = compute_research_adjustment(6.0, dossier, self._rules())
@@ -339,7 +339,7 @@ class TestLargeCompanyConfirmed:
     def test_large_headcount_gets_penalty(self):
         """Confirmed headcount ≥ 3000 gets -1.5."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=7000),
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
         )
         result = compute_research_adjustment(7.0, dossier, self._rules())
         assert result.research_delta == -1.5
@@ -349,7 +349,7 @@ class TestLargeCompanyConfirmed:
     def test_headcount_at_threshold(self):
         """Headcount exactly 3000 triggers the penalty."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=3000),
+            funding=FundingDossier(confidence=0.8, headcount="3000"),
         )
         result = compute_research_adjustment(7.0, dossier, self._rules())
         assert result.research_delta == -1.5
@@ -357,7 +357,7 @@ class TestLargeCompanyConfirmed:
     def test_small_headcount_no_penalty(self):
         """Headcount < 3000 does NOT trigger the penalty."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=500),
+            funding=FundingDossier(confidence=0.8, headcount="500"),
         )
         result = compute_research_adjustment(7.0, dossier, self._rules())
         assert result.research_delta == 0.0
@@ -383,7 +383,7 @@ class TestLargeCompanyConfirmed:
     def test_low_confidence_no_penalty(self):
         """Funding confidence below threshold skips the modifier."""
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.3, headcount=7000),
+            funding=FundingDossier(confidence=0.3, headcount="7000"),
         )
         result = compute_research_adjustment(7.0, dossier, self._rules())
         assert result.research_delta == 0.0
@@ -407,7 +407,7 @@ class TestDoubleCountSuppression:
         ]
         base_modifiers = {"large_enterprise": -0.5}
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=7000),
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
         )
         result = compute_research_adjustment(
             4.5, dossier, rules, base_modifiers=base_modifiers,
@@ -435,7 +435,7 @@ class TestDoubleCountSuppression:
             ),
         ]
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=7000),
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
         )
         # No base_modifiers passed
         result = compute_research_adjustment(5.0, dossier, rules)
@@ -457,7 +457,7 @@ class TestDoubleCountSuppression:
         ]
         base_modifiers = {"large_enterprise": -0.5}
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=200),  # small — doesn't fire
+            funding=FundingDossier(confidence=0.8, headcount="200"),  # small — doesn't fire
         )
         result = compute_research_adjustment(
             5.0, dossier, rules, base_modifiers=base_modifiers,
@@ -485,7 +485,7 @@ class TestDoubleCountSuppression:
         # base_modifiers does NOT include large_enterprise — it wasn't matched
         base_modifiers = {"aws": 1.0}
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=7000),
+            funding=FundingDossier(confidence=0.8, headcount="7000"),
         )
         result = compute_research_adjustment(
             5.0, dossier, rules, base_modifiers=base_modifiers,
@@ -524,7 +524,7 @@ class TestPhase1Integration:
         ]
         base_modifiers = {"large_enterprise": -0.5}
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=7000, public=True),
+            funding=FundingDossier(confidence=0.8, headcount="7000", public=True),
         )
         # base_score = 4.5 (e.g. base 4.0 + aws 1.0 + large_enterprise -0.5)
         result = compute_research_adjustment(
@@ -587,7 +587,7 @@ class TestPhase1Integration:
             ),
         ]
         dossier = _make_grounded_dossier(
-            funding=FundingDossier(confidence=0.8, headcount=5000),
+            funding=FundingDossier(confidence=0.8, headcount="5000"),
             fit=FitDossier(confidence=0.6, size_bucket="small"),
         )
         result = compute_research_adjustment(6.0, dossier, rules)

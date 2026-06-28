@@ -12,6 +12,7 @@ research_modifiers section), not hardcoded in Python.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from pydantic import BaseModel
@@ -22,6 +23,24 @@ from seeker_os.research.models import (
     SentimentDossier,
     FitDossier,
 )
+
+
+def _parse_headcount(value: str | int | None) -> int | None:
+    """Parse a headcount value that may be a range string like '501-1000',
+    a plain int, or None. Returns the lower bound for ranges, the int for
+    plain numbers, or None if unparseable."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    # Try to extract numbers from strings like "501-1000", "~500", "1,200"
+    nums = re.findall(r"[\d,]+", value.replace(",", ""))
+    if not nums:
+        return None
+    try:
+        return int(nums[0])
+    except ValueError:
+        return None
 
 
 class ResearchModifierRule(BaseModel):
@@ -129,7 +148,9 @@ def _is_right_size_company(
     Only falls back to fit.size_bucket when headcount is None.
     """
     if funding.headcount is not None and rule.headcount_max is not None:
-        return funding.headcount <= rule.headcount_max
+        hc = _parse_headcount(funding.headcount)
+        if hc is not None:
+            return hc <= rule.headcount_max
     # Headcount unknown — fall back to size_bucket signal
     if fit.size_bucket:
         bucket = fit.size_bucket.lower()
@@ -147,7 +168,9 @@ def _is_large_company_confirmed(
     Only falls back to public + large size_bucket when headcount is None.
     """
     if funding.headcount is not None and rule.headcount_min is not None:
-        return funding.headcount >= rule.headcount_min
+        hc = _parse_headcount(funding.headcount)
+        if hc is not None:
+            return hc >= rule.headcount_min
     # Headcount unknown — fall back to public + large size_bucket signal
     if funding.public and fit.size_bucket:
         bucket = fit.size_bucket.lower()

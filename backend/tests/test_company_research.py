@@ -168,7 +168,7 @@ class TestWikidataAdapter:
         dossier, official_website = fetch_wikidata_info("Stripe", wikipedia_title="Stripe, Inc.")
         assert dossier is not None
         assert dossier.founded == 2010
-        assert dossier.headcount == 2500
+        assert dossier.headcount == "2500"
         assert dossier.confidence == 0.6
         assert len(dossier.sources) == 1
         assert "wikidata.org" in dossier.sources[0].url
@@ -227,7 +227,7 @@ class TestResearchCompany:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2010,
-                headcount=2500,
+                headcount="2500",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q7624104", retrieved="2024-01-01T00:00:00Z")],
             ),
@@ -242,7 +242,7 @@ class TestResearchCompany:
         assert result.wikipedia is not None
         assert result.funding is not None
         assert result.funding.founded == 2010
-        assert result.funding.headcount == 2500
+        assert result.funding.headcount == "2500"
         assert "wikipedia" in result.sources_used
         assert "wikidata" in result.sources_used
 
@@ -258,7 +258,7 @@ class TestResearchCompany:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2010,
-                headcount=2500,
+                headcount="2500",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q7624104", retrieved="2024-01-01T00:00:00Z")],
             ),
@@ -274,7 +274,7 @@ class TestResearchCompany:
                 founded=2010,
                 stage="Series D",
                 total_raised_usd=1500000000,
-                headcount=7000,
+                headcount="7000",
                 financial_health="healthy",
                 confidence=0.8,
             ),
@@ -375,7 +375,7 @@ class TestResearchCompany:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2010,
-                headcount=2500,
+                headcount="2500",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q1", retrieved="2024-01-01")],
             ),
@@ -404,7 +404,7 @@ class TestResearchCompany:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2015,
-                headcount=500,
+                headcount="500",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q2", retrieved="2024-01-01")],
             ),
@@ -432,7 +432,7 @@ class TestResearchCompany:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2010,
-                headcount=100,
+                headcount="100",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q3", retrieved="2024-01-01")],
             ),
@@ -461,7 +461,7 @@ class TestResearchCompany:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2010,
-                headcount=100,
+                headcount="100",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q4", retrieved="2024-01-01")],
             ),
@@ -487,7 +487,7 @@ class TestResearchCompany:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2010,
-                headcount=100,
+                headcount="100",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q5", retrieved="2024-01-01")],
             ),
@@ -521,7 +521,7 @@ class TestCompanyResearchModels:
                 founded=2010,
                 stage="Series D",
                 total_raised_usd=1500000000,
-                headcount=7000,
+                headcount="7000",
                 confidence=0.8,
             ),
             sentiment=SentimentDossier(
@@ -1688,7 +1688,7 @@ class TestPhase3VerificationDegradation:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2015,
-                headcount=500,
+                headcount="500",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q2", retrieved="2024-01-01")],
             ),
@@ -1702,7 +1702,7 @@ class TestPhase3VerificationDegradation:
             summary="Large enterprise, 5000 employees, healthy runway.",
             funding=FundingDossier(
                 founded=2015,
-                headcount=5000,
+                headcount="5000",
                 stage="Series D",
                 financial_health="healthy",
                 confidence=0.8,
@@ -1758,7 +1758,7 @@ class TestPhase3VerificationDegradation:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2010,
-                headcount=7000,
+                headcount="7000",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q1", retrieved="2024-01-01")],
             ),
@@ -1771,7 +1771,7 @@ class TestPhase3VerificationDegradation:
             summary="Series D fintech, healthy runway.",
             funding=FundingDossier(
                 founded=2010,
-                headcount=7000,
+                headcount="7000",
                 stage="Series D",
                 financial_health="healthy",
                 confidence=0.8,
@@ -1821,7 +1821,7 @@ class TestPhase3VerificationDegradation:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2018,
-                headcount=50,
+                headcount="50",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q3", retrieved="2024-01-01")],
             ),
@@ -1834,7 +1834,7 @@ class TestPhase3VerificationDegradation:
             summary="Small startup, 50 employees.",
             funding=FundingDossier(
                 founded=2018,
-                headcount=50,
+                headcount="50",
                 stage="Seed",
                 confidence=0.6,
             ),
@@ -1886,7 +1886,7 @@ class TestPhase3VerificationDegradation:
             summary="Early-stage startup.",
             funding=FundingDossier(
                 founded=2023,
-                headcount=20,
+                headcount="20",
                 confidence=0.6,
             ),
         )
@@ -1993,7 +1993,7 @@ class TestPhase3VerificationDegradation:
         mock_wikidata.return_value = (
             FundingDossier(
                 founded=2010,
-                headcount=1000,
+                headcount="1000",
                 confidence=0.6,
                 sources=[SourceRef(url="https://www.wikidata.org/wiki/Q9", retrieved="2024-01-01")],
             ),
@@ -2008,7 +2008,7 @@ class TestPhase3VerificationDegradation:
             summary="Large company.",
             funding=FundingDossier(
                 founded=2010,
-                headcount=5000,
+                headcount="5000",
                 confidence=0.8,
                 sources=[SourceRef(url="https://invented-url.com/fake", retrieved="2024-01-01")],
             ),

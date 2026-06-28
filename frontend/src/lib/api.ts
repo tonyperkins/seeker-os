@@ -152,6 +152,10 @@ export interface RefilterRescoreResult {
   status: string;
   score: number | null;
   net_score: number | null;
+  previous_score: number | null;
+  previous_status: string | null;
+  score_changed: boolean;
+  status_changed: boolean;
   filter_passed: boolean;
   filter_reason: string | null;
   research_applied: boolean;

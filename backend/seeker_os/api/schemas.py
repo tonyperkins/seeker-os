@@ -233,6 +233,10 @@ class RefilterRescoreResult(BaseModel):
     status: str
     score: float | None = None
     net_score: float | None = None
+    previous_score: float | None = None
+    previous_status: str | None = None
+    score_changed: bool = False
+    status_changed: bool = False
     filter_passed: bool
     filter_reason: str | None = None
     research_applied: bool = False
@@ -585,7 +589,15 @@ class FundingDossierSchema(BaseModel):
     total_raised_usd: int | None = None
     valuation_usd: int | None = None
     last_round: LastRoundSchema | None = None
-    headcount: int | None = None
+    headcount: str | None = None
+
+    @field_validator("headcount", mode="before")
+    @classmethod
+    def _coerce_headcount(cls, v):
+        if isinstance(v, int):
+            return str(v)
+        return v
+
     headcount_trend: str | None = None
     layoffs: list[LayoffEventSchema] = []
     financial_health: str | None = None
