@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * Like useState, but persists the value to localStorage so it survives reloads.
  *
- * Reads synchronously from localStorage during initialization (via lazy
- * useState initializer) so the first render already has the stored value —
- * no flash of default state, no race with effects that depend on the value.
+ * Initializes with `initial` on both server and first client render to avoid
+ * hydration mismatches, then syncs from localStorage in a useEffect after
+ * hydration completes.
  *
  * @param key   localStorage key
  * @param initial  default value when nothing is stored (or localStorage is unavailable)
@@ -15,18 +15,23 @@ import { useCallback, useState } from "react";
 export function usePersistentState<T>(
   key: string,
   initial: T,
+  hydrateFromStorage = true,
 ): [T, (value: T | ((prev: T) => T)) => void] {
-  const [state, setState] = useState<T>(() => {
+  const [state, setState] = useState<T>(initial);
+
+  // Sync from localStorage after hydration (skip when initial came from URL)
+  useEffect(() => {
+    if (!hydrateFromStorage) return;
     try {
       const stored = localStorage.getItem(key);
       if (stored !== null) {
-        return JSON.parse(stored) as T;
+        const parsed = JSON.parse(stored) as T;
+        setState(parsed);
       }
     } catch {
       // ignore parse / access errors
     }
-    return initial;
-  });
+  }, [key, hydrateFromStorage]);
 
   const update = useCallback(
     (value: T | ((prev: T) => T)) => {

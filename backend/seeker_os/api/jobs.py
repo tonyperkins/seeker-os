@@ -319,6 +319,7 @@ def list_jobs(
     search: str | None = Query(None, description="Free-text search across title, company, location, reject_reason, discovered_query"),
     source: str | None = Query(None, description="Filter by source_id (e.g. 'manual', 'hiring_cafe')"),
     run_id: str | None = Query(None, description="Filter by pipeline run_id"),
+    verdict: str | None = Query(None, description="Filter by AI analysis verdict (APPLY, CONDITIONAL, MONITOR, SKIP)"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -350,6 +351,9 @@ def list_jobs(
         if run_id:
             query += " AND run_id LIKE ?"
             params.append(f"%{run_id}%")
+        if verdict:
+            query += " AND analysis_verdict = ?"
+            params.append(verdict)
 
         query += " ORDER BY"
         if status == "ready":

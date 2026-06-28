@@ -428,7 +428,7 @@ export interface MasterResumeInfo {
 export const api = {
   // Jobs
   jobs: {
-    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; limit?: number; offset?: number }) => {
       const search = new URLSearchParams();
       if (params?.status) search.set("status", params.status);
       if (params?.min_tier) search.set("min_tier", String(params.min_tier));
@@ -437,6 +437,7 @@ export const api = {
       if (params?.search) search.set("search", params.search);
       if (params?.source) search.set("source", params.source);
       if (params?.run_id) search.set("run_id", params.run_id);
+      if (params?.verdict) search.set("verdict", params.verdict);
       if (params?.limit) search.set("limit", String(params.limit));
       if (params?.offset) search.set("offset", String(params.offset));
       const qs = search.toString();

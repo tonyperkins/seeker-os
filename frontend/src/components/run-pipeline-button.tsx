@@ -26,7 +26,7 @@ const STEPS = [
 
 type StepStatus = "pending" | "started" | "in_progress" | "completed";
 
-export function RunPipelineButton({ setupComplete = true }: { setupComplete?: boolean }) {
+export function RunPipelineButton({ setupComplete = true, compact = false }: { setupComplete?: boolean; compact?: boolean }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PipelineRunSummary | null>(null);
@@ -149,15 +149,15 @@ export function RunPipelineButton({ setupComplete = true }: { setupComplete?: bo
 
   return (
     <div className="flex flex-col gap-3">
-      <Button onClick={handleRun} disabled={loading || !setupComplete} size="lg">
+      <Button onClick={handleRun} disabled={loading || !setupComplete} size={compact ? "default" : "lg"}>
         {loading ? (
           <Loader2 className="animate-spin" />
         ) : (
           <Play />
         )}
-        {loading ? "Running Pipeline…" : setupComplete ? "Run Pipeline" : "Complete setup first"}
+        {loading ? "Running…" : setupComplete ? "Run pipeline" : "Complete setup first"}
       </Button>
-      {!setupComplete && (
+      {!setupComplete && !compact && (
         <p className="text-xs text-muted-foreground text-center">
           Complete all setup steps above before running the pipeline.
         </p>
