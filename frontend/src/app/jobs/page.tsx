@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX } from "lucide-react";
+import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX, RefreshCw } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -553,6 +553,15 @@ function JobsPageInner() {
             <Brain className="size-3.5" />
             <Building2 className="size-3.5 -ml-1" />
             Analysis + Research
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={bulkLoading}
+            onClick={() => runBulkAction("Refilter & Rescore", (id) => api.jobs.refilterRescore({ job_ids: [id] }))}
+          >
+            <RefreshCw className="size-3.5" />
+            Refilter & Rescore
           </Button>
           <Button
             variant="outline"

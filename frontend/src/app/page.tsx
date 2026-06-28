@@ -19,6 +19,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { RunStrip } from "@/components/run-strip";
 import { VerdictBadge } from "@/components/verdict-badge";
+import { RefilterRescoreButton } from "@/components/refilter-rescore-button";
 import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
 
@@ -173,39 +174,44 @@ export default async function DashboardPage() {
             ) : (
               <div className="flex flex-col divide-y divide-border">
                 {runs.slice(0, 5).map((run) => (
-                  <Link
+                  <div
                     key={run.id}
-                    href={`/jobs?run_id=${run.run_id}&status=ready`}
                     className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
                   >
-                    {run.status === "completed" ? (
-                      <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
-                    ) : run.status === "failed" ? (
-                      <XCircle className="size-4 shrink-0 text-destructive" />
-                    ) : (
-                      <Clock className="size-4 shrink-0 text-muted-foreground" />
-                    )}
-                    <div className="flex flex-col">
-                      <span className="text-muted-foreground">{formatDateTime(run.started_at)}</span>
-                      <span className="font-mono text-xs text-muted-foreground/70">
-                        {run.run_id.slice(0, 8)}
-                      </span>
-                    </div>
-                    <div className="ml-auto flex items-center gap-4 font-mono text-xs">
-                      <div className="flex flex-col items-end">
-                        <span className="font-semibold">{run.cards_fetched}</span>
-                        <span className="text-muted-foreground/70">fetched</span>
+                    <Link
+                      href={`/jobs?run_id=${run.run_id}&status=ready`}
+                      className="flex flex-1 items-center gap-3"
+                    >
+                      {run.status === "completed" ? (
+                        <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                      ) : run.status === "failed" ? (
+                        <XCircle className="size-4 shrink-0 text-destructive" />
+                      ) : (
+                        <Clock className="size-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <div className="flex flex-col">
+                        <span className="text-muted-foreground">{formatDateTime(run.started_at)}</span>
+                        <span className="font-mono text-xs text-muted-foreground/70">
+                          {run.run_id.slice(0, 8)}
+                        </span>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span className="font-semibold">{run.cards_new}</span>
-                        <span className="text-muted-foreground/70">new</span>
+                      <div className="ml-auto flex items-center gap-4 font-mono text-xs">
+                        <div className="flex flex-col items-end">
+                          <span className="font-semibold">{run.cards_fetched}</span>
+                          <span className="text-muted-foreground/70">fetched</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="font-semibold">{run.cards_new}</span>
+                          <span className="text-muted-foreground/70">new</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{run.jobs_ready}</span>
+                          <span className="text-muted-foreground/70">ready</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{run.jobs_ready}</span>
-                        <span className="text-muted-foreground/70">ready</span>
-                      </div>
-                    </div>
-                  </Link>
+                    </Link>
+                    <RefilterRescoreButton runId={run.run_id} label="" size="icon" variant="ghost" />
+                  </div>
                 ))}
               </div>
             )}

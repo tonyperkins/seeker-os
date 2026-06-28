@@ -38,6 +38,7 @@ import { EventTimeline } from "@/components/event-timeline";
 import { CopyButton } from "@/components/copy-button";
 import { RunAllButton } from "@/components/run-all-button";
 import { CopyAllButton } from "@/components/copy-all-button";
+import { RefilterRescoreButton } from "@/components/refilter-rescore-button";
 import { api, type JobDetail } from "@/lib/api";
 import { formatDate } from "@/lib/date";
 
@@ -182,6 +183,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
         <div className="flex flex-wrap gap-2">
           <RunAllButton jobId={job.id} />
           <CopyAllButton job={job} />
+          <RefilterRescoreButton jobIds={[job.id]} />
         </div>
       </div>
 

@@ -221,6 +221,24 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class RefilterRescoreRequest(BaseModel):
+    """POST /api/jobs/refilter-rescore."""
+    job_ids: list[int] | None = None
+    run_id: str | None = None
+
+
+class RefilterRescoreResult(BaseModel):
+    """Result of a refilter&rescore operation."""
+    job_id: int
+    status: str
+    score: float | None = None
+    net_score: float | None = None
+    filter_passed: bool
+    filter_reason: str | None = None
+    research_applied: bool = False
+    analysis_verdict: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Application Event schemas
 # ---------------------------------------------------------------------------
