@@ -120,14 +120,15 @@ export default function JobsPage() {
 function JobsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const clearFilters = searchParams.get("clear_filters") === "1";
 
-  const [status, setStatus] = usePersistentState<string>("jobs:filter:status", searchParams.get("status") ?? "", !searchParams.get("status"));
-  const [minScore, setMinScore] = usePersistentState<string>("jobs:filter:minScore", searchParams.get("min_score") ?? "", !searchParams.get("min_score"));
-  const [company, setCompany] = usePersistentState<string>("jobs:filter:company", searchParams.get("company") ?? "", !searchParams.get("company"));
-  const [search, setSearch] = usePersistentState<string>("jobs:filter:search", searchParams.get("search") ?? "", !searchParams.get("search"));
-  const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "", !searchParams.get("source"));
-  const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "", !searchParams.get("run_id"));
-  const [verdict, setVerdict] = usePersistentState<string>("jobs:filter:verdict", searchParams.get("verdict") ?? "", !searchParams.get("verdict"));
+  const [status, setStatus] = usePersistentState<string>("jobs:filter:status", searchParams.get("status") ?? "", clearFilters || !searchParams.get("status"));
+  const [minScore, setMinScore] = usePersistentState<string>("jobs:filter:minScore", searchParams.get("min_score") ?? "", clearFilters || !searchParams.get("min_score"));
+  const [company, setCompany] = usePersistentState<string>("jobs:filter:company", searchParams.get("company") ?? "", clearFilters || !searchParams.get("company"));
+  const [search, setSearch] = usePersistentState<string>("jobs:filter:search", searchParams.get("search") ?? "", clearFilters || !searchParams.get("search"));
+  const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "", clearFilters || !searchParams.get("source"));
+  const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "", clearFilters || !searchParams.get("run_id"));
+  const [verdict, setVerdict] = usePersistentState<string>("jobs:filter:verdict", searchParams.get("verdict") ?? "", clearFilters || !searchParams.get("verdict"));
   const [sortKey, setSortKey] = usePersistentState<string>("jobs:sort:key", "score");
   const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("jobs:sort:dir", "desc");
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);

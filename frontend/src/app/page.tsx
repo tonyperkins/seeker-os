@@ -179,7 +179,7 @@ export default async function DashboardPage() {
                     className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
                   >
                     <Link
-                      href={`/jobs?run_id=${run.run_id}&status=ready`}
+                      href={`/jobs?run_id=${run.run_id}&clear_filters=1`}
                       className="flex flex-1 items-center gap-3"
                     >
                       {run.status === "completed" ? (
