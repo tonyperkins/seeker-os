@@ -11,12 +11,11 @@ services:
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - DEMO_MODE=${DEMO_MODE:-true}
-      # API keys — passthrough from host env (optional). If set, they take
-      # precedence over .env (load_dotenv uses override=False). If unset,
-      # load_dotenv fills them from the mounted .env file instead.
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - KILO_API_KEY=${KILO_API_KEY:-}
-      - RETRIEVAL_API_KEY=${RETRIEVAL_API_KEY:-}
+      # API keys are NOT passed through here. When the host var is unset,
+      # ${VAR:-} evaluates to empty string, and load_dotenv(override=False)
+      # treats that as "already set" — blocking the real key in data/.env.
+      # Instead, keys live in data/.env (mounted volume, persists across
+      # rebuilds) and are loaded by load_dotenv at startup.
     restart: unless-stopped
 
   frontend:
