@@ -3,16 +3,28 @@
 import pytest
 from fastapi.testclient import TestClient
 
+import seeker_os.database as dbmod
 from seeker_os.api.app import app
 from seeker_os.database import run_migrations, get_connection
 
 
 @pytest.fixture(scope="module")
-def client():
-    """Create a test client. DB migrations run on startup."""
-    # Ensure DB exists
-    run_migrations()
-    return TestClient(app)
+def client(tmp_path_factory):
+    """Create a test client with DB isolated to a temp path."""
+    db_path = tmp_path_factory.mktemp("db") / "test.db"
+    run_migrations(db_path)
+
+    _orig_db_path = dbmod._db_path
+    _orig_get_connection = dbmod.get_connection
+    dbmod._db_path = lambda: db_path
+
+    def _temp_get_connection(_db_path=None):
+        return _orig_get_connection(db_path)
+
+    dbmod.get_connection = _temp_get_connection
+    yield TestClient(app)
+    dbmod._db_path = _orig_db_path
+    dbmod.get_connection = _orig_get_connection
 
 
 class TestHealth:

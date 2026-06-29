@@ -10,14 +10,31 @@ from fastapi.testclient import TestClient
 
 os.environ.setdefault("STATIC_OUT_DIR", "/nonexistent")
 
+import seeker_os.api.backup as backupmod
+import seeker_os.database as dbmod
 from seeker_os.api.app import app
 from seeker_os.database import run_migrations, MIGRATIONS
 
 
 @pytest.fixture(scope="module")
-def client():
-    run_migrations()
-    return TestClient(app)
+def client(tmp_path_factory):
+    db_path = tmp_path_factory.mktemp("db") / "test.db"
+    run_migrations(db_path)
+
+    _orig_db_path = dbmod._db_path
+    _orig_get_connection = dbmod.get_connection
+    _orig_backup_db_path = backupmod._db_path
+    dbmod._db_path = lambda: db_path
+    backupmod._db_path = lambda: db_path
+
+    def _temp_get_connection(_db_path=None):
+        return _orig_get_connection(db_path)
+
+    dbmod.get_connection = _temp_get_connection
+    yield TestClient(app)
+    dbmod._db_path = _orig_db_path
+    dbmod.get_connection = _orig_get_connection
+    backupmod._db_path = _orig_backup_db_path
 
 
 class TestBackupExcludeSecrets:

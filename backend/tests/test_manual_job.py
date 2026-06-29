@@ -6,46 +6,28 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
+import seeker_os.database as dbmod
 from seeker_os.api.app import app
 from seeker_os.database import run_migrations, get_connection
 
 
 @pytest.fixture(scope="module")
-def client():
-    """Create a test client. DB migrations run on startup."""
-    run_migrations()
-    # Clean up any leftover test manual jobs from previous runs
-    db = get_connection()
-    try:
-        manual_ids = db.execute("SELECT id FROM jobs WHERE source_id='manual' AND discovered_query='manual'").fetchall()
-        if manual_ids:
-            id_list = [str(r["id"]) for r in manual_ids]
-            id_csv = ",".join(id_list)
-            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers", "application_events"]:
-                db.execute(f"DELETE FROM {table} WHERE job_id IN ({id_csv})")
-            db.execute(f"DELETE FROM jobs WHERE id IN ({id_csv})")
-        db.commit()
-    finally:
-        db.close()
-    return TestClient(app)
+def client(tmp_path_factory):
+    """Create a test client with DB isolated to a temp path."""
+    db_path = tmp_path_factory.mktemp("db") / "test.db"
+    run_migrations(db_path)
 
+    _orig_db_path = dbmod._db_path
+    _orig_get_connection = dbmod.get_connection
+    dbmod._db_path = lambda: db_path
 
-@pytest.fixture(scope="module", autouse=True)
-def cleanup_after():
-    """Clean up test manual jobs after all tests in the module complete."""
-    yield
-    db = get_connection()
-    try:
-        manual_ids = db.execute("SELECT id FROM jobs WHERE source_id='manual' AND discovered_query='manual'").fetchall()
-        if manual_ids:
-            id_list = [str(r["id"]) for r in manual_ids]
-            id_csv = ",".join(id_list)
-            for table in ["dedup_registry", "resumes", "company_research", "job_analyses", "cover_letters", "application_answers", "application_events"]:
-                db.execute(f"DELETE FROM {table} WHERE job_id IN ({id_csv})")
-            db.execute(f"DELETE FROM jobs WHERE id IN ({id_csv})")
-        db.commit()
-    finally:
-        db.close()
+    def _temp_get_connection(_db_path=None):
+        return _orig_get_connection(db_path)
+
+    dbmod.get_connection = _temp_get_connection
+    yield TestClient(app)
+    dbmod._db_path = _orig_db_path
+    dbmod.get_connection = _orig_get_connection
 
 
 # Long JD text that passes the evidence gate (>500 chars)

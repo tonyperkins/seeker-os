@@ -24,8 +24,13 @@ except ImportError:
 
 
 def is_available() -> bool:
-    """Return True if Playwright is installed and ready to use."""
-    return _PLAYWRIGHT_AVAILABLE
+    """Return True if Playwright is installed and browser fallback is not disabled."""
+    if not _PLAYWRIGHT_AVAILABLE:
+        return False
+    import os
+    if os.environ.get("SEEKER_OS_NO_BROWSER"):
+        return False
+    return True
 
 
 def fetch_with_browser(url: str, timeout_ms: int = 30000) -> str:
