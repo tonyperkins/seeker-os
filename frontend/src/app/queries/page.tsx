@@ -286,12 +286,13 @@ export default function QueriesPage() {
               No queries configured. Add one to start sourcing jobs.
             </p>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16">On</TableHead>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Slug</TableHead>
+                  <TableHead className="min-w-[8rem]">Label</TableHead>
+                  <TableHead className="min-w-[10rem] max-w-[20rem]">Slug</TableHead>
                   <TableHead className="w-28">Commitment</TableHead>
                   <TableHead className="w-20">Pages</TableHead>
                   <TableHead className="w-36">Last run</TableHead>
@@ -337,7 +338,7 @@ export default function QueriesPage() {
                       {/* Slug + search query (2 lines) */}
                       <TableCell>
                         <div className="flex flex-col gap-1">
-                          <span className="font-mono text-xs">{q.slug}</span>
+                          <span className="font-mono text-xs truncate">{q.slug}</span>
                           {isEditing ? (
                             <Input
                               value={editSearchQuery}
@@ -346,7 +347,7 @@ export default function QueriesPage() {
                               className="h-7"
                             />
                           ) : (
-                            <span className="font-mono text-xs text-muted-foreground">
+                            <span className="font-mono text-xs text-muted-foreground break-words line-clamp-2">
                               {q.search_query || "—"}
                             </span>
                           )}
@@ -487,6 +488,7 @@ export default function QueriesPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
