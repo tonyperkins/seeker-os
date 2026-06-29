@@ -28,10 +28,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from seeker_os.config import CONFIG_DIR, DATA_DIR, PROJECT_ROOT
-from seeker_os.database import DB_PATH
+from seeker_os.database import DB_PATH, MIGRATIONS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backup", tags=["backup"])
+
+# Maximum upload size for restore endpoints (50 MB).
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 # Files/dirs included in a backup (relative to PROJECT_ROOT).
 _BACKUP_CONFIG_GLOBS = ["*.yml", "blacklist.txt"]
@@ -52,18 +55,23 @@ class BackupManifest(BaseModel):
     timestamp: str
 
 
-def _collect_backup_files() -> list[Path]:
-    """Gather all non-DB config files that should be included in the backup."""
+def _collect_backup_files(include_secrets: bool = False) -> list[Path]:
+    """Gather all non-DB config files that should be included in the backup.
+
+    When include_secrets is False (default), .env is excluded to prevent
+    API keys from leaking via the backup artifact.
+    """
     files: list[Path] = []
 
     # Config dir — all .yml and blacklist.txt
     for pattern in _BACKUP_CONFIG_GLOBS:
         files.extend(sorted(CONFIG_DIR.glob(pattern)))
 
-    # .env
-    env_path = PROJECT_ROOT / _BACKUP_ENV
-    if env_path.exists():
-        files.append(env_path)
+    # .env — only included when explicitly requested
+    if include_secrets:
+        env_path = PROJECT_ROOT / _BACKUP_ENV
+        if env_path.exists():
+            files.append(env_path)
 
     # Master resume (data/master_resume.*)
     if DATA_DIR.exists():
@@ -75,9 +83,13 @@ def _collect_backup_files() -> list[Path]:
 
 
 @router.get("")
-def download_backup():
-    """Download a zip of all non-DB configuration files."""
-    files = _collect_backup_files()
+def download_backup(include_secrets: bool = False):
+    """Download a zip of all non-DB configuration files.
+
+    By default, .env is excluded to prevent API keys from leaking via the
+    backup artifact. Pass include_secrets=true to include .env.
+    """
+    files = _collect_backup_files(include_secrets=include_secrets)
     if not files:
         raise HTTPException(status_code=404, detail="No configuration files found to back up")
 
@@ -117,6 +129,8 @@ async def restore_backup(file: UploadFile = File(...)):
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Empty file")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Upload exceeds maximum size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
 
     try:
         zf = zipfile.ZipFile(io.BytesIO(raw))
@@ -169,7 +183,7 @@ async def restore_backup(file: UploadFile = File(...)):
 
         # If .env was restored, update os.environ so keys take effect
         if name == _BACKUP_ENV:
-            _reload_env(target)
+            _reload_env_after_restore(target)
 
     # Invalidate settings cache so restored configs take effect
     from seeker_os.config import invalidate_settings_cache
@@ -182,17 +196,13 @@ async def restore_backup(file: UploadFile = File(...)):
     }
 
 
-def _reload_env(env_path: Path) -> None:
-    """Parse .env and update os.environ with its values."""
+def _reload_env_after_restore(env_path: Path) -> None:
+    """Reload .env into os.environ after a restore, using python-dotenv for
+    correct parsing of quotes, export prefixes, and multiline values."""
     if not env_path.exists():
         return
-    for line in env_path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" in line:
-            k, _, v = line.partition("=")
-            os.environ[k.strip()] = v.strip()
+    from dotenv import load_dotenv
+    load_dotenv(env_path, override=True)
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +299,8 @@ async def restore_db_backup(file: UploadFile = File(...)):
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Empty file")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Upload exceeds maximum size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
 
     # Write uploaded bytes to a temp file
     tmp_path = DB_PATH.parent / f"_restore_tmp_{os.getpid()}.db"
@@ -302,6 +314,19 @@ async def restore_db_backup(file: UploadFile = File(...)):
             test_conn.close()
         except sqlite3.DatabaseError:
             raise HTTPException(status_code=400, detail="File is not a valid SQLite database")
+
+        # Validate user_version is not from a future/incompatible schema
+        try:
+            ver_conn = sqlite3.connect(str(tmp_path))
+            db_version = ver_conn.execute("PRAGMA user_version").fetchone()[0]
+            ver_conn.close()
+        except sqlite3.DatabaseError:
+            raise HTTPException(status_code=400, detail="Could not read database version")
+        if db_version > len(MIGRATIONS):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Database version {db_version} is newer than this app supports (max {len(MIGRATIONS)}). Update Seeker OS before restoring.",
+            )
 
         # Safety: snapshot the current DB before overwriting
         snapshot_path = _create_pre_restore_snapshot()
