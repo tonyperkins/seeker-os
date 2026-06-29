@@ -20,6 +20,8 @@ from seeker_os.database import get_connection
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
 
+MAX_RESUME_BYTES = 10 * 1024 * 1024
+
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
@@ -99,6 +101,8 @@ async def upload_master_resume(file: UploadFile = File(...)):
 
     # Write the file
     content = await file.read()
+    if len(content) > MAX_RESUME_BYTES:
+        raise HTTPException(status_code=413, detail=f"File exceeds {MAX_RESUME_BYTES // (1024 * 1024)} MB maximum size")
     master_path.write_bytes(content)
 
     fmt = ext.lstrip(".")

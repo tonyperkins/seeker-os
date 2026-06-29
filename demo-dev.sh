@@ -2,7 +2,7 @@
 # Seeker OS — Development script
 # Starts both the FastAPI backend and Next.js frontend
 #
-# Usage: ./dev.sh
+# Usage: ./demo-dev.sh
 
 set -e
 

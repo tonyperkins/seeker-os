@@ -213,3 +213,65 @@ class TestEmptyCaps:
             min_score=0.0,
         )
         assert result == 8.0  # no cap to apply
+
+
+class TestPromptInjectionResistance:
+    """Verify that an adversarial LLM response (prompt injection producing an
+    inflated verdict/score) cannot bypass the deterministic clamping path.
+
+    The LLM's weighted_score is NOT used in net_score computation — only the
+    verdict string feeds into verdict_caps. These tests confirm that even if a
+    malicious JD tricks the LLM into returning APPLY with a max weighted_score,
+    the net_score is still bounded by base_score + research_delta + caps.
+    """
+
+    def test_inflated_apply_with_low_base_stays_low(self):
+        """LLM returns APPLY + weighted_score 10.0, but base_score is 3.0.
+        Net = clamp(3.0 + 0.0, 0, 10) = 3.0 — APPLY has null cap so no further
+        clamping, but the LLM's inflated weighted_score is never used."""
+        result = compute_net_score(
+            base_score=3.0,
+            research_delta=0.0,
+            analysis_verdict="APPLY",
+            verdict_caps=_DEFAULT_CAPS,
+            max_score=10.0,
+            min_score=0.0,
+        )
+        assert result == 3.0  # base_score is what matters, not LLM's weighted_score
+
+    def test_inflated_apply_with_positive_research_clamps_to_max(self):
+        """Even with APPLY (no cap), base + research cannot exceed max_score."""
+        result = compute_net_score(
+            base_score=9.5,
+            research_delta=2.0,
+            analysis_verdict="APPLY",
+            verdict_caps=_DEFAULT_CAPS,
+            max_score=10.0,
+            min_score=0.0,
+        )
+        assert result == 10.0  # 9.5 + 2.0 = 11.5 → clamped to 10.0
+
+    def test_inflated_conditional_capped_regardless_of_llm_score(self):
+        """LLM returns CONDITIONAL with weighted_score 10.0, but base is 9.0.
+        Net = min(9.0, 7.0) = 7.0 — the CONDITIONAL cap holds regardless."""
+        result = compute_net_score(
+            base_score=9.0,
+            research_delta=0.0,
+            analysis_verdict="CONDITIONAL",
+            verdict_caps=_DEFAULT_CAPS,
+            max_score=10.0,
+            min_score=0.0,
+        )
+        assert result == 7.0  # CONDITIONAL cap overrides
+
+    def test_skip_verdict_overrides_inflated_base(self):
+        """Even if base_score is high (e.g. rubric scored well), SKIP caps it."""
+        result = compute_net_score(
+            base_score=9.0,
+            research_delta=0.0,
+            analysis_verdict="SKIP",
+            verdict_caps=_DEFAULT_CAPS,
+            max_score=10.0,
+            min_score=0.0,
+        )
+        assert result == 3.0  # SKIP cap = 3.0, regardless of base

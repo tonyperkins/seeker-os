@@ -115,8 +115,27 @@ The **Settings** page in the web dashboard provides a no-edit-config-files inter
 - **Accuracy Rules** — resume validation constraints (disallowed phrases, forbidden tech, etc.).
 - **LLM Providers** — model routing, tier assignments, and provider API keys. Supports
   API key auth and Anthropic OAuth (PKCE flow) for passwordless authentication.
-- **Backup & Restore** — download all config files as a zip, restore from upload,
+- **Backup & Restore** — download all config files as a zip (`.env` excluded by
+  default; pass `include_secrets=true` to include it), restore from upload,
   download SQLite DB snapshot, restore DB from upload.
+
+## Security & Data Hygiene
+
+Seeker OS runs locally on your machine — there is no network-facing attack surface
+by design. However, the data at rest is sensitive:
+
+- **`data/seeker.db`** contains candid employer assessments, application notes,
+  and scoring data. Treat it as private.
+- **`config/*.yml`** files contain your personal profile, scoring rubric, and
+  identity rules. Real configs are gitignored.
+- **`.env`** contains API keys for LLM providers and retrieval services. It is
+  gitignored and excluded from default backups.
+
+**Backup awareness:** Backup zips downloaded via the API exclude `.env` by default.
+Use `include_secrets=true` only when you need to transfer keys to a new machine,
+and delete the backup afterward. Be deliberate about where backup files and the
+SQLite database are stored — cloud sync folders, shared drives, and version
+control are all potential leak vectors for this data.
 
 ## Onboarding
 
