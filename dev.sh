@@ -24,7 +24,10 @@ fi
 export DEMO_MODE=false
 
 echo "Starting FastAPI backend on :8000..."
-uvicorn seeker_os.api.app:app --reload --reload-dir backend --port 8000 --app-dir backend &
+# Wrap with xvfb-run so Playwright's non-headless Chromium uses a virtual
+# display instead of popping up a visible browser window.
+xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+  uvicorn seeker_os.api.app:app --reload --reload-dir backend --port 8000 --app-dir backend &
 BACKEND_PID=$!
 
 # Start frontend
