@@ -7,4 +7,6 @@ if [ ! -f /app/data/.env ]; then
     touch /app/data/.env
 fi
 
-exec "$@"
+# Wrap with Xvfb so Playwright can run in non-headless mode (required for
+# Vercel JS challenge resolution). xvfb-run provides a virtual display.
+exec xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" "$@"

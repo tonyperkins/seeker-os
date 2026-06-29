@@ -49,7 +49,11 @@ def _strip_html(html: str) -> str:
 
 
 def _fetch_url(url: str, user_agent: str, timeout: int = 15) -> str:
-    """Fetch a URL and return the response text."""
+    """Fetch a URL and return the response text.
+
+    Tries httpx first. If blocked by Vercel JS challenge (403/429),
+    falls back to a headless browser via Playwright if available.
+    """
     headers = {
         "User-Agent": user_agent,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -61,9 +65,21 @@ def _fetch_url(url: str, user_agent: str, timeout: int = 15) -> str:
         "Sec-Fetch-User": "?1",
         "Upgrade-Insecure-Requests": "1",
     }
-    resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=True)
-    resp.raise_for_status()
-    return resp.text
+    try:
+        resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=True)
+        resp.raise_for_status()
+        return resp.text
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code in (403, 429):
+            from seeker_os.discovery.browser_fetch import is_available, fetch_with_browser
+            if is_available():
+                import logging
+                logging.getLogger(__name__).warning(
+                    "httpx blocked (%d), falling back to headless browser for %s",
+                    e.response.status_code, url,
+                )
+                return fetch_with_browser(url)
+        raise
 
 
 def _fetch_greenhouse(board: str, job_id: str, user_agent: str) -> str:

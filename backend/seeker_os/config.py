@@ -364,6 +364,7 @@ class SourceConfig(BaseModel):
     cache_ttl_hours: int = 6
     max_retries: int = 3
     timeout_seconds: int = 15
+    browser_fallback: bool = True
     source_map: dict[str, str] = {}
 
 

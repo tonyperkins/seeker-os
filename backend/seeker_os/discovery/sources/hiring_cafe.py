@@ -8,11 +8,14 @@ and docs/HIRINGCAFE_FIELDS.md for details.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from urllib.parse import quote, unquote
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from seeker_os.config import SourceConfig
 from seeker_os.discovery.cache import DiskCache
@@ -64,6 +67,7 @@ class HiringCafeAdapter:
         self.user_agent = config.user_agent
         self.max_retries = config.max_retries
         self.timeout = config.timeout_seconds
+        self.browser_fallback = config.browser_fallback
         self.cache = cache
         self._last_request_time: float = 0.0
 
@@ -82,7 +86,11 @@ class HiringCafeAdapter:
             time.sleep(self.request_delay - elapsed)
 
     def _fetch_html(self, url: str) -> str:
-        """Fetch HTML with retry and delay. Returns HTML text."""
+        """Fetch HTML with retry and delay. Returns HTML text.
+
+        Tries httpx first. If blocked by Vercel JS challenge (403/429),
+        falls back to a headless browser via Playwright if available.
+        """
         cache_key = url
         cached = self.cache.get(cache_key)
         if cached is not None:
@@ -130,6 +138,22 @@ class HiringCafeAdapter:
             except Exception as e:
                 last_error = e
                 time.sleep(self.request_delay)
+
+        # All httpx retries exhausted — try Playwright browser fallback.
+        if self.browser_fallback:
+            from seeker_os.discovery.browser_fetch import is_available, fetch_with_browser
+            if is_available():
+                logger.warning("httpx blocked (%s), falling back to headless browser for %s", last_error, url)
+                try:
+                    html = fetch_with_browser(url)
+                    if html and "__NEXT_DATA__" in html:
+                        self._last_request_time = time.time()
+                        self.cache.set(cache_key, html)
+                        logger.info("Browser fallback succeeded for %s", url)
+                        return html
+                    last_error = Exception("Browser fallback returned page without __NEXT_DATA__")
+                except Exception as e:
+                    last_error = Exception(f"Browser fallback failed: {e}")
 
         raise RuntimeError(f"Failed to fetch {url} after {self.max_retries} attempts: {last_error}")
 

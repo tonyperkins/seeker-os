@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-2.0-0 \
     libffi-dev \
     shared-mime-info \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -16,7 +17,10 @@ WORKDIR /app
 COPY backend/ /app/backend/
 COPY config/ /app/config/
 
-RUN pip install --no-cache-dir -e /app/backend
+RUN pip install --no-cache-dir -e "/app/backend[browser]"
+
+# Install Playwright Chromium browser and its system dependencies
+RUN playwright install chromium --with-deps
 
 # Create data directory (will be overridden by volume mount in compose)
 RUN mkdir -p /app/data
