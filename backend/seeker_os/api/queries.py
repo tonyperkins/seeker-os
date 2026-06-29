@@ -17,7 +17,7 @@ def list_queries():
     db = get_connection()
     try:
         rows = db.execute(
-            "SELECT * FROM search_queries ORDER BY enabled DESC, label ASC"
+            "SELECT * FROM search_queries ORDER BY label ASC"
         ).fetchall()
         return [
             QuerySummary(

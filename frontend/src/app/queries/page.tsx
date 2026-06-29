@@ -15,10 +15,10 @@ import {
   Card,
   CardContent,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -289,12 +289,11 @@ export default function QueriesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Slug</TableHead>
+                  <TableHead className="w-16">On</TableHead>
                   <TableHead>Label</TableHead>
+                  <TableHead>Slug</TableHead>
                   <TableHead className="w-28">Commitment</TableHead>
                   <TableHead className="w-20">Pages</TableHead>
-                  <TableHead>Search query</TableHead>
-                  <TableHead className="w-24">Enabled</TableHead>
                   <TableHead className="w-36">Last run</TableHead>
                   <TableHead className="w-48 text-right">Actions</TableHead>
                 </TableRow>
@@ -304,7 +303,26 @@ export default function QueriesPage() {
                   const isEditing = editingId === q.id;
                   return (
                     <TableRow key={q.id ?? q.slug}>
-                      <TableCell className="font-mono text-xs">{q.slug}</TableCell>
+                      {/* Enable/disable toggle */}
+                      <TableCell>
+                        {isEditing ? (
+                          <Switch
+                            checked={editEnabled}
+                            onCheckedChange={setEditEnabled}
+                          />
+                        ) : (
+                          <Switch
+                            checked={q.enabled}
+                            onCheckedChange={(checked) => {
+                              if (q.id != null) {
+                                api.queries.update(q.id, { enabled: checked }).then(fetchQueries);
+                              }
+                            }}
+                            disabled={q.id == null}
+                          />
+                        )}
+                      </TableCell>
+                      {/* Label */}
                       <TableCell>
                         {isEditing ? (
                           <Input
@@ -315,6 +333,24 @@ export default function QueriesPage() {
                         ) : (
                           <span className="font-medium">{q.label}</span>
                         )}
+                      </TableCell>
+                      {/* Slug + search query (2 lines) */}
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-mono text-xs">{q.slug}</span>
+                          {isEditing ? (
+                            <Input
+                              value={editSearchQuery}
+                              onChange={(e) => setEditSearchQuery(e.target.value)}
+                              placeholder="e.g. senior sre remote"
+                              className="h-7"
+                            />
+                          ) : (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {q.search_query || "—"}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {isEditing ? (
@@ -343,37 +379,6 @@ export default function QueriesPage() {
                           />
                         ) : (
                           <span className="text-muted-foreground">{q.max_pages}</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <Input
-                            value={editSearchQuery}
-                            onChange={(e) => setEditSearchQuery(e.target.value)}
-                            placeholder="e.g. senior sre remote"
-                            className="h-7"
-                          />
-                        ) : (
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {q.search_query || "—"}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <label className="flex items-center gap-1.5 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={editEnabled}
-                              onChange={(e) => setEditEnabled(e.target.checked)}
-                              className="size-3.5"
-                            />
-                            {editEnabled ? "on" : "off"}
-                          </label>
-                        ) : (
-                          <Badge variant={q.enabled ? "default" : "outline"}>
-                            {q.enabled ? "enabled" : "disabled"}
-                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
