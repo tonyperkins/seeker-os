@@ -100,13 +100,23 @@ class HiringCafeAdapter:
                     self._last_request_time = time.time()
                     self.cache.set(cache_key, resp.text)
                     return resp.text
-                elif resp.status_code in (429, 503):
-                    # Exponential backoff
-                    wait = (2 ** attempt) * self.request_delay
+                elif resp.status_code in (403, 429, 503):
+                    # Exponential backoff — 403 after 429 means the WAF has
+                    # escalated to a hard block; immediate retries make it worse.
+                    # Respect Retry-After header if present.
+                    retry_after = resp.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            wait = min(float(retry_after), 60.0)
+                        except ValueError:
+                            wait = (2 ** attempt) * self.request_delay
+                    else:
+                        wait = (2 ** attempt) * self.request_delay
                     time.sleep(wait)
-                    last_error = Exception(f"HTTP {resp.status_code} — rate limited")
+                    last_error = Exception(f"HTTP {resp.status_code} — rate limited or blocked")
                 else:
                     last_error = Exception(f"HTTP {resp.status_code}")
+                    time.sleep(self.request_delay)
             except Exception as e:
                 last_error = e
                 time.sleep(self.request_delay)
