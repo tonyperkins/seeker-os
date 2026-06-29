@@ -336,7 +336,7 @@ export default function QueriesPage() {
                         )}
                       </TableCell>
                       {/* Slug + search query (2 lines) */}
-                      <TableCell>
+                      <TableCell className="max-w-[20rem]">
                         <div className="flex flex-col gap-1">
                           <span className="font-mono text-xs truncate">{q.slug}</span>
                           {isEditing ? (
