@@ -150,7 +150,7 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
   const overallPct = Math.round((completedCount / STEPS.length) * 100);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={`flex flex-col gap-3 ${compact ? "relative" : ""}`}>
       <Button
         onClick={handleRun}
         disabled={loading || !setupComplete || demoMode}
@@ -172,7 +172,7 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
 
       {/* Progress display */}
       {loading && (
-        <div className="flex flex-col gap-3 rounded-md border border-border p-4">
+        <div className={`flex flex-col gap-3 rounded-md border border-border p-4 ${compact ? "absolute top-full left-0 z-50 mt-2 bg-background shadow-lg" : "max-w-lg"}`}>
           {/* Overall progress bar */}
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-xs">
