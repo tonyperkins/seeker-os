@@ -10,6 +10,7 @@ services:
       - ./data:/app/data
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - DEMO_MODE=${DEMO_MODE:-true}
       # API keys — passthrough from host env (optional). If set, they take
       # precedence over .env (load_dotenv uses override=False). If unset,
       # load_dotenv fills them from the mounted .env file instead.
