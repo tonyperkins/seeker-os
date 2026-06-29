@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
     if is_demo_mode():
         # Demo DB is immutable and pre-baked; migrations are skipped at runtime.
         # Build-time seeding runs run_migrations() before the image is baked.
-        from seeker_os.database import DB_PATH, get_connection
+        from seeker_os.database import _db_path, get_connection
         from seeker_os.demo.seed import seed_demo_db
 
         conn = get_connection()
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
         conn.close()
         if job_count == 0:
             logger.info("Demo DB is empty; seeding synthetic data")
-            seed_demo_db(DB_PATH)
+            seed_demo_db(_db_path())
             logger.info("Demo seed complete")
     else:
         run_migrations()

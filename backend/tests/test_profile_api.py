@@ -41,8 +41,8 @@ def temp_config(tmp_path, monkeypatch):
 
     # Also redirect DB to temp so app startup migrations don't touch real data
     db_path = tmp_path / "seeker.db"
-    monkeypatch.setattr("seeker_os.database.DB_PATH", db_path)
-    run_migrations()
+    monkeypatch.setattr("seeker_os.database._db_path", lambda: db_path)
+    run_migrations(db_path)
 
     return cfg_dir
 
@@ -75,8 +75,9 @@ class TestProfile:
         monkeypatch.setattr(config_mod, "CONFIG_DIR", cfg_dir)
         monkeypatch.setattr(profile_routes_mod, "CONFIG_DIR", cfg_dir)
         monkeypatch.setattr(config_writer_mod, "CONFIG_DIR", cfg_dir)
-        monkeypatch.setattr("seeker_os.database.DB_PATH", tmp_path / "seeker.db")
-        run_migrations()
+        db_path = tmp_path / "seeker.db"
+        monkeypatch.setattr("seeker_os.database._db_path", lambda: db_path)
+        run_migrations(db_path)
         c = TestClient(app)
         r = c.get("/api/profile")
         assert r.status_code == 404
@@ -151,8 +152,9 @@ class TestAccuracyRules:
         monkeypatch.setattr(config_mod, "CONFIG_DIR", cfg_dir)
         monkeypatch.setattr(profile_routes_mod, "CONFIG_DIR", cfg_dir)
         monkeypatch.setattr(config_writer_mod, "CONFIG_DIR", cfg_dir)
-        monkeypatch.setattr("seeker_os.database.DB_PATH", tmp_path / "seeker.db")
-        run_migrations()
+        db_path = tmp_path / "seeker.db"
+        monkeypatch.setattr("seeker_os.database._db_path", lambda: db_path)
+        run_migrations(db_path)
         c = TestClient(app)
         r = c.get("/api/accuracy-rules")
         assert r.status_code == 200

@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from seeker_os.api.app import app
-from seeker_os.database import run_migrations, get_connection, DB_PATH
+from seeker_os.database import run_migrations, get_connection
 
 
 @pytest.fixture(scope="module")

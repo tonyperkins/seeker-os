@@ -28,7 +28,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from seeker_os.config import CONFIG_DIR, DATA_DIR, PROJECT_ROOT
-from seeker_os.database import DB_PATH, MIGRATIONS
+from seeker_os.database import _db_path, MIGRATIONS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backup", tags=["backup"])
@@ -216,14 +216,14 @@ def _create_pre_restore_snapshot() -> Path | None:
     is stored in data/pre-restore-snapshots/ with a timestamped name.
     Returns the snapshot path, or None if the DB doesn't exist yet.
     """
-    if not DB_PATH.exists():
+    if not _db_path().exists():
         return None
 
     _PRE_RESTORE_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     snapshot_path = _PRE_RESTORE_DIR / f"{_PRE_RESTORE_PREFIX}{ts}.db"
 
-    source = sqlite3.connect(str(DB_PATH))
+    source = sqlite3.connect(str(_db_path()))
     try:
         dest = sqlite3.connect(str(snapshot_path))
         try:
@@ -256,14 +256,14 @@ def download_db_backup():
     Uses sqlite3.Connection.backup() (the SQLite Online Backup API) which
     produces a consistent copy even while the database is in active use.
     """
-    if not DB_PATH.exists():
+    if not _db_path().exists():
         raise HTTPException(status_code=404, detail="Database file not found")
 
     buf = io.BytesIO()
     # Create an in-memory destination DB and copy from the live DB into it
     dest = sqlite3.connect(":memory:")
     try:
-        source = sqlite3.connect(str(DB_PATH))
+        source = sqlite3.connect(str(_db_path()))
         try:
             source.backup(dest)
         finally:
@@ -303,7 +303,7 @@ async def restore_db_backup(file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail=f"Upload exceeds maximum size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
 
     # Write uploaded bytes to a temp file
-    tmp_path = DB_PATH.parent / f"_restore_tmp_{os.getpid()}.db"
+    tmp_path = _db_path().parent / f"_restore_tmp_{os.getpid()}.db"
     try:
         tmp_path.write_bytes(raw)
 
@@ -336,7 +336,7 @@ async def restore_db_backup(file: UploadFile = File(...)):
         # This is safe even while the server has open connections.
         source = sqlite3.connect(str(tmp_path))
         try:
-            dest = sqlite3.connect(str(DB_PATH))
+            dest = sqlite3.connect(str(_db_path()))
             try:
                 source.backup(dest)
             finally:

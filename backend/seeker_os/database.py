@@ -13,6 +13,20 @@ from typing import Any
 
 from seeker_os.config import DATA_DIR, is_demo_mode
 
+
+def _db_path() -> Path:
+    """Return the active DB path, evaluating is_demo_mode() at call time.
+
+    This must be dynamic, not a module-level constant, because .env is loaded
+    by Settings.__init__ which runs after module import. A constant set at
+    import time would lock DB_PATH to the demo DB before .env is read.
+    """
+    return DATA_DIR / ("seeker.demo.db" if is_demo_mode() else "seeker.db")
+
+
+# Backward-compatible module-level constant. Set at import time — may be
+# stale if DEMO_MODE is set via .env (loaded later). Production code uses
+# _db_path() instead. Tests that monkeypatch this should patch _db_path.
 DB_PATH = DATA_DIR / ("seeker.demo.db" if is_demo_mode() else "seeker.db")
 
 # ---------------------------------------------------------------------------
@@ -374,14 +388,14 @@ MIGRATIONS: list[str | callable] = [
 ]
 
 
-def run_migrations(db_path: Path | str = DB_PATH) -> None:
+def run_migrations(db_path: Path | str | None = None) -> None:
     """Apply pending migrations based on PRAGMA user_version.
 
     Each entry in MIGRATIONS is either a SQL string (executed via executescript)
     or a callable(conn) that runs Python code (for data backfills that need
     application-level logic like normalize_company).
     """
-    db_path = Path(db_path)
+    db_path = Path(db_path) if db_path is not None else _db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(db_path))
@@ -400,14 +414,16 @@ def run_migrations(db_path: Path | str = DB_PATH) -> None:
         conn.close()
 
 
-def get_connection(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
+def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
     """Get a SQLite connection. Run migrations if needed.
 
     In demo mode the database is treated as immutable: it is opened read-only
     and migrations are skipped. The demo DB must be pre-baked before startup.
     """
+    if db_path is None:
+        db_path = _db_path()
     db_path = Path(db_path)
-    if is_demo_mode() and db_path == DB_PATH:
+    if is_demo_mode() and db_path == _db_path():
         if not db_path.exists():
             raise RuntimeError(
                 f"Demo DB not found at {db_path}. "

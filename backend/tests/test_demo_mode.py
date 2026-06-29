@@ -29,7 +29,7 @@ def demo_client(monkeypatch):
     importlib.reload(config)
     importlib.reload(database)
     # Seed the demo DB directly so the runtime opens it read-only.
-    seed_demo_db(database.DB_PATH)
+    seed_demo_db(database._db_path())
     importlib.reload(app)
 
     with TestClient(app.app) as client:
@@ -189,7 +189,7 @@ def test_demo_uses_demo_db_path(monkeypatch):
     from seeker_os import database
 
     importlib.reload(database)
-    assert database.DB_PATH.name == "seeker.demo.db"
+    assert database._db_path().name == "seeker.demo.db"
 
 
 def test_demo_guard_blocks_every_non_get_route(demo_client):
@@ -336,7 +336,7 @@ def test_demo_seeder_only_fires_in_demo_mode_for_empty_db(tmp_path, monkeypatch)
     live_db = tmp_path / "live_empty.db"
     importlib.reload(config)
     importlib.reload(database)
-    monkeypatch.setattr(database, "DB_PATH", live_db)
+    monkeypatch.setattr(database, "_db_path", lambda: live_db)
     monkeypatch.setattr(database, "get_connection", _make_connection_patcher(live_db))
     importlib.reload(seed_module)
     importlib.reload(app_module)
@@ -352,7 +352,7 @@ def test_demo_seeder_only_fires_in_demo_mode_for_empty_db(tmp_path, monkeypatch)
     demo_db = tmp_path / "demo_empty.db"
     importlib.reload(config)
     importlib.reload(database)
-    monkeypatch.setattr(database, "DB_PATH", demo_db)
+    monkeypatch.setattr(database, "_db_path", lambda: demo_db)
     monkeypatch.setattr(database, "get_connection", _make_connection_patcher(demo_db))
     importlib.reload(seed_module)
     importlib.reload(app_module)

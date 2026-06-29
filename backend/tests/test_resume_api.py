@@ -22,14 +22,14 @@ from seeker_os.database import run_migrations
 def client(tmp_path, monkeypatch):
     """Test client with the SQLite DB redirected to a temp path.
 
-    Patches DB_PATH and get_connection in every module that imported it
+    Patches _db_path and get_connection in every module that imported it
     at module level (generator, resumes) plus the database module itself
     (covers validator, which imports get_connection inside a function).
     """
     db_path = tmp_path / "test.db"
     run_migrations(db_path)
 
-    monkeypatch.setattr(dbmod, "DB_PATH", db_path)
+    monkeypatch.setattr(dbmod, "_db_path", lambda: db_path)
 
     _orig_get_connection = dbmod.get_connection
 
