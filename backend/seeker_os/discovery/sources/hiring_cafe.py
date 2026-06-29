@@ -70,6 +70,7 @@ class HiringCafeAdapter:
         self.browser_fallback = config.browser_fallback
         self.cache = cache
         self._last_request_time: float = 0.0
+        self._httpx_blocked: bool = False
 
     @property
     def id(self) -> str:
@@ -90,6 +91,7 @@ class HiringCafeAdapter:
 
         Tries httpx first. If blocked by Vercel JS challenge (403/429),
         falls back to a headless browser via Playwright if available.
+        Once httpx is blocked, subsequent requests skip straight to Playwright.
         """
         cache_key = url
         cached = self.cache.get(cache_key)
@@ -98,56 +100,61 @@ class HiringCafeAdapter:
 
         self._respect_delay()
 
-        headers = {
-            "User-Agent": self.user_agent,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
-        }
-        last_error: Exception | None = None
+        # If httpx is already known to be blocked, skip straight to browser.
+        if not self._httpx_blocked:
+            headers = {
+                "User-Agent": self.user_agent,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Upgrade-Insecure-Requests": "1",
+            }
+            last_error: Exception | None = None
 
-        for attempt in range(self.max_retries):
-            try:
-                resp = httpx.get(url, headers=headers, timeout=self.timeout, follow_redirects=True)
-                if resp.status_code == 200:
-                    self._last_request_time = time.time()
-                    self.cache.set(cache_key, resp.text)
-                    return resp.text
-                elif resp.status_code in (403, 429, 503):
-                    # Exponential backoff — 403 after 429 means the WAF has
-                    # escalated to a hard block; immediate retries make it worse.
-                    # Respect Retry-After header if present.
-                    retry_after = resp.headers.get("Retry-After")
-                    if retry_after:
-                        try:
-                            wait = min(float(retry_after), 60.0)
-                        except ValueError:
+            for attempt in range(self.max_retries):
+                try:
+                    resp = httpx.get(url, headers=headers, timeout=self.timeout, follow_redirects=True)
+                    if resp.status_code == 200:
+                        self._last_request_time = time.time()
+                        self.cache.set(cache_key, resp.text)
+                        return resp.text
+                    elif resp.status_code in (403, 429, 503):
+                        # Exponential backoff — 403 after 429 means the WAF has
+                        # escalated to a hard block; immediate retries make it worse.
+                        # Respect Retry-After header if present.
+                        retry_after = resp.headers.get("Retry-After")
+                        if retry_after:
+                            try:
+                                wait = min(float(retry_after), 60.0)
+                            except ValueError:
+                                wait = (2 ** attempt) * self.request_delay
+                        else:
                             wait = (2 ** attempt) * self.request_delay
+                        time.sleep(wait)
+                        last_error = Exception(f"HTTP {resp.status_code} — rate limited or blocked")
                     else:
-                        wait = (2 ** attempt) * self.request_delay
-                    time.sleep(wait)
-                    last_error = Exception(f"HTTP {resp.status_code} — rate limited or blocked")
-                else:
-                    last_error = Exception(f"HTTP {resp.status_code}")
+                        last_error = Exception(f"HTTP {resp.status_code}")
+                        time.sleep(self.request_delay)
+                except Exception as e:
+                    last_error = e
                     time.sleep(self.request_delay)
-            except Exception as e:
-                last_error = e
-                time.sleep(self.request_delay)
+        else:
+            last_error = Exception("httpx previously blocked, skipping to browser")
 
-        # All httpx retries exhausted — try Playwright browser fallback.
+        # All httpx retries exhausted (or skipped) — try Playwright browser fallback.
         if self.browser_fallback:
             from seeker_os.discovery.browser_fetch import is_available, fetch_with_browser
             if is_available():
-                logger.warning("httpx blocked (%s), falling back to headless browser for %s", last_error, url)
+                logger.warning("Falling back to headless browser for %s (%s)", url, last_error)
                 try:
                     html = fetch_with_browser(url)
                     if html and "__NEXT_DATA__" in html:
                         self._last_request_time = time.time()
+                        self._httpx_blocked = True  # Skip httpx for subsequent requests
                         self.cache.set(cache_key, html)
                         logger.info("Browser fallback succeeded for %s", url)
                         return html
