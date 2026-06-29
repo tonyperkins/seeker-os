@@ -142,8 +142,27 @@ def run_pipeline(
         print("\nTier 1: Discovery")
         adapters = build_adapters(settings.sources, cache) if settings.sources else {}
 
-        # Filter queries
-        all_queries = settings.queries.queries if settings.queries else []
+        # Load queries from DB (UI writes here) with YAML fallback
+        db_queries = db.execute(
+            "SELECT source_id, query_slug, label, commitment_filter, max_pages, enabled, search_query "
+            "FROM search_queries ORDER BY id"
+        ).fetchall()
+        if db_queries:
+            from seeker_os.config import QueryConfig
+            all_queries = [
+                QueryConfig(
+                    source_id=r["source_id"] or "hiring_cafe",
+                    slug=r["query_slug"],
+                    label=r["label"] or r["query_slug"],
+                    commitment=r["commitment_filter"] or "full_time",
+                    max_pages=r["max_pages"] or 1,
+                    enabled=bool(r["enabled"]),
+                    search_query=r["search_query"] if "search_query" in r.keys() else None,
+                )
+                for r in db_queries
+            ]
+        else:
+            all_queries = settings.queries.queries if settings.queries else []
         if queries:
             all_queries = [q for q in all_queries if q.slug in queries]
 
