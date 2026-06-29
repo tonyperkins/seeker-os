@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { api, type CompanyResearchResult } from "@/lib/api";
 import { ErrorBanner } from "@/components/error-banner";
+import { useDemoMode } from "@/lib/demo";
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
   const pct = Math.round(confidence * 100);
@@ -220,6 +221,7 @@ function CopyResearchButton({ data }: { data: CompanyResearchResult }) {
 }
 
 export function CompanyResearch({ jobId }: { jobId: number }) {
+  const { demoMode } = useDemoMode();
   const [data, setData] = useState<CompanyResearchResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -298,15 +300,16 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
           <Button
             variant="outline"
             size="sm"
-            disabled={running}
+            disabled={running || demoMode}
             onClick={runResearch}
+            title={demoMode ? "Research runs are disabled in demo mode" : undefined}
           >
             {running ? (
               <Loader2 className="animate-spin" />
             ) : (
               <RefreshCw />
             )}
-            {data ? "Refresh" : "Research"}
+            {running ? "Researching..." : demoMode ? "Demo mode" : data ? "Refresh" : "Research"}
           </Button>
         </div>
       }

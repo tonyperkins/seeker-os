@@ -27,6 +27,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
+import { useDemoMode } from "@/lib/demo";
 
 const REJECT_REASONS = [
   "comp_too_low",
@@ -51,6 +52,7 @@ const REASON_HINTS: Record<string, string> = {
 };
 
 export function JobActions({ jobId, currentStatus }: { jobId: number; currentStatus: string }) {
+  const { demoMode } = useDemoMode();
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +103,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
-          disabled={busy !== null || currentStatus === "reviewing"}
+          disabled={busy !== null || currentStatus === "reviewing" || demoMode}
           onClick={() => doAction("reviewing", () => api.jobs.update(jobId, { status: "reviewing" }))}
         >
           {busy === "reviewing" ? <Loader2 className="animate-spin" /> : <Eye />}
@@ -110,7 +112,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
 
         <Button
           variant="outline"
-          disabled={busy !== null || currentStatus === "interested"}
+          disabled={busy !== null || currentStatus === "interested" || demoMode}
           onClick={() => doAction("interested", () => api.jobs.update(jobId, { status: "interested" }))}
         >
           {busy === "interested" ? <Loader2 className="animate-spin" /> : <Star />}
@@ -120,7 +122,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
         {/* Mark Applied — records APPLIED event */}
         <Button
           variant="default"
-          disabled={busy !== null || currentStatus === "applied"}
+          disabled={busy !== null || currentStatus === "applied" || demoMode}
           onClick={() => doAction("apply", () => api.jobs.apply(jobId))}
         >
           {busy === "apply" ? <Loader2 className="animate-spin" /> : <Send />}
@@ -130,7 +132,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
         {/* Skip — removes from active queue */}
         <Button
           variant="outline"
-          disabled={busy !== null}
+          disabled={busy !== null || demoMode}
           onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
         >
           {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
@@ -141,7 +143,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
         <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
           <DialogTrigger
             render={
-              <Button variant="destructive" disabled={busy !== null}>
+              <Button variant="destructive" disabled={busy !== null || demoMode}>
                 {busy === "reject" ? <Loader2 className="animate-spin" /> : <XCircle />}
                 Reject
               </Button>
@@ -198,7 +200,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
               <Button
                 variant="destructive"
-                disabled={!rejectReason || busy !== null}
+                disabled={!rejectReason || busy !== null || demoMode}
                 onClick={() =>
                   doAction(
                     "reject",
@@ -221,7 +223,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
         {currentStatus !== "ready" && (
           <Button
             variant="ghost"
-            disabled={busy !== null}
+            disabled={busy !== null || demoMode}
             onClick={() => doAction("ready", () => api.jobs.update(jobId, { status: "ready" }))}
           >
             {busy === "ready" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
@@ -234,7 +236,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
           <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
             <DialogTrigger
               render={
-                <Button variant="default" disabled={busy !== null}>
+                <Button variant="default" disabled={busy !== null || demoMode}>
                   {busy === "override" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
                   Override Rejection
                 </Button>
@@ -269,7 +271,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
               <DialogFooter>
                 <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
                 <Button
-                  disabled={busy !== null}
+                  disabled={busy !== null || demoMode}
                   onClick={() =>
                     doAction(
                       "override",
@@ -293,7 +295,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
         <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
           <DialogTrigger
             render={
-              <Button variant="ghost" disabled={busy !== null} className="text-destructive hover:text-destructive">
+              <Button variant="ghost" disabled={busy !== null || demoMode} className="text-destructive hover:text-destructive">
                 {busy === "delete" ? <Loader2 className="animate-spin" /> : <Trash2 />}
                 Delete
               </Button>
@@ -311,7 +313,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
               <Button
                 variant="destructive"
-                disabled={busy !== null}
+                disabled={busy !== null || demoMode}
                 onClick={() => {
                   handleDelete();
                   setDeleteOpen(false);

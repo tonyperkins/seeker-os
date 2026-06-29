@@ -1,0 +1,70 @@
+# Seeker OS — Demo Filter Config (Fictional persona)
+# Loaded only when DEMO_MODE=true.
+
+filters:
+  remote_only: true
+  us_only: true
+  seniority_floor:
+    - mid
+    - senior
+    - staff
+    - principal
+    - director
+  seniority_reject:
+    - junior
+    - entry
+  seniority_unknown_passes: true
+  seniority_title_override:
+    - senior
+    - staff
+    - principal
+    - director
+    - sre
+    - site reliability
+    - platform
+    - infrastructure
+    - devops
+  comp_floor_margin_pct: 0
+  comp_unknown_passes: true
+  comp_sanity_max: 10000000
+  freshness_days: 30
+  commitment_required: "Full Time"
+  location_exclude: []
+  visa_sponsorship_required: false
+  junior_title_patterns:
+    - junior
+    - entry
+    - associate
+    - intern
+    - new grad
+    - early career
+
+title_filters:
+  positive:
+    - sre
+    - site reliability
+    - platform engineer
+    - devops engineer
+    - infrastructure engineer
+    - systems engineer
+    - reliability engineer
+    - cloud engineer
+    - senior
+    - staff
+    - principal
+    - director
+  negative:
+    - sales
+    - marketing
+    - product manager
+    - customer success
+    - account executive
+    - business development
+    - recruiter
+    - intern
+    - junior
+    - top secret
+    - ts/sci
+    - security clearance
+    - clearance required
+    - secret clearance

@@ -1,0 +1,42 @@
+# Seeker OS — Demo Accuracy Rules (Fictional)
+# Loaded only when DEMO_MODE=true.
+
+rules:
+  - id: "never-inflate-years"
+    description: "Do not inflate Alex's experience beyond the anchor phrase."
+    type: "experience_anchor"
+    severity: "high"
+    patterns:
+      - "8\\+\\s*years"
+  - id: "no-certifications"
+    description: "Do not claim certifications that are not on the master resume."
+    type: "disallowed_phrases"
+    severity: "high"
+    phrases:
+      - "certified"
+      - "AWS Certified"
+      - "CKA"
+      - "CCIE"
+  - id: "no-never-claim-tech"
+    description: "Do not claim technologies in the never-claim list."
+    type: "forbidden_technologies"
+    severity: "high"
+    technologies:
+      - "Kubernetes expert"
+      - "AWS solutions architect"
+      - "TensorFlow expert"
+  - id: "honest-ml-framing"
+    description: "Use the configured honest qualifier when mentioning ML."
+    type: "required_phrases"
+    severity: "medium"
+    phrases:
+      - "ML infrastructure"
+      - "not model training"
+  - id: "no-fortune-claims"
+    description: "Do not claim Fortune 500 or executive experience."
+    type: "disallowed_phrases"
+    severity: "high"
+    phrases:
+      - "Fortune 500 executive"
+      - "IPO lead"
+      - "managed 20+ person team"

@@ -1,6 +1,6 @@
 """SQLite connection helper and schema migrations.
 
-SQLite at data/seeker.db — single-user, zero-config.
+SQLite at data/seeker.db (live) or data/seeker.demo.db (demo) — single-user, zero-config.
 No Alembic. Simple versioned migrations via PRAGMA user_version.
 """
 
@@ -11,9 +11,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from seeker_os.config import DATA_DIR
+from seeker_os.config import DATA_DIR, is_demo_mode
 
-DB_PATH = DATA_DIR / "seeker.db"
+DB_PATH = DATA_DIR / ("seeker.demo.db" if is_demo_mode() else "seeker.db")
 
 # ---------------------------------------------------------------------------
 # Python-callable migrations (for data backfills that need application logic)
@@ -365,6 +365,12 @@ MIGRATIONS: list[str | callable] = [
     """
     ALTER TABLE jobs ADD COLUMN comp_source TEXT DEFAULT 'none';
     """,
+    # Migration 21: Persist entity disambiguation verification_state.
+    # Values: verified | unverified | mismatch. Previously computed at runtime;
+    # storing it lets the UI and demo surface "research discarded: entity mismatch".
+    """
+    ALTER TABLE company_research ADD COLUMN verification_state TEXT DEFAULT 'unverified';
+    """,
 ]
 
 
@@ -395,12 +401,27 @@ def run_migrations(db_path: Path | str = DB_PATH) -> None:
 
 
 def get_connection(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
-    """Get a SQLite connection. Run migrations if needed."""
+    """Get a SQLite connection. Run migrations if needed.
+
+    In demo mode the database is treated as immutable: it is opened read-only
+    and migrations are skipped. The demo DB must be pre-baked before startup.
+    """
     db_path = Path(db_path)
+    if is_demo_mode() and db_path == DB_PATH:
+        if not db_path.exists():
+            raise RuntimeError(
+                f"Demo DB not found at {db_path}. "
+                "Build the image with a pre-seeded demo DB or run the seeder before startup."
+            )
+        # Read-only, immutable connection. URI mode requires check_same_thread=False.
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    # Live mode or an explicit non-default path: writable connection with migrations.
     if not db_path.exists():
         run_migrations(db_path)
     else:
-        # Check if migrations are needed
         conn = sqlite3.connect(str(db_path))
         current = conn.execute("PRAGMA user_version").fetchone()[0]
         conn.close()

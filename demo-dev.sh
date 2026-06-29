@@ -19,9 +19,8 @@ else
   source .venv/bin/activate
 fi
 
-# Start backend in normal (non-demo) mode for local development.
-# The deployed demo image sets DEMO_MODE=true.
-export DEMO_MODE=false
+# Start backend in demo mode for local development.
+export DEMO_MODE=true
 
 echo "Starting FastAPI backend on :8000..."
 uvicorn seeker_os.api.app:app --reload --reload-dir backend --port 8000 --app-dir backend &

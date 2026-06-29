@@ -1,0 +1,34 @@
+# Seeker OS — Demo Company Research Config (Fictional)
+# Loaded only when DEMO_MODE=true.
+
+wikipedia:
+  enabled: false
+wikidata:
+  enabled: false
+llm_dossier:
+  enabled: false
+retrieval:
+  type: ""
+  api_key: ""
+  max_results: 5
+  timeout_seconds: 15
+  funding_query_template: "{company} funding round investors valuation"
+  sentiment_query_template: "{company} employee reviews sentiment glassdoor culture"
+  retrieval_cache_ttl_days: 7
+
+user_agent: "SeekerOS-Demo/0.1 (product; contact: admin@example.com)"
+
+confidence_floor: 0.3
+staleness_months: 18
+source_trust_order: []
+
+mismatch_confidence: 0.2
+research_ttl_days: 30
+
+fit_preferences:
+  preferred_size_bucket: "growth-stage (200-800)"
+  preferred_stage: "Series A-C"
+  remote_policy: "remote-first or fully remote"
+  ic_vs_mgmt: "IC-heavy, low management overhead"
+  clearance_ok: true
+  notes: "Demo preferences only — no real job search."

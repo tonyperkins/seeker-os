@@ -14,6 +14,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from seeker_os.api.demo_guard import DemoGuardMiddleware
 from seeker_os.api.jobs import router as jobs_router
 from seeker_os.api.pipeline import router as pipeline_router
 from seeker_os.api.queries import router as queries_router
@@ -26,22 +27,28 @@ from seeker_os.api.company_research import router as company_research_router
 from seeker_os.api.company_research_settings import router as company_research_settings_router
 from seeker_os.api.jd_analysis import router as jd_analysis_router
 from seeker_os.api.backup import router as backup_router
+from seeker_os.config import is_demo_mode
 from seeker_os.database import run_migrations
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
-# Logging — write to data/backend.log so the UI can retrieve recent lines
+# Logging — write to data/backend.log so the UI can retrieve recent lines in
+# live mode. In demo mode, logs go to stdout only (correct for containers and
+# avoids a writable data/ directory).
 # ---------------------------------------------------------------------------
 _LOG_DIR = Path(__file__).resolve().parents[2] / "data"
-_LOG_DIR.mkdir(exist_ok=True)
 _LOG_FILE = _LOG_DIR / "backend.log"
+
+_log_handlers = [logging.StreamHandler()]
+if not is_demo_mode():
+    _LOG_DIR.mkdir(exist_ok=True)
+    _log_handlers.append(logging.FileHandler(_LOG_FILE, encoding="utf-8"))
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(_LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
+    handlers=_log_handlers,
 )
 
 # Suppress watchfiles (uvicorn --reload) to WARNING in the log file to prevent
@@ -52,8 +59,26 @@ logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run DB migrations on startup."""
-    run_migrations()
+    """Run DB migrations on startup (live mode only) and log the active mode."""
+    mode = "DEMO (read-only)" if is_demo_mode() else "LIVE"
+    logger.info("Seeker OS starting in %s mode", mode)
+
+    if is_demo_mode():
+        # Demo DB is immutable and pre-baked; migrations are skipped at runtime.
+        # Build-time seeding runs run_migrations() before the image is baked.
+        from seeker_os.database import DB_PATH, get_connection
+        from seeker_os.demo.seed import seed_demo_db
+
+        conn = get_connection()
+        job_count = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        conn.close()
+        if job_count == 0:
+            logger.info("Demo DB is empty; seeding synthetic data")
+            seed_demo_db(DB_PATH)
+            logger.info("Demo seed complete")
+    else:
+        run_migrations()
+
     yield
 
 
@@ -63,6 +88,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Demo guard — must be early in the middleware stack so it blocks mutations
+# before any route handler runs.
+app.add_middleware(DemoGuardMiddleware)
 
 # CORS — configurable via env var CORS_ORIGINS (comma-separated).
 # Defaults to localhost:3000 for local dev. For Docker/production, set
@@ -104,9 +133,17 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/demo-mode")
+def demo_mode_status():
+    """Return whether the backend is running in read-only demo mode."""
+    return {"demo_mode": is_demo_mode()}
+
+
 @app.get("/api/logs")
 def get_logs(tail: int = 80):
     """Return the last *tail* lines of the backend log file for UI display."""
+    if is_demo_mode():
+        return {"lines": [], "path": None, "note": "Demo mode logs are emitted to stdout only."}
     try:
         lines = _LOG_FILE.read_text(encoding="utf-8").splitlines()
         return {"lines": lines[-tail:], "path": str(_LOG_FILE)}

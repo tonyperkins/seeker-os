@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { api, type MasterResumeInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-export function MasterResumeUpload({ onUploaded, bare = false }: { onUploaded?: () => void; bare?: boolean }) {
+export function MasterResumeUpload({ onUploaded, bare = false, disabled = false }: { onUploaded?: () => void; bare?: boolean; disabled?: boolean }) {
   const [info, setInfo] = useState<MasterResumeInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -36,6 +36,7 @@ export function MasterResumeUpload({ onUploaded, bare = false }: { onUploaded?: 
   }, [loadInfo]);
 
   async function handleFile(file: File) {
+    if (disabled) return;
     setUploading(true);
     setError(null);
     try {
@@ -50,12 +51,14 @@ export function MasterResumeUpload({ onUploaded, bare = false }: { onUploaded?: 
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (disabled) return;
     const file = e.target.files?.[0];
     if (file) handleFile(file);
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
+    if (disabled) return;
     setDragOver(false);
     const file = e.dataTransfer.files?.[0];
     if (file) handleFile(file);
@@ -120,19 +123,20 @@ export function MasterResumeUpload({ onUploaded, bare = false }: { onUploaded?: 
 
       {/* Upload area */}
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragOver={(e) => { if (!disabled) { e.preventDefault(); setDragOver(true); } }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         className={cn(
           "rounded-lg border-2 border-dashed p-6 text-center transition-colors",
-          dragOver
+          dragOver && !disabled
             ? "border-primary bg-primary/5"
-            : "border-border hover:border-muted-foreground/50",
+            : "border-border",
+          disabled ? "opacity-50 cursor-not-allowed" : "hover:border-muted-foreground/50",
         )}
       >
         <Upload className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
         <p className="text-sm text-muted-foreground mb-3">
-          Drag &amp; drop your master resume here, or
+          {disabled ? "Resume upload is disabled in demo mode" : "Drag & drop your master resume here, or"}
         </p>
         <label>
           <input
@@ -140,15 +144,18 @@ export function MasterResumeUpload({ onUploaded, bare = false }: { onUploaded?: 
             accept=".md,.docx,.pdf"
             onChange={handleInputChange}
             className="hidden"
-            disabled={uploading}
+            disabled={uploading || disabled}
           />
-          <span className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground cursor-pointer hover:bg-primary/90">
+          <span className={cn(
+            "inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground",
+            disabled ? "cursor-not-allowed" : "cursor-pointer hover:bg-primary/90",
+          )}>
             {uploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            {uploading ? "Uploading..." : "Browse files"}
+            {uploading ? "Uploading..." : disabled ? "Demo mode" : "Browse files"}
           </span>
         </label>
         <p className="text-xs text-muted-foreground mt-2">

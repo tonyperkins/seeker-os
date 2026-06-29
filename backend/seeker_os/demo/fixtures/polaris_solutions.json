@@ -1,0 +1,111 @@
+{
+  "id": 11,
+  "title": "Senior SRE",
+  "core_title": "Senior SRE",
+  "company": "Polaris Solutions",
+  "company_homepage": "https://polaris-solutions.example.com",
+  "location": "Remote (US)",
+  "workplace_type": "Remote",
+  "workplace_countries": ["US"],
+  "seniority_level": "senior",
+  "commitment": ["Full Time"],
+  "comp_min": 170000,
+  "comp_max": 200000,
+  "comp_currency": "USD",
+  "comp_source": "structured",
+  "technical_tools": ["AWS", "Kubernetes", "Terraform"],
+  "date_posted": "2026-06-18",
+  "role_type": "Individual Contributor",
+  "status": "ready",
+  "tier_passed": 4,
+  "score": 6.5,
+  "score_reasons": [
+    "Base: Senior SRE (3.5)",
+    "+1.0 remote_us",
+    "+1.0 comp_target",
+    "+0.5 key_cloud",
+    "+0.5 sre_culture"
+  ],
+  "score_gaps": [
+    "Company research hit a wrong-entity mismatch; dossier confidence is degraded.",
+    "No research modifiers applied because confidence is below thresholds."
+  ],
+  "score_modifiers": {
+    "remote_us": 1.0,
+    "comp_target": 1.0,
+    "key_cloud": 0.5,
+    "sre_culture": 0.5
+  },
+  "jd_summary": "Senior SRE, remote US. Company research returned a mismatched entity.",
+  "apply_url": "https://polaris-solutions.example.com/jobs/senior-sre",
+  "detail_url": "https://hiring.cafe/jobs/polaris-solutions-senior-sre",
+  "discovered_query": "senior sre remote",
+  "ai_policy": "allowed",
+  "research_adjusted_score": 6.5,
+  "research_delta": 0.0,
+  "net_score": 6.5,
+  "research_breakdown": [],
+  "overall_confidence": 0.2,
+  "summary": "Company research returned a mismatched entity (Wikipedia/Wikidata matched a different Polaris). Dossier confidence is degraded.",
+  "verdict_flags": {
+    "green": [],
+    "red": ["entity mismatch — research discarded"],
+    "watch": ["re-run research with correct domain if needed"]
+  },
+  "funding_data": {
+    "founded": null,
+    "hq": null,
+    "public": false,
+    "stage": null,
+    "total_raised_usd": null,
+    "valuation_usd": null,
+    "last_round": null,
+    "headcount": null,
+    "headcount_trend": null,
+    "layoffs": [],
+    "financial_health": null,
+    "confidence": 0.2,
+    "sources": [],
+    "stripped_count": 0
+  },
+  "sentiment_data": {
+    "overall_rating_estimate": null,
+    "rating_scale": "out of 5",
+    "ceo_approval_pct": null,
+    "recommend_pct": null,
+    "positives": [],
+    "negatives": [],
+    "staleness_warning": null,
+    "confidence": 0.2,
+    "sources": [],
+    "stripped_count": 0
+  },
+  "fit_data": {
+    "remote_policy": null,
+    "remote_walkback": null,
+    "size_bucket": null,
+    "ic_vs_mgmt_culture": null,
+    "comp_band": null,
+    "clearance_required": false,
+    "confidence": 0.2,
+    "sources": [],
+    "stripped_count": 0
+  },
+  "gaps": [
+    "Wikipedia/Wikidata entity discarded — domain mismatch",
+    "All section confidences degraded to 0.2; no research modifiers applied."
+  ],
+  "sources_used": [],
+  "retrieval_used": true,
+  "retrieval_sources": [],
+  "retrieval_snippets": [
+    {
+      "url": "https://example.com/polaris-mismatch",
+      "title": "Polaris Inc. (not Polaris Solutions)",
+      "snippet": "Retrieval results point to a different Polaris entity; discarding.",
+      "source_domain": "example.com",
+      "score": 0.4
+    }
+  ],
+  "verification_state": "mismatch"
+}
