@@ -291,8 +291,8 @@ export default function QueriesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16">On</TableHead>
-                  <TableHead className="min-w-[8rem]">Label</TableHead>
-                  <TableHead className="min-w-[10rem] max-w-[20rem]">Slug</TableHead>
+                  <TableHead>Label</TableHead>
+                  <TableHead className="max-w-[20rem]">Slug</TableHead>
                   <TableHead className="w-28">Commitment</TableHead>
                   <TableHead className="w-20">Pages</TableHead>
                   <TableHead className="w-36">Last run</TableHead>
