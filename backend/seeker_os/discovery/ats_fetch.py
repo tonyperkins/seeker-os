@@ -50,7 +50,17 @@ def _strip_html(html: str) -> str:
 
 def _fetch_url(url: str, user_agent: str, timeout: int = 15) -> str:
     """Fetch a URL and return the response text."""
-    headers = {"User-Agent": user_agent}
+    headers = {
+        "User-Agent": user_agent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    }
     resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=True)
     resp.raise_for_status()
     return resp.text
