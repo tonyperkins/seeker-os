@@ -22,6 +22,7 @@ export function ThemeToggle() {
   const toggle = useCallback(() => {
     const next: Theme = theme === "light" ? "dark" : "light";
     localStorage.setItem("seeker-os-theme", next);
+    document.cookie = `seeker-os-theme=${next};path=/;max-age=31536000;samesite=lax`;
     document.documentElement.classList.toggle("dark", next === "dark");
     // Force re-render by dispatching a storage event won't work same-tab,
     // so we dispatch a custom event that our subscribe can listen for.
