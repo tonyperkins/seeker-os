@@ -47,7 +47,7 @@ def _insert_job(db: sqlite3.Connection, job: JobCard, run_id: str | None = None)
             technical_tools, requirements_summary, date_posted, role_type,
             status, tier_passed, discovered_at, discovered_query, updated_at, is_pinned,
             detail_url, run_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'discovered', 1, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'discovered', 1, ?, ?, ?, ?, ?, ?)
         """,
         (
             job.source_id, job.source_job_id, job.ats_source, job.ats_board_token, job.ats_job_id,
