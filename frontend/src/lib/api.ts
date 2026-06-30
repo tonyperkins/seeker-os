@@ -84,6 +84,7 @@ export interface JobSummary {
   has_research: boolean;
   has_resume: boolean;
   analysis_verdict: string | null;
+  net_score: number | null;
 }
 
 export interface JobDetail extends JobSummary {
@@ -402,8 +403,6 @@ export interface ProviderInfoResponse {
   label: string;
   enabled: boolean;
   auto_fetch_models: boolean;
-  auth_method: string;
-  oauth_token_path: string | null;
   base_url: string | null;
   api_key_set: boolean;
   models: ModelInfoResponse[];
@@ -667,18 +666,6 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(body),
       }),
-    // Anthropic OAuth flow
-    oauthInitiate: () =>
-      fetchAPI<{ auth_url: string; state: string }>("/api/models/anthropic/oauth/initiate", { method: "POST" }),
-    oauthCallback: (code: string, state: string) =>
-      fetchAPI<MessageResponse>("/api/models/anthropic/oauth/callback", {
-        method: "POST",
-        body: JSON.stringify({ code, state }),
-      }),
-    oauthStatus: () =>
-      fetchAPI<{ exists: boolean; expired: boolean; expires_at: number | null; path: string }>(
-        "/api/models/anthropic/oauth/status",
-      ),
   },
 
   // Health

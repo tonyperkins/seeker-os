@@ -1,22 +1,13 @@
 # Seeker OS — LLM Providers & Models (EXAMPLE TEMPLATE)
 # Copy to providers.yml and fill in your settings. providers.yml is .gitignore'd.
 # API keys are env var references (${VAR_NAME}), never literal in config files.
-# Anthropic supports two auth methods:
-#   - api_key: Standard API key (env var reference)
-#   - oauth: OAuth token via the in-app "Connect Account" button (PKCE flow)
-#            Token is stored at data/.anthropic_oauth.json
 # See docs/LLM_ROUTING.md for full details.
 
 providers:
   - id: anthropic_direct
     type: anthropic
     label: "Anthropic Direct"
-    # Option A: API key (env var reference)
-    # api_key: ${ANTHROPIC_API_KEY}
-    # auth_method: api_key
-    # Option B: OAuth — use the "Connect Account" button on the Models page
-    auth_method: oauth
-    oauth_token_path: "data/.anthropic_oauth.json"
+    api_key: ${ANTHROPIC_API_KEY}
     enabled: false
     auto_fetch_models: true
     models:

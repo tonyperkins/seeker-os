@@ -50,6 +50,7 @@ class JobSummary(BaseModel):
     has_research: bool = False
     has_resume: bool = False
     analysis_verdict: str | None = None
+    net_score: float | None = None
 
     @field_validator("comp_min", "comp_max", mode="before")
     @classmethod

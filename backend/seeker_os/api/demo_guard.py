@@ -36,7 +36,6 @@ _ALLOWED_PATHS = {
     "/api/accuracy-rules",
     "/api/settings/company-research",
     "/api/models",
-    "/api/models/anthropic/oauth/status",
     "/api/models/providers",
     "/api/models/tiers",
     "/api/models/tasks",

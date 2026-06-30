@@ -26,7 +26,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MasterResumeUpload } from "@/components/master-resume-upload";
-import { AnthropicAuthDialog } from "@/components/anthropic-auth-dialog";
 import { ProfileForm } from "@/components/profile-form";
 import { FilterForm } from "@/components/filter-form";
 import {
@@ -329,7 +328,6 @@ function ProviderStep({
   onRefresh: () => Promise<ProvidersConfigResponse | null>;
   onNext: () => void;
 }) {
-  const [authOpen, setAuthOpen] = useState(false);
   const [fetchingProvider, setFetchingProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savingTiers, setSavingTiers] = useState(false);
@@ -338,24 +336,6 @@ function ProviderStep({
   const allProviders = providers?.providers ?? [];
   const enabledProviders = allProviders.filter((p) => p.enabled);
   const tiers = providers?.tiers ?? {};
-
-  const handleAuthSuccess = useCallback(async () => {
-    setAuthOpen(false);
-    setError(null);
-    const p = await onRefresh();
-    const anthropic = p?.providers.find((prov) => prov.type === "anthropic");
-    if (anthropic) {
-      setFetchingProvider(anthropic.id);
-      try {
-        await api.models.fetch(anthropic.id);
-        await onRefresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to fetch models");
-      } finally {
-        setFetchingProvider(null);
-      }
-    }
-  }, [onRefresh]);
 
   const handleFetchModels = useCallback(async (providerId: string) => {
     setFetchingProvider(providerId);
@@ -486,7 +466,6 @@ function ProviderStep({
           fetching={fetchingProvider === provider.id}
           onFetchModels={() => handleFetchModels(provider.id)}
           onToggleEnabled={(enabled) => handleEnableProvider(provider.id, enabled)}
-          onConnectAnthropic={() => setAuthOpen(true)}
           onEdit={() => setEditingProvider(provider.id)}
           editingOpen={editingProvider === provider.id}
           onEditClose={() => setEditingProvider(null)}
@@ -528,13 +507,6 @@ function ProviderStep({
         </Card>
       )}
 
-      <AnthropicAuthDialog
-        key={authOpen ? "open" : "closed"}
-        open={authOpen}
-        onOpenChange={setAuthOpen}
-        onSuccess={handleAuthSuccess}
-      />
-
       {/* Continue button */}
       <div className="flex flex-col items-end gap-2">
         {!hasProvider && (
@@ -557,7 +529,6 @@ function ProviderCard({
   fetching,
   onFetchModels,
   onToggleEnabled,
-  onConnectAnthropic,
   onEdit,
   editingOpen,
   onEditClose,
@@ -567,7 +538,6 @@ function ProviderCard({
   fetching: boolean;
   onFetchModels: () => void;
   onToggleEnabled: (_enabled: boolean) => void;
-  onConnectAnthropic: () => void;
   onEdit: () => void;
   editingOpen: boolean;
   onEditClose: () => void;
@@ -588,7 +558,7 @@ function ProviderCard({
             </CardTitle>
             <CardDescription className="mt-1">
               {isAnthropic
-                ? "Claude Pro/Max subscription via OAuth, or API key"
+                ? "Anthropic API key required"
                 : `OpenAI-compatible gateway at ${provider.base_url ?? "—"}`}
             </CardDescription>
           </div>
@@ -617,26 +587,15 @@ function ProviderCard({
                 {connected ? "Connected" : "Not connected"}
               </p>
               <p className="text-xs text-muted-foreground">
-                {provider.auth_method === "oauth" ? "OAuth token" : "API key"}
+                API key
                 {provider.base_url && ` · ${provider.base_url}`}
               </p>
             </div>
           </div>
-          {isAnthropic ? (
-            <Button
-              variant={connected ? "outline" : "default"}
-              size="sm"
-              onClick={onConnectAnthropic}
-            >
-              <KeyRound className="size-3.5" />
-              {connected ? "Re-authorize" : "Connect Account"}
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" onClick={onEdit}>
-              <KeyRound className="size-3.5" />
-              Configure
-            </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <KeyRound className="size-3.5" />
+            Configure
+          </Button>
         </div>
 
         {/* Models status */}
@@ -709,7 +668,6 @@ function EditProviderInline({
         label,
         enabled: true,
         auto_fetch_models: true,
-        auth_method: "api_key",
         base_url: baseUrl,
       };
       if (apiKey.trim()) {

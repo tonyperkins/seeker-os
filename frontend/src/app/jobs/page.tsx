@@ -222,7 +222,7 @@ function JobsPageInner() {
       let cmp = 0;
       switch (sortKey) {
         case "score":
-          cmp = (a.score ?? -1) - (b.score ?? -1);
+          cmp = (a.net_score ?? a.score ?? -1) - (b.net_score ?? b.score ?? -1);
           break;
         case "status":
           cmp = a.status.localeCompare(b.status);
@@ -732,7 +732,14 @@ function JobsPageInner() {
                         </button>
                       </TableCell>
                       <TableCell className="whitespace-nowrap font-mono font-medium">
-                        {job.score != null ? job.score : "—"}
+                        <div className="flex flex-col items-center">
+                          <span>{job.score != null ? job.score : "—"}</span>
+                          {job.net_score != null && job.net_score !== job.score && (
+                            <span className="text-xs text-muted-foreground" title="Net score (base + research, capped by AI verdict)">
+                              → {job.net_score.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <div className="flex items-center gap-1" title={job.reject_reason ? (job.reject_details ? `Manually rejected: ${job.reject_reason}` : job.reject_reason) : job.status}>

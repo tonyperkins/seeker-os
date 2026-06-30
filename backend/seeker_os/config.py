@@ -84,7 +84,7 @@ def resolve_env_vars(value: Any) -> Any:
 # Credential-like field names that should only hold ${VAR} references
 _CREDENTIAL_FIELD_NAMES = {"api_key", "token", "secret", "password", "apikey"}
 # Safe field names that may hold a non-${VAR} value (e.g. a file path)
-_SAFE_CREDENTIAL_FIELDS = {"oauth_token_path", "token_path"}
+_SAFE_CREDENTIAL_FIELDS = {"token_path"}
 
 
 def _check_unresolved_env_refs(data: Any, filename: str) -> None:
@@ -405,8 +405,6 @@ class ProviderConfig(BaseModel):
     base_url: str | None = None
     enabled: bool = True
     auto_fetch_models: bool = False
-    auth_method: str = "api_key"  # 'api_key' or 'oauth'
-    oauth_token_path: str | None = None  # path to OAuth token JSON file
     models: list[ProviderModel] = []
 
 

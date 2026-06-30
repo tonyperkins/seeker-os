@@ -70,7 +70,7 @@ export function SetupGuide({
     {
       icon: Server,
       title: "Configure an LLM provider",
-      description: "Set up at least one provider with an API key or OAuth and assign models to tiers. This powers resume parsing, scoring, and generation.",
+      description: "Set up at least one provider with an API key and assign models to tiers. This powers resume parsing, scoring, and generation.",
       done: step0Done,
       action: !step0Done ? "providers" : null,
     },

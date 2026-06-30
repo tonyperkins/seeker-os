@@ -33,8 +33,6 @@ export function EditProviderDialog({
   const [baseUrl, setBaseUrl] = useState(provider.base_url ?? "");
   const [enabled, setEnabled] = useState(provider.enabled);
   const [autoFetch, setAutoFetch] = useState(provider.auto_fetch_models);
-  const [authMethod, setAuthMethod] = useState(provider.auth_method);
-  const [oauthTokenPath, setOauthTokenPath] = useState(provider.oauth_token_path ?? "");
   const [apiKey, setApiKey] = useState("");
 
   function handleOpenChange(nextOpen: boolean) {
@@ -44,8 +42,6 @@ export function EditProviderDialog({
       setBaseUrl(provider.base_url ?? "");
       setEnabled(provider.enabled);
       setAutoFetch(provider.auto_fetch_models);
-      setAuthMethod(provider.auth_method);
-      setOauthTokenPath(provider.oauth_token_path ?? "");
       setApiKey("");
       setError(null);
     }
@@ -60,15 +56,10 @@ export function EditProviderDialog({
         label,
         enabled,
         auto_fetch_models: autoFetch,
-        auth_method: authMethod,
       };
 
       if (provider.type === "openai_compatible") {
         body.base_url = baseUrl;
-      }
-
-      if (authMethod === "oauth") {
-        body.oauth_token_path = oauthTokenPath;
       }
 
       // Only send API key if user entered a new one
@@ -134,77 +125,27 @@ export function EditProviderDialog({
             </div>
           )}
 
-          {/* Auth method (only for anthropic) */}
-          {provider.type === "anthropic" && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Authentication Method</Label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAuthMethod("api_key")}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                    authMethod === "api_key"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  API Key
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthMethod("oauth")}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                    authMethod === "oauth"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
-                  OAuth Token
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* API Key field */}
-          {authMethod === "api_key" && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="provider-api-key">
-                API Key
-                {provider.api_key_set && (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    (currently set — leave blank to keep)
-                  </span>
-                )}
-              </Label>
-              <Input
-                id="provider-api-key"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={provider.api_key_set ? "••••••••" : "Enter API key"}
-              />
-              <p className="text-xs text-muted-foreground">
-                Stored in .env as ${provider.id.toUpperCase()}_API_KEY
-              </p>
-            </div>
-          )}
-
-          {/* OAuth token path */}
-          {authMethod === "oauth" && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="provider-oauth-path">OAuth Token File Path</Label>
-              <Input
-                id="provider-oauth-path"
-                value={oauthTokenPath}
-                onChange={(e) => setOauthTokenPath(e.target.value)}
-                placeholder="~/.hermes/.anthropic_oauth.json"
-              />
-              <p className="text-xs text-muted-foreground">
-                Path to a JSON file with an <code>accessToken</code> field (e.g. from
-                Claude CLI login)
-              </p>
-            </div>
-          )}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="provider-api-key">
+              API Key
+              {provider.api_key_set && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  (currently set — leave blank to keep)
+                </span>
+              )}
+            </Label>
+            <Input
+              id="provider-api-key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={provider.api_key_set ? "••••••••" : "Enter API key"}
+            />
+            <p className="text-xs text-muted-foreground">
+              Stored in .env as ${provider.id.toUpperCase()}_API_KEY
+            </p>
+          </div>
 
           {/* Toggles */}
           <div className="flex flex-col gap-3">

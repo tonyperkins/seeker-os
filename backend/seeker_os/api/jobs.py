@@ -236,6 +236,7 @@ def _row_to_summary(
         has_research=has_research,
         has_resume=has_resume,
         analysis_verdict=row["analysis_verdict"] if "analysis_verdict" in row.keys() else None,
+        net_score=row["net_score"] if "net_score" in row.keys() else None,
     )
 
 

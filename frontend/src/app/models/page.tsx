@@ -11,7 +11,6 @@ import {
   Cpu,
   Zap,
   Search,
-  KeyRound,
   ChevronDown,
 } from "lucide-react";
 import {
@@ -34,7 +33,6 @@ import {
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { EditProviderDialog } from "@/components/edit-provider-dialog";
-import { AnthropicAuthDialog } from "@/components/anthropic-auth-dialog";
 import {
   api,
   type ProvidersConfigResponse,
@@ -104,7 +102,6 @@ function ProviderCard({
   testResult: HealthResult | null;
 }) {
   const [search, setSearch] = useState("");
-  const [authOpen, setAuthOpen] = useState(false);
   const [expanded, setExpanded] = usePersistentState(`models:provider:${provider.id}:expanded`, true);
 
   const filteredModels = useMemo(() => {
@@ -180,26 +177,6 @@ function ProviderCard({
                 </Button>
               )}
               <EditProviderDialog provider={provider} onSaved={onSaved} />
-              {provider.type === "anthropic" && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setAuthOpen(true)}
-                  >
-                    <KeyRound className="h-3.5 w-3.5" />
-                    {provider.auth_method === "oauth" && provider.api_key_set
-                      ? "Re-authorize"
-                      : "Connect Account"}
-                  </Button>
-                  <AnthropicAuthDialog
-                    key={authOpen ? "open" : "closed"}
-                    open={authOpen}
-                    onOpenChange={setAuthOpen}
-                    onSuccess={onSaved}
-                  />
-                </>
-              )}
             </div>
             {testResult && (
               <div

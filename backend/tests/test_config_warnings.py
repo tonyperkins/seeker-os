@@ -99,14 +99,6 @@ class TestLiteralSecretWarnings:
         assert len(w) == 1
         assert "token" in str(w[0].message)
 
-    def test_no_warning_for_oauth_token_path(self):
-        """oauth_token_path is a safe field — should not warn even with a literal."""
-        data = {"oauth_token_path": "data/.anthropic_oauth.json"}
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            _check_literal_secrets(data, "providers.yml")
-        assert len(w) == 0
-
     def test_warning_does_not_print_value(self):
         """The literal-secret warning must not include the actual value."""
         data = {"api_key": "sk-super-secret-never-print-this"}

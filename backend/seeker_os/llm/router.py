@@ -38,8 +38,6 @@ def create_provider(config: ProviderConfig) -> LLMProvider:
             api_key=api_key,
             base_url=config.base_url,
             label=config.label,
-            auth_method=config.auth_method,
-            oauth_token_path=config.oauth_token_path,
         )
     elif config.type == "openai_compatible":
         from seeker_os.llm.openai_compat_provider import OpenAICompatProvider
@@ -215,76 +213,6 @@ class ModelRouter:
                 return task_config.max_tokens
         return self._TASK_MAX_TOKENS_DEFAULTS.get(task, self._DEFAULT_MAX_TOKENS)
 
-    # --- Cross-provider rate-limit fallback ---
-
-    @staticmethod
-    def _is_rate_limit_error(exc: Exception) -> bool:
-        """Check if an exception is a rate-limit error (429) from any provider SDK."""
-        exc_class_name = type(exc).__name__
-        if "RateLimitError" in exc_class_name:
-            return True
-        status_code = getattr(exc, "status_code", None)
-        if status_code == 429:
-            return True
-        response = getattr(exc, "response", None)
-        if response is not None:
-            status_code = getattr(response, "status_code", None)
-            if status_code == 429:
-                return True
-        return False
-
-    def _get_tier_for_task(self, task: str) -> str:
-        """Determine the tier for a task (mirrors resolve() logic)."""
-        config = self.settings.providers
-        if config:
-            task_config = config.tasks.get(task)
-            if task_config:
-                return task_config.tier
-        return self._infer_tier(task)
-
-    def _find_fallback_model(self, provider_id: str, tier: str, primary_model: str) -> str | None:
-        """Find a suitable model on a fallback provider for the given tier.
-
-        Resolution order:
-        1. Manually configured models with a matching tier tag
-        2. Any manually configured model (first available)
-        3. Disk-cached auto-fetched models (first available)
-        4. Live-fetch models from the provider's API (first available)
-
-        Returns None if no model can be found — the caller skips the provider.
-        The primary's model ID is NOT reused on other providers — gateways
-        use different model IDs (e.g. Kilo uses 'anthropic/claude-opus-4-8',
-        not 'claude-opus-4-8'), so guessing would cause a 400.
-        """
-        pc = self._provider_configs.get(provider_id)
-        if pc and pc.models:
-            for m in pc.models:
-                if tier in (m.tags or []):
-                    return m.id
-            return pc.models[0].id
-
-        from seeker_os.llm.cache import get_cached_models, save_cached_models
-        cached = get_cached_models(provider_id)
-        if cached:
-            for m in cached:
-                if m.available:
-                    return m.id
-
-        # Last resort: live-fetch the provider's model list
-        provider = self._providers.get(provider_id)
-        if provider and hasattr(provider, "list_models"):
-            try:
-                live_models = provider.list_models()
-                if live_models:
-                    save_cached_models(provider_id, live_models)
-                    for m in live_models:
-                        if m.available:
-                            return m.id
-            except Exception:
-                pass
-
-        return None
-
     # --- Model max_output ceiling enforcement (FIX 2) ---
 
     def _get_model_max_output(self, provider_id: str, model_id: str) -> int | None:
@@ -356,9 +284,6 @@ class ModelRouter:
         Before the call, the requested max_tokens is checked against the routed
         model's max_output ceiling — raises ValueError if explicitly exceeded,
         caps silently if resolved from defaults.
-
-        If the primary provider returns a rate-limit error (429), the router
-        transparently retries on other available providers before giving up.
         """
         provider, model = self.resolve(task)
 
@@ -385,81 +310,7 @@ class ModelRouter:
             task=task,
         )
 
-        try:
-            return provider.generate(request)
-        except Exception as exc:
-            if not self._is_rate_limit_error(exc):
-                raise
-            return self._retry_with_fallback(
-                task, system_prompt, user_prompt,
-                temperature, max_tokens, explicitly_requested,
-                primary_provider_id=provider_id,
-                primary_model=model,
-            )
-
-    def _retry_with_fallback(
-        self,
-        task: str,
-        system_prompt: str,
-        user_prompt: str,
-        temperature: float,
-        max_tokens: int,
-        explicitly_requested: bool,
-        primary_provider_id: str,
-        primary_model: str,
-    ) -> LLMResponse:
-        """Try other available providers after a rate-limit error on the primary."""
-        tier = self._get_tier_for_task(task)
-        tried = {primary_provider_id}
-        last_exc: Exception | None = None
-
-        for alt_pid, alt_provider in self.get_available_providers().items():
-            if alt_pid in tried:
-                continue
-            tried.add(alt_pid)
-
-            alt_model = self._find_fallback_model(alt_pid, tier, primary_model)
-            if alt_model is None:
-                continue
-
-            alt_max_tokens = self._enforce_max_output_ceiling(
-                task, alt_pid, alt_model, max_tokens,
-                explicitly_requested=explicitly_requested,
-            )
-
-            logger.warning(
-                "Rate-limited on provider '%s' for task '%s' — "
-                "falling back to provider '%s' model '%s'",
-                primary_provider_id, task, alt_pid, alt_model,
-            )
-
-            request = LLMRequest(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                model=alt_model,
-                temperature=temperature,
-                max_tokens=alt_max_tokens,
-                task=task,
-            )
-
-            try:
-                return alt_provider.generate(request)
-            except Exception as exc:
-                if not self._is_rate_limit_error(exc):
-                    raise
-                last_exc = exc
-                logger.warning(
-                    "Fallback provider '%s' also rate-limited for task '%s'",
-                    alt_pid, task,
-                )
-                continue
-
-        # All providers exhausted — raise the last rate-limit error
-        if last_exc is not None:
-            raise last_exc
-        raise RuntimeError(
-            f"All providers rate-limited for task '{task}' — no fallback available"
-        )
+        return provider.generate(request)
 
     def list_all_models(self, provider_id: str | None = None) -> list[ModelInfo]:
         """List models from all providers or a specific one.

@@ -31,8 +31,6 @@ class ProviderInfoResponse(BaseModel):
     label: str
     enabled: bool = True
     auto_fetch_models: bool = False
-    auth_method: str = "api_key"
-    oauth_token_path: str | None = None
     base_url: str | None = None
     # api_key is never sent to the frontend — only whether it's set
     api_key_set: bool = False
@@ -65,8 +63,6 @@ class ProviderUpdateRequest(BaseModel):
     base_url: str | None = None
     enabled: bool | None = None
     auto_fetch_models: bool | None = None
-    auth_method: str | None = None  # 'api_key' or 'oauth'
-    oauth_token_path: str | None = None
 
 
 @router.get("", response_model=ProvidersConfigResponse)
@@ -117,17 +113,9 @@ def get_providers_config():
                 healthy = False
                 health_message = str(e)
 
-        # Check if auth is available — either API key or OAuth token file.
-        # An unresolved ${VAR_NAME} placeholder means the env var is not set,
-        # so we must not treat it as a real key.
+        # Check if auth is available — an unresolved ${VAR_NAME} placeholder
+        # means the env var is not set, so we must not treat it as a real key.
         auth_available = bool(pc.api_key) and not pc.api_key.startswith("${")
-        if not auth_available and pc.auth_method == "oauth" and pc.oauth_token_path:
-            from pathlib import Path
-            from seeker_os.config import PROJECT_ROOT
-            tp = Path(pc.oauth_token_path)
-            if not tp.is_absolute():
-                tp = PROJECT_ROOT / tp
-            auth_available = tp.expanduser().exists()
 
         providers_response.append(ProviderInfoResponse(
             id=pc.id,
@@ -135,8 +123,6 @@ def get_providers_config():
             label=pc.label or pc.id,
             enabled=pc.enabled,
             auto_fetch_models=pc.auto_fetch_models,
-            auth_method=pc.auth_method,
-            oauth_token_path=pc.oauth_token_path,
             base_url=pc.base_url,
             api_key_set=auth_available,
             models=models,
@@ -290,10 +276,6 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
         provider_found["enabled"] = body.enabled
     if body.auto_fetch_models is not None:
         provider_found["auto_fetch_models"] = body.auto_fetch_models
-    if body.auth_method is not None:
-        provider_found["auth_method"] = body.auth_method
-    if body.oauth_token_path is not None:
-        provider_found["oauth_token_path"] = body.oauth_token_path
 
     if body.api_key is not None:
         # Store the API key in .env, reference it in providers.yml
@@ -352,13 +334,6 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
             health_message = str(e)
 
     auth_available = bool(pc.api_key) and not pc.api_key.startswith("${")
-    if not auth_available and pc.auth_method == "oauth" and pc.oauth_token_path:
-        from pathlib import Path
-        from seeker_os.config import PROJECT_ROOT
-        tp = Path(pc.oauth_token_path)
-        if not tp.is_absolute():
-            tp = PROJECT_ROOT / tp
-        auth_available = tp.expanduser().exists()
 
     return ProviderInfoResponse(
         id=pc.id,
@@ -366,8 +341,6 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
         label=pc.label or pc.id,
         enabled=pc.enabled,
         auto_fetch_models=pc.auto_fetch_models,
-        auth_method=pc.auth_method,
-        oauth_token_path=pc.oauth_token_path,
         base_url=pc.base_url,
         api_key_set=auth_available,
         models=models,
@@ -441,73 +414,3 @@ def update_task(task: str, body: TaskUpdateRequest):
         tasks[task] = entry
         _write_providers_yml(raw)
     return TaskOverrideResponse(tier=body.tier, provider=body.provider, model=body.model)
-
-
-# ---------------------------------------------------------------------------
-# Anthropic OAuth flow
-# ---------------------------------------------------------------------------
-
-class OAuthInitiateResponse(BaseModel):
-    auth_url: str
-    state: str
-
-
-class OAuthCallbackRequest(BaseModel):
-    code: str
-    state: str
-
-
-class OAuthStatusResponse(BaseModel):
-    exists: bool
-    expired: bool
-    expires_at: int | None = None
-    path: str
-
-
-@router.post("/anthropic/oauth/initiate", response_model=OAuthInitiateResponse)
-def initiate_anthropic_oauth():
-    """Start the Anthropic OAuth PKCE flow.
-
-    Returns an authorization URL for the user to open in their browser.
-    After authorizing, the user gets a code to paste back.
-    """
-    from seeker_os.llm.anthropic_oauth import initiate_oauth
-    result = initiate_oauth()
-    return OAuthInitiateResponse(**result)
-
-
-@router.post("/anthropic/oauth/callback", response_model=MessageResponse)
-def anthropic_oauth_callback(body: OAuthCallbackRequest):
-    """Exchange the OAuth authorization code for tokens.
-
-    Saves the tokens to data/.anthropic_oauth.json and updates providers.yml
-    to point to the local token file.
-    """
-    from seeker_os.llm.anthropic_oauth import exchange_code, get_token_path
-    try:
-        exchange_code(body.code, body.state)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        logger.exception("OAuth token exchange failed")
-        raise HTTPException(status_code=500, detail="Token exchange failed — see server logs for details")
-
-    # Update providers.yml to use the local token file
-    raw = _read_providers_yml()
-    for provider in raw.get("providers", []):
-        if provider.get("type") == "anthropic":
-            provider["auth_method"] = "oauth"
-            provider["oauth_token_path"] = get_token_path()
-            provider["enabled"] = True
-            break
-    _write_providers_yml(raw)
-
-    return MessageResponse(message="Anthropic OAuth successful — token saved")
-
-
-@router.get("/anthropic/oauth/status", response_model=OAuthStatusResponse)
-def anthropic_oauth_status():
-    """Check the status of the local Anthropic OAuth token."""
-    from seeker_os.llm.anthropic_oauth import get_token_status
-    result = get_token_status()
-    return OAuthStatusResponse(**result)
