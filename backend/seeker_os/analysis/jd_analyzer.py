@@ -381,7 +381,15 @@ def analyze_job(
 
     # 5. Parse JSON response
     text = _strip_code_fences(response.text)
-    data = json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        db.close()
+        raise ValueError(
+            f"JD analysis LLM returned invalid JSON for job {job_id} "
+            f"(model={response.model}, output_tokens={response.output_tokens}): "
+            f"{text[:300]!r}"
+        ) from exc
 
     # 6. Store in DB
     now = datetime.now(timezone.utc).isoformat()
@@ -433,6 +441,7 @@ def analyze_job(
         min_score=min_score,
     )
     db.execute(
+        # TODO: analysis_delta is vestigial (always 0.0 — never computed). Remove or implement.
         "UPDATE jobs SET analysis_verdict = ?, analysis_delta = 0.0, net_score = ? WHERE id = ?",
         (verdict, net, job_id),
     )

@@ -138,18 +138,19 @@ def _check_modifier(
             if not comp_trusted:
                 return False
             return comp_min is not None and comp_min >= mod.threshold
+        if mod.threshold_min is not None and mod.threshold_max is not None:
+            # Range: threshold_min <= comp < threshold_max
+            # Must be checked before threshold_max-only case (which would shadow it).
+            effective = comp_max if comp_max is not None else comp_min
+            if effective is not None and mod.threshold_min <= effective < mod.threshold_max:
+                return True
+            return False
         if mod.threshold_max is not None:
             # Negative: comp_max below threshold_max
             if comp_max is not None and comp_max < mod.threshold_max:
                 return True
             # Also check comp_min as fallback
             if comp_min is not None and comp_min < mod.threshold_max and comp_max is None:
-                return True
-            return False
-        if mod.threshold_min is not None and mod.threshold_max is not None:
-            # Range: threshold_min <= comp <= threshold_max
-            effective = comp_max if comp_max is not None else comp_min
-            if effective is not None and mod.threshold_min <= effective < mod.threshold_max:
                 return True
             return False
         return False
@@ -229,7 +230,8 @@ def score_job(
         elif rule.check == "jd_infra_role":
             # JD matches target-role keywords but no title match.
             # Patterns are configurable via BaseScoreRule.patterns in scoring_rubric.yml.
-            if rule.patterns and any(p in jd_text.lower() for p in rule.patterns):
+            # Use _check_pattern (regex, IGNORECASE) for consistency with all other checks.
+            if rule.patterns and any(_check_pattern(jd_text, p) for p in rule.patterns):
                 base_score = rule.score
                 base_label = rule.label
                 break

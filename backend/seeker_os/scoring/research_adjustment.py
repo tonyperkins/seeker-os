@@ -73,11 +73,6 @@ class ResearchAdjustmentResult(BaseModel):
     applied: bool = False  # False when no grounding (stub, no retrieval)
 
 
-def _normalize_company_name(name: str) -> str:
-    """Normalize company name for matching."""
-    return (name or "").strip().lower()
-
-
 def _is_recent_layoff(layoff_date: str | None, within_days: int = 180) -> bool:
     """Check if a layoff date is within the recent window."""
     if not layoff_date:
