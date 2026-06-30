@@ -7,11 +7,15 @@ if [ ! -f /app/data/.env ]; then
     touch /app/data/.env
 fi
 
-# Wrap with Xvfb so Playwright can run in non-headless mode (required for
-# Vercel JS challenge resolution). xvfb-run provides a virtual display.
-# Fall back to direct execution if xvfb-run isn't available (older images).
-if command -v xvfb-run >/dev/null 2>&1 && command -v xauth >/dev/null 2>&1; then
-    exec xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" "$@"
-else
-    exec "$@"
+# Start Xvfb in background for Playwright non-headless Chromium (Vercel
+# JS challenge requires non-headless mode). We start Xvfb manually instead
+# of using xvfb-run because xvfb-run swallows stdout/stderr, making it
+# impossible to see application logs or crash errors in Docker.
+if command -v Xvfb >/dev/null 2>&1; then
+    export DISPLAY=:99
+    Xvfb :99 -screen 0 1280x720x24 -nolisten tcp &
+    # Give Xvfb a moment to start
+    sleep 1
 fi
+
+exec "$@"
