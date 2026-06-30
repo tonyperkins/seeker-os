@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     shared-mime-info \
     xvfb \
+    xauth \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
