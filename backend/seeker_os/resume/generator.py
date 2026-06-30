@@ -106,6 +106,22 @@ def _load_never_claim_text(settings: Settings) -> str:
     return f"NEVER mention these technologies anywhere in the resume: {items}"
 
 
+def _load_honest_qualifiers_text(settings: Settings) -> str:
+    """Load the honest qualifiers from identity_rules.yml for the prompt.
+
+    Returns empty string if no identity or no honest_qualifiers entries — the
+    prompt says nothing about honest qualifiers in that case. No hardcoded
+    fallback.
+    """
+    identity = settings.identity
+    if not identity or not identity.honest_qualifiers:
+        return ""
+    lines: list[str] = []
+    for hq in identity.honest_qualifiers:
+        lines.append(f"- {hq.skill}: {hq.framing}")
+    return "\n".join(lines)
+
+
 def _load_work_eligibility_text(settings: Settings) -> str:
     """Load work eligibility from identity_rules.yml for the prompt.
 
@@ -218,6 +234,19 @@ def generate_resume(
     never_claim_text = _load_never_claim_text(settings)
     if never_claim_text:
         system_prompt += f"\n\n--- NEVER CLAIM ---\n{never_claim_text}\n--- END NEVER CLAIM ---\n"
+
+    # Inject honest qualifiers from identity_rules.yml — skill framings must
+    # match the master's wording verbatim and must not be upgraded or paraphrased
+    honest_qualifiers_text = _load_honest_qualifiers_text(settings)
+    if honest_qualifiers_text:
+        system_prompt += (
+            f"\n\n--- HONEST QUALIFIERS (verbatim — do not upgrade) ---\n"
+            f"Wherever the skill appears (competency lines, summary, bullets), "
+            f"its qualifier must match the master's wording and must not be "
+            f"upgraded or paraphrased into a stronger claim.\n"
+            f"{honest_qualifiers_text}\n"
+            f"--- END HONEST QUALIFIERS ---\n"
+        )
 
     # Inject work eligibility from identity_rules.yml
     work_eligibility_text = _load_work_eligibility_text(settings)
