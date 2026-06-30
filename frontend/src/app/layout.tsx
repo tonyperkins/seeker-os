@@ -25,14 +25,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
+      <body className="min-h-full flex flex-col bg-background text-foreground">
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('seeker-os-theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
           }}
         />
-      </head>
-      <body className="min-h-full flex flex-col bg-background text-foreground">
         <DemoModeProvider>
           <DemoBanner />
           <div className="flex min-h-screen">
