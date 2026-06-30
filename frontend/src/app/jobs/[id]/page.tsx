@@ -172,9 +172,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-primary hover:underline"
-                >
-                  homepage <ExternalLink className="inline size-3" />
-                </a>
+                ><ExternalLink className="inline size-3" /></a>
               )}
             </div>
           </div>

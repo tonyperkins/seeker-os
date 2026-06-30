@@ -1,12 +1,12 @@
 /** API client for Seeker OS backend. */
 
 // Server-side renders (SSR) run inside the container — use the Docker service name.
-// Client-side fetches run in the browser — use the public URL (host-mapped port).
-// Dynamic property access prevents Next.js from inlining process.env at build time.
+// Client-side fetches use relative URLs so they work behind any reverse proxy
+// (Next.js rewrites /api/* to the backend).
 const API_BASE =
   typeof window === "undefined"
     ? process.env["SERVER_API_URL"] || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    : "";
 
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData;
@@ -589,9 +589,9 @@ export const api = {
       fetchAPI<Record<string, unknown>>(`/api/resumes/${id}/validate`, { method: "POST" }),
     clearExports: (id: number) =>
       fetchAPI<MessageResponse>(`/api/resumes/${id}/exports`, { method: "DELETE" }),
-    pdfUrl: (id: number) => `${API_BASE}/api/resumes/${id}/pdf`,
-    markdownUrl: (id: number) => `${API_BASE}/api/resumes/${id}/markdown`,
-    docxUrl: (id: number) => `${API_BASE}/api/resumes/${id}/docx`,
+    pdfUrl: (id: number) => `/api/resumes/${id}/pdf`,
+    markdownUrl: (id: number) => `/api/resumes/${id}/markdown`,
+    docxUrl: (id: number) => `/api/resumes/${id}/docx`,
     getMaster: () => fetchAPI<MasterResumeInfo>("/api/resumes/master"),
     uploadMaster: (file: File) => {
       const formData = new FormData();
