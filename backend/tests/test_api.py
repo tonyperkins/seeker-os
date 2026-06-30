@@ -44,18 +44,21 @@ class TestJobs:
     def test_list_jobs(self, client):
         r = client.get("/api/jobs?limit=5")
         assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        data = r.json()
+        assert "jobs" in data
+        assert "total" in data
+        assert isinstance(data["jobs"], list)
 
     def test_list_jobs_filter_status(self, client):
         r = client.get("/api/jobs?status=ready&limit=10")
         assert r.status_code == 200
-        for job in r.json():
+        for job in r.json()["jobs"]:
             assert job["status"] == "ready"
 
     def test_list_jobs_min_score(self, client):
         r = client.get("/api/jobs?min_score=6.0&limit=10")
         assert r.status_code == 200
-        for job in r.json():
+        for job in r.json()["jobs"]:
             if job["score"] is not None:
                 assert job["score"] >= 6.0
 
@@ -66,8 +69,9 @@ class TestJobs:
     def test_get_job_detail(self, client):
         # First get a job ID from the list
         r = client.get("/api/jobs?limit=1")
-        if r.json():
-            job_id = r.json()[0]["id"]
+        jobs = r.json()["jobs"]
+        if jobs:
+            job_id = jobs[0]["id"]
             r2 = client.get(f"/api/jobs/{job_id}")
             assert r2.status_code == 200
             detail = r2.json()
@@ -78,8 +82,9 @@ class TestJobs:
     def test_reject_job(self, client):
         # Get a ready job
         r = client.get("/api/jobs?status=ready&limit=1")
-        if r.json():
-            job_id = r.json()[0]["id"]
+        jobs = r.json()["jobs"]
+        if jobs:
+            job_id = jobs[0]["id"]
             r2 = client.post(f"/api/jobs/{job_id}/reject", json={"reason": "Test rejection"})
             assert r2.status_code == 200
             # Verify status changed
@@ -90,9 +95,10 @@ class TestJobs:
 
     def test_update_job_status(self, client):
         r = client.get("/api/jobs?limit=1")
-        if r.json():
-            job_id = r.json()[0]["id"]
-            original_status = r.json()[0]["status"]
+        jobs = r.json()["jobs"]
+        if jobs:
+            job_id = jobs[0]["id"]
+            original_status = jobs[0]["status"]
             r2 = client.patch(f"/api/jobs/{job_id}", json={"status": "reviewing"})
             assert r2.status_code == 200
             # Restore

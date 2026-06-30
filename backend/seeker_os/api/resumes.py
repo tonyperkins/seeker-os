@@ -122,6 +122,50 @@ async def upload_master_resume(file: UploadFile = File(...)):
     )
 
 
+@router.get("/master/content")
+def get_master_resume_content():
+    """Get the full text content of the master resume (markdown only)."""
+    from seeker_os.config import Settings
+
+    settings = Settings()
+    if not settings.profile or not settings.profile.resume:
+        raise HTTPException(status_code=404, detail="No resume config in profile.yml")
+
+    master_path = Path(settings.profile.resume.master_path).expanduser()
+    if not master_path.exists():
+        raise HTTPException(status_code=404, detail=f"Master resume not found at {master_path}")
+
+    fmt = master_path.suffix.lstrip(".").lower()
+    if fmt != "md":
+        raise HTTPException(status_code=400, detail=f"Content editing is only supported for markdown resumes (got .{fmt})")
+
+    return {"content": master_path.read_text(encoding="utf-8")}
+
+
+class MasterResumeContentUpdate(BaseModel):
+    content: str
+
+
+@router.put("/master/content", response_model=MessageResponse)
+def update_master_resume_content(body: MasterResumeContentUpdate):
+    """Update the full text content of the master resume (markdown only)."""
+    from seeker_os.config import Settings
+
+    settings = Settings()
+    if not settings.profile or not settings.profile.resume:
+        raise HTTPException(status_code=404, detail="No resume config in profile.yml")
+
+    master_path = Path(settings.profile.resume.master_path).expanduser()
+    fmt = master_path.suffix.lstrip(".").lower()
+    if fmt != "md":
+        raise HTTPException(status_code=400, detail=f"Content editing is only supported for markdown resumes (got .{fmt})")
+
+    master_path.parent.mkdir(parents=True, exist_ok=True)
+    master_path.write_text(body.content, encoding="utf-8")
+
+    return MessageResponse(message="Master resume updated")
+
+
 @router.post("/parse", response_model=ResumeParseResult)
 def parse_master_resume():
     """Parse the master resume using LLM to extract structured profile data.

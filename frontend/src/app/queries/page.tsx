@@ -184,9 +184,6 @@ export default function QueriesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Queries</h1>
-          <p className="text-sm text-muted-foreground">
-            Search query definitions sourced from hiring.cafe.
-          </p>
         </div>
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger render={<Button><Plus /> Add query</Button>} />

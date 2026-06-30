@@ -19,6 +19,7 @@ import { SettingsConfigCard } from "@/components/settings-config-card";
 import { AccuracyRulesCard } from "@/components/accuracy-rules-card";
 import { CompanyResearchSettingsCard } from "@/components/company-research-settings-card";
 import { BackupRestoreCard } from "@/components/backup-restore-card";
+import { BookmarkletCard } from "@/components/bookmarklet-card";
 import { api, type SettingsResponse, type ProfileData, type FiltersData, type AccuracyRule } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -62,10 +63,6 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Upload your resume to auto-extract your profile, then review and fine-tune
-          your filter parameters.
-        </p>
       </div>
 
       {/* Status summary */}
@@ -123,6 +120,11 @@ export default async function SettingsPage() {
         profile={profile}
         filters={filters}
       />
+
+      <Separator />
+
+      {/* Bookmarklet — drag-to-bookmarks-bar job adder */}
+      <BookmarkletCard />
 
       <Separator />
 
