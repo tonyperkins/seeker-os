@@ -13,6 +13,8 @@ fi
 # impossible to see application logs or crash errors in Docker.
 if command -v Xvfb >/dev/null 2>&1; then
     export DISPLAY=:99
+    # Clean up stale lock files from previous container instance
+    rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
     Xvfb :99 -screen 0 1280x720x24 -nolisten tcp &
     # Give Xvfb a moment to start
     sleep 1
