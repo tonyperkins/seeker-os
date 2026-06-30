@@ -142,7 +142,7 @@ export default function QueriesPage() {
         enabled: editEnabled,
         commitment: editCommitment,
         max_pages: parseInt(editMaxPages, 10) || 1,
-        search_query: editSearchQuery.trim() || undefined,
+        search_query: editSearchQuery.trim() || "",
       });
       setEditingId(null);
       await fetchQueries();

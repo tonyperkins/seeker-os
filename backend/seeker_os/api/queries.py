@@ -75,7 +75,12 @@ def update_query(query_id: int, body: QueryUpdate):
         if body.enabled is not None:
             db.execute("UPDATE search_queries SET enabled=? WHERE id=?", (body.enabled, query_id))
         if body.search_query is not None:
-            db.execute("UPDATE search_queries SET search_query=? WHERE id=?", (body.search_query, query_id))
+            if body.search_query.strip():
+                db.execute("UPDATE search_queries SET search_query=? WHERE id=?", (body.search_query, query_id))
+            else:
+                db.execute("UPDATE search_queries SET search_query=NULL WHERE id=?", (query_id,))
+        if body.clear_search_query:
+            db.execute("UPDATE search_queries SET search_query=NULL WHERE id=?", (query_id,))
         db.commit()
         return MessageResponse(message=f"Query {query_id} updated")
     finally:

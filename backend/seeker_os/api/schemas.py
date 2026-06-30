@@ -394,6 +394,7 @@ class QueryUpdate(BaseModel):
     max_pages: int | None = None
     enabled: bool | None = None
     search_query: str | None = None
+    clear_search_query: bool = False
 
 
 # ---------------------------------------------------------------------------
