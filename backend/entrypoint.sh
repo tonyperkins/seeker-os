@@ -9,4 +9,9 @@ fi
 
 # Wrap with Xvfb so Playwright can run in non-headless mode (required for
 # Vercel JS challenge resolution). xvfb-run provides a virtual display.
-exec xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" "$@"
+# Fall back to direct execution if xvfb-run isn't available (older images).
+if command -v xvfb-run >/dev/null 2>&1 && command -v xauth >/dev/null 2>&1; then
+    exec xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" "$@"
+else
+    exec "$@"
+fi
