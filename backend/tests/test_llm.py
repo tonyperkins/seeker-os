@@ -493,8 +493,12 @@ class TestTaskMaxTokensConfig:
 class TestRateLimitFallback:
     """Cross-provider fallback when the primary provider returns 429."""
 
-    def _make_router(self, primary_generate, fallback_generate=None):
-        """Build a router with two mock providers for fallback testing."""
+    def _make_router(self, primary_generate, fallback_generate=None, fallback_models=None):
+        """Build a router with two mock providers for fallback testing.
+
+        Args:
+            fallback_models: list of ProviderModel to configure on the fallback provider.
+        """
         from seeker_os.config import Settings, ProvidersConfig, ProviderConfig, TierMapping, TaskOverride
         from seeker_os.llm.router import ModelRouter
 
@@ -534,7 +538,8 @@ class TestRateLimitFallback:
         router._provider_configs = {
             "primary": ProviderConfig(id="primary", type="anthropic", api_key="x"),
             "fallback": ProviderConfig(id="fallback", type="openai_compatible", api_key="y",
-                                       base_url="http://localhost:11434/v1"),
+                                       base_url="http://localhost:11434/v1",
+                                       models=fallback_models or []),
         }
         router._initialized = True
         return router
@@ -548,6 +553,8 @@ class TestRateLimitFallback:
 
     def test_rate_limit_falls_back_to_second_provider(self):
         """When primary returns 429, router retries on the fallback provider."""
+        from seeker_os.config import ProviderModel
+
         call_count = {"primary": 0, "fallback": 0}
 
         def primary_generate(request):
@@ -558,7 +565,10 @@ class TestRateLimitFallback:
             call_count["fallback"] += 1
             return LLMResponse(text="fallback ok", model=request.model, provider="fallback")
 
-        router = self._make_router(primary_generate, fallback_generate)
+        router = self._make_router(
+            primary_generate, fallback_generate,
+            fallback_models=[ProviderModel(id="fb-model", label="FB", tags=["moderate"])],
+        )
 
         response = router.generate("jd_analysis", "sys", "usr")
         assert response.text == "fallback ok"
@@ -567,6 +577,8 @@ class TestRateLimitFallback:
 
     def test_non_rate_limit_error_does_not_fall_back(self):
         """Non-429 errors (e.g. 400 Bad Request) propagate immediately without fallback."""
+        from seeker_os.config import ProviderModel
+
         call_count = {"primary": 0, "fallback": 0}
 
         def primary_generate(request):
@@ -577,7 +589,10 @@ class TestRateLimitFallback:
             call_count["fallback"] += 1
             return LLMResponse(text="should not reach", model=request.model, provider="fallback")
 
-        router = self._make_router(primary_generate, fallback_generate)
+        router = self._make_router(
+            primary_generate, fallback_generate,
+            fallback_models=[ProviderModel(id="fb-model", label="FB", tags=["moderate"])],
+        )
 
         with pytest.raises(ValueError, match="400 Bad Request"):
             router.generate("jd_analysis", "sys", "usr")
@@ -586,13 +601,18 @@ class TestRateLimitFallback:
 
     def test_all_providers_rate_limited_raises_last_error(self):
         """When all providers return 429, the last rate-limit error is raised."""
+        from seeker_os.config import ProviderModel
+
         def primary_generate(request):
             raise self._make_rate_limit_error()
 
         def fallback_generate(request):
             raise self._make_rate_limit_error()
 
-        router = self._make_router(primary_generate, fallback_generate)
+        router = self._make_router(
+            primary_generate, fallback_generate,
+            fallback_models=[ProviderModel(id="fb-model", label="FB", tags=["moderate"])],
+        )
 
         with pytest.raises(Exception, match="429"):
             router.generate("jd_analysis", "sys", "usr")
@@ -629,6 +649,73 @@ class TestRateLimitFallback:
         response = router.generate("jd_analysis", "sys", "usr")
         assert response.text == "ok"
         assert captured_model["model"] == "alt-mid-model"
+
+    def test_fallback_model_live_fetched_when_no_configured_models(self):
+        """When fallback provider has no configured/cached models, live-fetch from its API."""
+        from seeker_os.llm.cache import clear_cache
+
+        captured_model = {}
+
+        def primary_generate(request):
+            raise self._make_rate_limit_error()
+
+        class FallbackProviderWithModels:
+            def __init__(self, pid):
+                self._id = pid
+            @property
+            def id(self): return self._id
+            @property
+            def type(self): return "mock"
+            def generate(self, request):
+                captured_model["model"] = request.model
+                return LLMResponse(text="live ok", model=request.model, provider=self._id)
+            def list_models(self):
+                return [ModelInfo(id="live-model-1", label="Live 1", provider_id=self._id, available=True)]
+            def test_connection(self): return ProviderHealth(provider_id=self._id, healthy=True)
+
+        def fallback_generate(request):
+            return LLMResponse(text="should not reach", model=request.model, provider="fallback")
+
+        router = self._make_router(primary_generate, fallback_generate)
+        # Replace with a provider that has list_models
+        router._providers["fallback"] = FallbackProviderWithModels("fallback")
+        # Ensure no disk cache interferes
+        clear_cache("fallback")
+
+        response = router.generate("jd_analysis", "sys", "usr")
+        assert response.text == "live ok"
+        assert captured_model["model"] == "live-model-1"
+
+        clear_cache("fallback")
+
+    def test_fallback_skipped_when_no_models_available(self):
+        """Provider with no configured, cached, or live-fetchable models is skipped, not tried with primary's model."""
+        from seeker_os.llm.cache import clear_cache
+
+        def primary_generate(request):
+            raise self._make_rate_limit_error()
+
+        class NoModelsProvider:
+            def __init__(self, pid):
+                self._id = pid
+            @property
+            def id(self): return self._id
+            @property
+            def type(self): return "mock"
+            def generate(self, request):
+                return LLMResponse(text="should not reach", model=request.model, provider=self._id)
+            def list_models(self): return []
+            def test_connection(self): return ProviderHealth(provider_id=self._id, healthy=True)
+
+        router = self._make_router(primary_generate, fallback_generate=None)
+        # Add a second provider with no models at all
+        router._providers["fallback"] = NoModelsProvider("fallback")
+        clear_cache("fallback")
+
+        with pytest.raises(RuntimeError, match="no fallback available"):
+            router.generate("jd_analysis", "sys", "usr")
+
+        clear_cache("fallback")
 
     def test_is_rate_limit_error_detects_anthropic_pattern(self):
         """_is_rate_limit_error detects anthropic.RateLimitError-like exceptions."""

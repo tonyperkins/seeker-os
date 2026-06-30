@@ -249,7 +249,12 @@ class ModelRouter:
         1. Manually configured models with a matching tier tag
         2. Any manually configured model (first available)
         3. Disk-cached auto-fetched models (first available)
-        4. The same model ID as the primary (gateways often proxy the same models)
+        4. Live-fetch models from the provider's API (first available)
+
+        Returns None if no model can be found — the caller skips the provider.
+        The primary's model ID is NOT reused on other providers — gateways
+        use different model IDs (e.g. Kilo uses 'anthropic/claude-opus-4-8',
+        not 'claude-opus-4-8'), so guessing would cause a 400.
         """
         pc = self._provider_configs.get(provider_id)
         if pc and pc.models:
@@ -258,14 +263,27 @@ class ModelRouter:
                     return m.id
             return pc.models[0].id
 
-        from seeker_os.llm.cache import get_cached_models
+        from seeker_os.llm.cache import get_cached_models, save_cached_models
         cached = get_cached_models(provider_id)
         if cached:
             for m in cached:
                 if m.available:
                     return m.id
 
-        return primary_model
+        # Last resort: live-fetch the provider's model list
+        provider = self._providers.get(provider_id)
+        if provider and hasattr(provider, "list_models"):
+            try:
+                live_models = provider.list_models()
+                if live_models:
+                    save_cached_models(provider_id, live_models)
+                    for m in live_models:
+                        if m.available:
+                            return m.id
+            except Exception:
+                pass
+
+        return None
 
     # --- Model max_output ceiling enforcement (FIX 2) ---
 
