@@ -63,7 +63,7 @@ export default function KanbanPage() {
     try {
       // Fetch jobs across all kanban-relevant statuses
       const data = await api.jobs.list({ limit: 500 });
-      setJobs(data);
+      setJobs(data.jobs);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load jobs");
     } finally {
@@ -181,9 +181,6 @@ export default function KanbanPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Kanban</h1>
-          <p className="text-sm text-muted-foreground">
-            Drag and drop jobs between columns to update status.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           {error && (

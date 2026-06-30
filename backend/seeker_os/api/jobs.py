@@ -320,7 +320,7 @@ def _row_to_detail(row, db=None) -> JobDetail:
     )
 
 
-@router.get("", response_model=list[JobSummary])
+@router.get("")
 def list_jobs(
     status: str | None = Query(None, description="Filter by status"),
     min_score: float | None = Query(None, description="Minimum score"),
@@ -330,6 +330,7 @@ def list_jobs(
     source: str | None = Query(None, description="Filter by source_id (e.g. 'manual', 'hiring_cafe')"),
     run_id: str | None = Query(None, description="Filter by pipeline run_id"),
     verdict: str | None = Query(None, description="Filter by AI analysis verdict (APPLY, CONDITIONAL, MONITOR, SKIP)"),
+    exclude_status: str | None = Query(None, description="Comma-separated statuses to exclude (e.g. 'rejected,skipped')"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -342,6 +343,12 @@ def list_jobs(
         if status:
             query += " AND status = ?"
             params.append(status)
+        if exclude_status:
+            excluded = [s.strip() for s in exclude_status.split(",") if s.strip()]
+            if excluded:
+                placeholders = ",".join("?" for _ in excluded)
+                query += f" AND status NOT IN ({placeholders})"
+                params.extend(excluded)
         if min_tier is not None:
             query += " AND tier_passed >= ?"
             params.append(min_tier)
@@ -364,6 +371,10 @@ def list_jobs(
         if verdict:
             query += " AND analysis_verdict = ?"
             params.append(verdict)
+
+        # Count total matching rows (without LIMIT/OFFSET) for pagination
+        count_query = query.replace("SELECT *", "SELECT COUNT(*) as total", 1)
+        total = db.execute(count_query, params).fetchone()["total"]
 
         query += " ORDER BY"
         if status == "ready":
@@ -400,7 +411,7 @@ def list_jobs(
             ).fetchall()
             resume_ids = {r["job_id"] for r in resume_rows}
 
-        return [
+        jobs = [
             _row_to_summary(
                 r, db=db, stale_after_days=stale_after_days,
                 stale_result=stale_map.get(r["id"]),
@@ -412,6 +423,7 @@ def list_jobs(
             )
             for r in rows
         ]
+        return {"jobs": jobs, "total": total}
     finally:
         db.close()
 

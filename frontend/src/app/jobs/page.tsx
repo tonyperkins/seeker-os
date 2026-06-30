@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX, RefreshCw } from "lucide-react";
+import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX, RefreshCw } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -34,11 +34,9 @@ import { ErrorBanner } from "@/components/error-banner";
 
 const STATUS_OPTIONS = [
   { value: "ready", label: "Ready" },
-  { value: "rejected", label: "Rejected" },
   { value: "reviewing", label: "Reviewing" },
   { value: "interested", label: "Interested" },
   { value: "applied", label: "Applied" },
-  { value: "skipped", label: "Skipped" },
 ];
 
 const SOURCE_OPTIONS = [
@@ -129,9 +127,14 @@ function JobsPageInner() {
   const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "", !clearFilters && !searchParams.get("source"));
   const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "", !clearFilters && !searchParams.get("run_id"));
   const [verdict, setVerdict] = usePersistentState<string>("jobs:filter:verdict", searchParams.get("verdict") ?? "", !clearFilters && !searchParams.get("verdict"));
+  const [hideRejected, setHideRejected] = usePersistentState<boolean>("jobs:filter:hideRejected", false);
+  const [hideSkipped, setHideSkipped] = usePersistentState<boolean>("jobs:filter:hideSkipped", false);
   const [sortKey, setSortKey] = usePersistentState<string>("jobs:sort:key", "score");
   const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("jobs:sort:dir", "desc");
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = usePersistentState<number>("jobs:page", 1);
+  const PAGE_SIZE = 50;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hydrated, setHydrated] = useState(false);
@@ -144,8 +147,9 @@ function JobsPageInner() {
     setLoading(true);
     setError(null);
     try {
-      const params: { status?: string; min_score?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; limit?: number } = {
-        limit: 200,
+      const params: { status?: string; min_score?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; limit?: number; offset?: number } = {
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
       };
       if (status) params.status = status;
       const ms = parseFloat(minScore);
@@ -155,14 +159,19 @@ function JobsPageInner() {
       if (source) params.source = source;
       if (runId.trim()) params.run_id = runId.trim();
       if (verdict) params.verdict = verdict;
+      const excluded: string[] = [];
+      if (hideRejected) excluded.push("rejected");
+      if (hideSkipped) excluded.push("skipped");
+      if (excluded.length > 0) params.exclude_status = excluded.join(",");
       const data = await api.jobs.list(params);
-      setJobs(data);
+      setJobs(data.jobs);
+      setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load jobs");
     } finally {
       setLoading(false);
     }
-  }, [status, minScore, company, search, source, runId, verdict]);
+  }, [status, minScore, company, search, source, runId, verdict, hideRejected, hideSkipped, page]);
 
   // Mark hydration complete after usePersistentState effects have run
   useEffect(() => {
@@ -178,6 +187,16 @@ function JobsPageInner() {
     fetchJobs();
   }, [fetchJobs, hydrated]);
 
+  // Reset to page 1 when filters change (but not when page itself changes)
+  const filterKey = `${status}|${minScore}|${company}|${search}|${source}|${runId}|${verdict}|${hideRejected}|${hideSkipped}`;
+  const prevFilterKey = useRef(filterKey);
+  useEffect(() => {
+    if (prevFilterKey.current !== filterKey) {
+      prevFilterKey.current = filterKey;
+      setPage(1);
+    }
+  }, [filterKey, setPage]);
+
   // Keep URL in sync (shallow) — skip until hydrated to avoid stripping
   // clear_filters before usePersistentState has stabilized
   useEffect(() => {
@@ -190,9 +209,11 @@ function JobsPageInner() {
     if (source) params.set("source", source);
     if (runId) params.set("run_id", runId);
     if (verdict) params.set("verdict", verdict);
+    if (hideRejected) params.set("hide_rejected", "1");
+    if (hideSkipped) params.set("hide_skipped", "1");
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
-  }, [status, minScore, company, search, source, runId, verdict, router, hydrated]);
+  }, [status, minScore, company, search, source, runId, verdict, hideRejected, hideSkipped, router, hydrated]);
 
   const sortedJobs = useMemo(() => {
     if (!jobs) return [];
@@ -254,6 +275,9 @@ function JobsPageInner() {
     setSource("");
     setRunId("");
     setVerdict("");
+    setHideRejected(false);
+    setHideSkipped(false);
+    setPage(1);
   }
 
   const allSelected = sortedJobs.length > 0 && sortedJobs.every((j) => selectedIds.has(j.id));
@@ -307,9 +331,6 @@ function JobsPageInner() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Jobs</h1>
-          <p className="text-sm text-muted-foreground">
-            All discovered jobs with filtering and search.
-          </p>
         </div>
         <AddJobDialog onCreated={fetchJobs} />
       </div>
@@ -319,9 +340,9 @@ function JobsPageInner() {
         title={
           <div className="flex items-center gap-2">
             Filters
-            {(status || source || minScore || runId || search || company || verdict) && (
+            {(status || source || minScore || runId || search || company || verdict || hideRejected || hideSkipped) && (
               <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                {[status, source, minScore, runId, search, company, verdict].filter(Boolean).length}
+                {[status, source, minScore, runId, search, company, verdict, hideRejected ? "hr" : null, hideSkipped ? "hs" : null].filter(Boolean).length}
               </Badge>
             )}
           </div>
@@ -345,13 +366,13 @@ function JobsPageInner() {
           {/* Status + Source pills */}
           <div className="flex flex-wrap items-start gap-4 sm:gap-6">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="min-w-[48px] text-xs font-semibold text-muted-foreground">Status</span>
+              <span className="min-w-[48px] text-xs font-normal text-muted-foreground">Status</span>
               <button
                 onClick={() => setStatus("")}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
                   status === ""
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                    ? "border-foreground/20 bg-foreground/20 text-foreground"
+                    : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                 }`}
               >
                 All
@@ -360,10 +381,10 @@ function JobsPageInner() {
                 <button
                   key={opt.value}
                   onClick={() => setStatus(opt.value)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
                     status === opt.value
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                      ? "border-foreground/20 bg-foreground/20 text-foreground"
+                      : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                   }`}
                 >
                   {opt.label}
@@ -374,13 +395,13 @@ function JobsPageInner() {
             <Separator orientation="vertical" className="hidden h-6 self-center bg-border/50 sm:block" />
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className="min-w-[44px] text-xs font-semibold text-muted-foreground">Source</span>
+              <span className="min-w-[44px] text-xs font-normal text-muted-foreground">Source</span>
               <button
                 onClick={() => setSource("")}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
                   source === ""
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                    ? "border-foreground/20 bg-foreground/20 text-foreground"
+                    : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                 }`}
               >
                 All
@@ -389,10 +410,10 @@ function JobsPageInner() {
                 <button
                   key={opt.value}
                   onClick={() => setSource(opt.value)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
                     source === opt.value
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                      ? "border-foreground/20 bg-foreground/20 text-foreground"
+                      : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                   }`}
                 >
                   {opt.label}
@@ -403,37 +424,60 @@ function JobsPageInner() {
 
           <Separator className="bg-border/50" />
 
-          {/* Verdict pills */}
+          {/* Verdict pills + Hide toggles */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="min-w-[48px] text-xs font-semibold text-muted-foreground">Verdict</span>
+            <span className="min-w-[48px] text-xs font-normal text-muted-foreground">Verdict</span>
             <button
               onClick={() => setVerdict("")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+              className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
                 verdict === ""
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                  ? "border-foreground/20 bg-foreground/20 text-foreground"
+                  : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
               }`}
             >
               All
             </button>
             {([
-              { value: "APPLY", label: "Apply", activeClass: "bg-emerald-500 text-white shadow-sm" },
-              { value: "CONDITIONAL", label: "Conditional", activeClass: "bg-amber-500 text-white shadow-sm" },
-              { value: "MONITOR", label: "Monitor", activeClass: "bg-sky-500 text-white shadow-sm" },
-              { value: "SKIP", label: "Skip", activeClass: "bg-red-500 text-white shadow-sm" },
+              { value: "APPLY", label: "Apply", activeClass: "border-border bg-emerald-600 text-white" },
+              { value: "CONDITIONAL", label: "Conditional", activeClass: "border-border bg-amber-600 text-white" },
+              { value: "MONITOR", label: "Monitor", activeClass: "border-border bg-sky-600 text-white" },
+              { value: "SKIP", label: "Skip", activeClass: "border-border bg-red-600 text-white" },
             ] as const).map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => setVerdict(opt.value)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
                   verdict === opt.value
                     ? opt.activeClass
-                    : "border border-transparent bg-secondary/60 text-secondary-foreground hover:bg-secondary"
+                    : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                 }`}
               >
                 {opt.label}
               </button>
             ))}
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <span className="text-xs font-normal text-muted-foreground">Hide</span>
+              <button
+                onClick={() => setHideRejected(!hideRejected)}
+                className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
+                  hideRejected
+                    ? "border-border bg-red-600 text-white"
+                    : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                }`}
+              >
+                Rejected
+              </button>
+              <button
+                onClick={() => setHideSkipped(!hideSkipped)}
+                className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
+                  hideSkipped
+                  ? "border-foreground/20 bg-foreground/20 text-foreground"
+                  : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                }`}
+              >
+                Skipped
+              </button>
+            </div>
           </div>
 
           <Separator className="bg-border/50" />
@@ -528,6 +572,11 @@ function JobsPageInner() {
               ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                onClick={() => runBulkAction("Reject", (id) => api.jobs.update(id, { status: "rejected" }))}
+              >
+                Reject
+              </DropdownMenuItem>
+              <DropdownMenuItem
                 onClick={() => runBulkAction("Skip", (id) => api.jobs.skip(id))}
               >
                 Skip
@@ -601,7 +650,7 @@ function JobsPageInner() {
             <div className="p-6">
               <ErrorBanner message={error} />
             </div>
-          ) : loading ? (
+          ) : loading && !jobs ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
               <Loader2 className="animate-spin" />
               Loading jobs…
@@ -611,7 +660,7 @@ function JobsPageInner() {
               No jobs match these filters.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className={`overflow-x-auto transition-opacity ${loading ? "opacity-50" : ""}`}>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -743,9 +792,36 @@ function JobsPageInner() {
       </Card>
 
       {sortedJobs.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Showing {sortedJobs.length} job{sortedJobs.length !== 1 ? "s" : ""}.
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + sortedJobs.length} of {total} job{total !== 1 ? "s" : ""}.
+          </p>
+          {total > PAGE_SIZE && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage(page - 1)}
+              >
+                <ChevronLeft className="size-4" />
+                Prev
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Page {page} of {Math.ceil(total / PAGE_SIZE)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
+                onClick={() => setPage(page + 1)}
+              >
+                Next
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

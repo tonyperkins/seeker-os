@@ -68,9 +68,6 @@ function ResumesContent() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Resumes</h1>
-          <p className="text-sm text-muted-foreground">
-            AI-generated tailored resumes with accuracy validation.
-          </p>
           {jobId && (
             <div className="mt-2 flex items-center gap-2">
               <Badge variant="secondary">Filtered by job #{jobId}</Badge>

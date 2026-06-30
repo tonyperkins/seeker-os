@@ -33,7 +33,7 @@ export function RecentRunRow({ run }: RecentRunRowProps) {
   }
 
   return (
-    <div className="flex flex-col gap-1 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md">
+    <div className="flex flex-col gap-1 py-2.5 text-sm transition-colors hover:bg-muted/40 px-2 rounded-md">
       <div className="flex items-center gap-3">
         <Link
           href={`/jobs?run_id=${run.run_id}&clear_filters=1`}

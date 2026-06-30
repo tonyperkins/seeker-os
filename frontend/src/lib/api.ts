@@ -448,7 +448,7 @@ export const api = {
 
   // Jobs
   jobs: {
-    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; limit?: number; offset?: number }) => {
       const search = new URLSearchParams();
       if (params?.status) search.set("status", params.status);
       if (params?.min_tier) search.set("min_tier", String(params.min_tier));
@@ -458,10 +458,11 @@ export const api = {
       if (params?.source) search.set("source", params.source);
       if (params?.run_id) search.set("run_id", params.run_id);
       if (params?.verdict) search.set("verdict", params.verdict);
+      if (params?.exclude_status) search.set("exclude_status", params.exclude_status);
       if (params?.limit) search.set("limit", String(params.limit));
       if (params?.offset) search.set("offset", String(params.offset));
       const qs = search.toString();
-      return fetchAPI<JobSummary[]>(`/api/jobs${qs ? `?${qs}` : ""}`);
+      return fetchAPI<{ jobs: JobSummary[]; total: number }>(`/api/jobs${qs ? `?${qs}` : ""}`);
     },
     get: (id: number) => fetchAPI<JobDetail>(`/api/jobs/${id}`),
     create: (data: JobCreateRequest) =>
@@ -593,6 +594,12 @@ export const api = {
     markdownUrl: (id: number) => `/api/resumes/${id}/markdown`,
     docxUrl: (id: number) => `/api/resumes/${id}/docx`,
     getMaster: () => fetchAPI<MasterResumeInfo>("/api/resumes/master"),
+    getMasterContent: () => fetchAPI<{ content: string }>("/api/resumes/master/content"),
+    updateMasterContent: (content: string) =>
+      fetchAPI<{ message: string }>("/api/resumes/master/content", {
+        method: "PUT",
+        body: JSON.stringify({ content }),
+      }),
     uploadMaster: (file: File) => {
       const formData = new FormData();
       formData.append("file", file);

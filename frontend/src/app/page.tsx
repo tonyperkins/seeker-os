@@ -17,7 +17,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { RunStrip } from "@/components/run-strip";
 import { VerdictBadge } from "@/components/verdict-badge";
-import { RecentRunRow } from "@/components/recent-run-row";
+import { RecentRunsCard } from "@/components/recent-runs-card";
 import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +70,7 @@ export default async function DashboardPage() {
   let funnel: FunnelStats | null = null;
   let runs: PipelineRunRecord[] = [];
   let topMatches: JobSummary[] = [];
+  let topMatchesResp: { jobs: JobSummary[]; total: number } = { jobs: [], total: 0 };
   let settings: SettingsResponse | null = null;
   let resumeInfo: MasterResumeInfo | null = null;
   let providers: ProvidersConfigResponse | null = null;
@@ -77,7 +78,7 @@ export default async function DashboardPage() {
   let error: string | null = null;
 
   try {
-    [funnel, runs, topMatches, settings, resumeInfo, providers, { demo_mode: isDemoMode }] = await Promise.all([
+    [funnel, runs, topMatchesResp, settings, resumeInfo, providers, { demo_mode: isDemoMode }] = await Promise.all([
       api.analytics.funnel(),
       api.pipeline.runs(),
       api.jobs.list({ status: "ready", limit: 5 }),
@@ -86,6 +87,7 @@ export default async function DashboardPage() {
       api.models.getConfig().catch(() => null),
       api.demoMode.get().catch(() => ({ demo_mode: false })),
     ]);
+    topMatches = topMatchesResp.jobs;
     // Sort top matches by score desc (defensive — API may already sort)
     topMatches = [...topMatches].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
   } catch (err) {
@@ -139,9 +141,6 @@ export default async function DashboardPage() {
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Run the pipeline, review recent runs, act on top matches.
-        </p>
       </div>
 
       {/* ZONE 1 — Run strip (self-contained, removable) */}
@@ -156,35 +155,11 @@ export default async function DashboardPage() {
       {/* ZONE 2 — Recent runs + cumulative funnel (two columns) */}
       <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
         {/* Left — Recent runs */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Runs</CardTitle>
-            <CardDescription>Latest pipeline execution history</CardDescription>
-            <CardAction>
-              <Link href="/jobs" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                View all
-                <ArrowRight />
-              </Link>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {runs.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No pipeline runs yet.
-              </p>
-            ) : (
-              <div className="flex flex-col divide-y divide-border">
-                {runs.slice(0, 5).map((run) => (
-                  <RecentRunRow key={run.id} run={run} />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <RecentRunsCard runs={runs} />
 
         {/* Right — Pipeline funnel (fixed) */}
         {funnelStages.length > 0 && (
-          <Card>
+          <Card className="h-full">
             <CardHeader>
               <CardTitle>Pipeline Funnel</CardTitle>
               <CardDescription>
