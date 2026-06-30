@@ -228,7 +228,8 @@ def run_pipeline(
                 role_types=sq_role_types,
             ))
 
-        _emit("discovery", "Discovery", "started", detail=f"Fetching from {len(source_queries)} queries…")
+        enabled_count = sum(1 for sq in source_queries if sq.enabled)
+        _emit("discovery", "Discovery", "started", detail=f"Fetching from {enabled_count} queries…")
         cards = fetch_all_queries(source_queries, adapters, cache)
         result.cards_fetched = len(cards)
         _emit("discovery", "Discovery", "in_progress", total=len(cards), detail=f"Fetched {len(cards)} cards")
