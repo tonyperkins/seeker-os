@@ -12,16 +12,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xauth \
     && rm -rf /var/lib/apt/lists/*
 
+# Build arg: set to false to skip Playwright/Chromium install.
+# Skip when: ARM64 host, no internet access, or browser fallback not needed.
+# The app degrades gracefully — httpx is the primary fetch path.
+ARG INSTALL_BROWSER=true
+
 WORKDIR /app
 
 # Copy backend source and install
 COPY backend/ /app/backend/
 COPY config/ /app/config/
 
-RUN pip install --no-cache-dir -e "/app/backend[browser]"
+# Install core dependencies; include playwright Python package only when browser support is requested.
+RUN if [ "$INSTALL_BROWSER" = "true" ]; then \
+        pip install --no-cache-dir -e "/app/backend[browser]"; \
+    else \
+        pip install --no-cache-dir -e "/app/backend"; \
+    fi
 
-# Install Playwright Chromium browser and its system dependencies
-RUN playwright install chromium --with-deps
+# Download Playwright Chromium browser binary and its system dependencies.
+# Non-fatal: if the CDN download fails (ARM64, no internet, etc.) the build
+# still succeeds and the app falls back to httpx-only mode.
+RUN if [ "$INSTALL_BROWSER" = "true" ]; then \
+        playwright install chromium --with-deps || \
+        echo "WARNING: Playwright Chromium install failed — browser fallback disabled. Set INSTALL_BROWSER=false to suppress this."; \
+    fi
 
 # Create data directory (will be overridden by volume mount in compose)
 RUN mkdir -p /app/data
