@@ -17,6 +17,10 @@ All components (base, research_delta, verdict) are preserved separately for UI d
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def compute_net_score(
     base_score: float,
@@ -50,8 +54,19 @@ def compute_net_score(
     cap = verdict_caps.get(analysis_verdict)
     if cap is not None:
         net = min(adjusted, cap)
+    elif analysis_verdict in verdict_caps:
+        # Verdict is known but has a null cap (e.g. APPLY) → no ceiling
+        net = adjusted
     else:
-        # APPLY (null cap) or unknown verdict → no cap
+        # Unknown verdict — not in verdict_caps at all. Log a warning so rogue
+        # LLM output (e.g. "CONDITIONAL_PLUS") is visible rather than silently
+        # treated as APPLY.
+        logger.warning(
+            "compute_net_score: unrecognized verdict %r not in verdict_caps %s "
+            "— no cap applied (treated as APPLY)",
+            analysis_verdict,
+            list(verdict_caps.keys()),
+        )
         net = adjusted
 
     # Step 4: clamp to [min_score, max_score] (belt + suspenders)

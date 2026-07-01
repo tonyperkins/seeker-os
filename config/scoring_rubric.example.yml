@@ -157,3 +157,23 @@ scoring:
   comp_sanity_max: 10000000
   # Provenance values that earn full trust (comp_target bonus, floor clearing).
   trusted_comp_sources: ["structured", "manual"]
+
+  # Evidence gate: reject JDs shorter than this many characters as insufficient.
+  # Increase if you see false-rejects on short API job cards; decrease if you
+  # want to score very sparse listings.
+  min_jd_length: 500
+
+  # Location fallback patterns: if the location field is empty but the JD text
+  # matches any of these regex patterns, the evidence gate passes (the job is
+  # clearly remote or US-based). Also used by the location_only modifier to
+  # skip the city-no-remote penalty for remote roles.
+  # Uses re.search with IGNORECASE. Customize for your geography.
+  location_fallback_patterns:
+    - "remote"
+    - "united states"
+    - "\\bus\\b"
+
+  # Metadata extraction: max characters of JD text forwarded to the LLM for
+  # structured-field extraction (company name, comp range, seniority, etc.).
+  # Increase if salary ranges are routinely appearing past the 8000-char mark.
+  metadata_max_jd_chars: 8000

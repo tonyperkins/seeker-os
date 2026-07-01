@@ -9,9 +9,13 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
+import logging
+
 from seeker_os.config import FilterConfig, ProfileConfig, TitleFilters
 from seeker_os.filtering.title_patterns import title_matches
 from seeker_os.models import JobCard, FilterResult
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_date(date_str: str) -> datetime | None:
@@ -159,20 +163,25 @@ def apply_filters(
         if bl.lower() in company_lower:
             return FilterResult(passed=False, reason=f"Blacklisted company ({job.company})")
 
-    # 9. Commitment
+    # 10. Commitment
     if filters.commitment_required:
         commitments = [c.lower() for c in job.commitment]
         required = filters.commitment_required.lower()
         if commitments and required not in commitments:
             return FilterResult(passed=False, reason=f"Commitment mismatch (need {filters.commitment_required})")
 
-    # 10. Visa sponsorship
+    # 11. Visa sponsorship
     if filters.visa_sponsorship_required:
-        # JobCard doesn't have visa_sponsorship field, but the DB row might
-        # This is checked in the runner if the field is available
-        pass  # TODO: check visa_sponsorship when field is available
+        # JobCard doesn't have visa_sponsorship field yet — filter is a no-op.
+        # Log once so the user knows the setting has no effect rather than
+        # silently passing all jobs through.
+        logger.warning(
+            "visa_sponsorship_required is configured but cannot be enforced — "
+            "visa_sponsorship field is not yet available in job data. "
+            "All jobs pass this check until the field is populated."
+        )
 
-    # 11. Freshness
+    # 12. Freshness
     if filters.freshness_days > 0:
         posted = _parse_date(job.date_posted)
         if posted:

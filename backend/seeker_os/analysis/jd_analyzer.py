@@ -73,7 +73,16 @@ def _load_prefs_text(settings: Settings) -> str:
 
 
 def _load_accuracy_rules_text(settings: Settings) -> str:
-    """Load accuracy rules as a text block for the prompt."""
+    """Load analysis-relevant accuracy rules as a text block for the JD analysis prompt.
+
+    Only emits rule types that are meaningful during analysis (not generation):
+    - forbidden_technologies: never-claim items the model must not score as matches
+    - disallowed_phrases: phrasing that must not appear in any generated output
+
+    Generation-only rule types (required_phrases, experience_anchor,
+    education_omission) are omitted — they constrain artifact text, not the
+    analysis verdict, and add noise to the analysis prompt.
+    """
     if not settings.profile or not settings.profile.resume:
         return "(no accuracy rules configured)"
     rules_path = settings.config_dir / "accuracy_rules.yml"
@@ -81,19 +90,18 @@ def _load_accuracy_rules_text(settings: Settings) -> str:
         return "(accuracy_rules.yml not found)"
     with open(rules_path) as f:
         data = yaml.safe_load(f)
+    _ANALYSIS_RELEVANT = {"forbidden_technologies", "disallowed_phrases"}
     lines: list[str] = []
     for rule in data.get("rules", []):
         rule_type = rule.get("type", "")
+        if rule_type not in _ANALYSIS_RELEVANT:
+            continue
         lines.append(f"- [{rule.get('severity', 'high').upper()}] {rule['description']}")
         if rule_type == "disallowed_phrases" and rule.get("phrases"):
             lines.append(f"  Disallowed phrases: {', '.join(rule['phrases'])}")
         if rule_type == "forbidden_technologies" and rule.get("technologies"):
             lines.append(f"  FORBIDDEN TECHNOLOGIES (never-claim): {', '.join(rule['technologies'])}")
-        if rule_type == "required_phrases" and rule.get("phrases"):
-            lines.append(f"  Required phrases: {', '.join(rule['phrases'])}")
-        if rule_type in ("experience_anchor", "education_omission") and rule.get("patterns"):
-            lines.append(f"  Patterns to avoid: {', '.join(rule['patterns'])}")
-    return "\n".join(lines) if lines else "(no rules defined)"
+    return "\n".join(lines) if lines else "(no analysis-relevant rules defined)"
 
 
 def _load_rubric_text(settings: Settings) -> str:
@@ -381,7 +389,15 @@ def analyze_job(
 
     # 5. Parse JSON response
     text = _strip_code_fences(response.text)
-    data = json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        db.close()
+        raise ValueError(
+            f"JD analysis LLM returned invalid JSON for job {job_id} "
+            f"(model={response.model}, output_tokens={response.output_tokens}): "
+            f"{text[:300]!r}"
+        ) from exc
 
     # 6. Store in DB
     now = datetime.now(timezone.utc).isoformat()
@@ -433,6 +449,7 @@ def analyze_job(
         min_score=min_score,
     )
     db.execute(
+        # TODO: analysis_delta is vestigial (always 0.0 — never computed). Remove or implement.
         "UPDATE jobs SET analysis_verdict = ?, analysis_delta = 0.0, net_score = ? WHERE id = ?",
         (verdict, net, job_id),
     )

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, CheckCircle2, AlertCircle, FlaskConical, Settings2 } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, FlaskConical, Settings2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -208,13 +208,18 @@ export function CompanyResearchSettingsCard() {
         </div>
 
         {/* Save button for primary fields */}
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-          {saving ? "Saving..." : "Save Settings"}
-        </Button>
-        {saveMsg && (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400">{saveMsg}</p>
-        )}
+        <div className="flex items-center gap-3">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="animate-spin" /> : <Save />}
+            {saving ? "Saving..." : "Save Settings"}
+          </Button>
+          {saveMsg && (
+            <span className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="size-4" />
+              {saveMsg}
+            </span>
+          )}
+        </div>
 
         {/* Advanced settings — collapsible within the card */}
         <details className="mt-2">

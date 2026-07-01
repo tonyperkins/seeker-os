@@ -11,9 +11,10 @@ Post threshold: **≥6.0** (configurable in `scoring_rubric.yml`).
 ## Step 0: Evidence Gate
 
 Skip entirely if:
-- JD < 500 characters
-- No location information available
-- City-header location with no "remote" anywhere in JD
+- JD shorter than `min_jd_length` characters (default 500, configurable in `scoring_rubric.yml`)
+- No location field **and** no match against any `location_fallback_patterns` in JD text (default: `remote`, `united states`, `\bus\b`)
+
+Both thresholds are configurable in `scoring_rubric.yml` — no hardcoded values in Python.
 
 ## Step 1: Hard Reject (return score=0, do not post)
 
@@ -193,6 +194,14 @@ All three score components are preserved separately in the `jobs` table:
 | `net_score` | Final composite: min(adjusted, verdict_cap) |
 | `analysis_verdict` | AI verdict string (`APPLY`, `CONDITIONAL`, `MONITOR`, `SKIP`) |
 | `analysis_delta` | Reserved for future use |
+
+### ScoringConfig fields (from `scoring_rubric.yml`)
+
+| Field | Default | Description |
+|---|---|---|
+| `min_jd_length` | `500` | Minimum JD character count to pass the evidence gate |
+| `location_fallback_patterns` | `["remote", "united states", "\\bus\\b"]` | Regex patterns that signal remote/US work when location field is empty; used in evidence gate and `location_only` modifier |
+| `metadata_max_jd_chars` | `8000` | Max JD characters sent to the LLM metadata extractor (company, comp, seniority) |
 
 The Net score is never computed if no analysis has run — the UI falls back to
 showing the base or research-adjusted score.

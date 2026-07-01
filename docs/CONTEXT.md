@@ -1,7 +1,9 @@
 # Seeker OS — Context & Current State
 
-**Last updated:** 2026-06-27
+**Last updated:** 2026-06-30
 **Phase:** Phase 3 — complete. Company research, resume generation, cover letters, application answers, JD analysis, net score, application lifecycle events, onboarding wizard, backup/restore, and Kanban board all implemented. Phase 4 (cron, analytics, historical import, Chrome extension) pending.
+
+**Recent work (2026-06-30):** Scoring and analysis code audit (`ai-audit/SCORING_ANALYSIS_AUDIT.md`). Fixed 15 of 18 identified issues including: dead `structured_comp` range check, unhandled JSONDecodeError in JD analyzer, inconsistent regex matching in `jd_infra_role`, unknown verdict silent passthrough in net score, dead `_normalize_company_name`, visa sponsorship no-op warning, comment numbering. Added three new configurable fields to `ScoringConfig` (`min_jd_length`, `location_fallback_patterns`, `metadata_max_jd_chars`). Narrowed `except Exception` swallowing in company research to specific httpx types. Trimmed JD analysis rules prompt to analysis-relevant rule types only. Wired identity context into the application answer critique path.
 
 ---
 
