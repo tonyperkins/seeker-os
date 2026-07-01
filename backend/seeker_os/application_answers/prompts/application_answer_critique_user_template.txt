@@ -8,6 +8,11 @@
 {accuracy_rules_text}
 ---
 
+## IDENTITY CONSTRAINTS (never-claim list and honest qualifiers)
+---
+{identity_text}
+---
+
 ## APPLICATION QUESTION
 {question}
 

@@ -80,7 +80,10 @@ def _search_wikipedia(company: str, timeout: int = 10, headers: dict | None = No
             return None
         # Return the first result — Wikipedia search is usually good at ranking
         return search_results[0]["title"]
-    except Exception:
+    except (httpx.HTTPStatusError, httpx.RequestError):
+        return None
+    except Exception as e:
+        logger.warning("Unexpected error in _search_wikipedia('%s'): %s", company, e)
         return None
 
 
@@ -108,7 +111,10 @@ def fetch_wikipedia_info(company: str, timeout: int = 10, headers: dict | None =
             url=data.get("content_urls", {}).get("desktop", {}).get("page"),
             thumbnail=data.get("thumbnail", {}).get("source") if data.get("thumbnail") else None,
         )
-    except Exception:
+    except (httpx.HTTPStatusError, httpx.RequestError):
+        return None
+    except Exception as e:
+        logger.warning("Unexpected error in fetch_wikipedia_info('%s'): %s", company, e)
         return None
 
 
@@ -137,8 +143,10 @@ def _get_wikidata_item_id(title: str, timeout: int = 10, headers: dict | None = 
             wb_item = page.get("pageprops", {}).get("wikibase_item")
             if wb_item:
                 return wb_item
-    except Exception:
+    except (httpx.HTTPStatusError, httpx.RequestError):
         pass
+    except Exception as e:
+        logger.warning("Unexpected error in _get_wikidata_item_id('%s'): %s", title, e)
     return None
 
 
@@ -231,8 +239,10 @@ def fetch_wikidata_info(
             ), official_website
         # Even without founded/employees, return the official_website for verification
         return None, official_website
-    except Exception:
+    except (httpx.HTTPStatusError, httpx.RequestError):
         pass
+    except Exception as e:
+        logger.warning("Unexpected error in fetch_wikidata_info('%s'): %s", company, e)
     return None, None
 
 
@@ -892,8 +902,10 @@ def research_company(
         from seeker_os.config import Settings
         settings = Settings()
         cr_config = settings.company_research
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            "Failed to load Settings for company research — degrading to defaults: %s", e
+        )
 
     # Build per-call headers from config (no shared mutable state)
     headers = _build_headers(cr_config)
@@ -968,9 +980,11 @@ def research_company(
     # 2b. Live retrieval (Phase 3) — funding + sentiment snippets with URLs
     retrieval_snippets: list[RetrievalSnippet] = []
     if retrieval_adapter:
-        funding_template = cr_config.retrieval.funding_query_template if cr_config else "{company} funding round investors valuation"
-        sentiment_template = cr_config.retrieval.sentiment_query_template if cr_config else "{company} employee reviews sentiment glassdoor culture"
-        cache_ttl_days = cr_config.retrieval.retrieval_cache_ttl_days if cr_config else 7
+        # retrieval_adapter is only built when cr_config and cr_config.retrieval are set,
+        # so cr_config is guaranteed non-None inside this block.
+        funding_template = cr_config.retrieval.funding_query_template
+        sentiment_template = cr_config.retrieval.sentiment_query_template
+        cache_ttl_days = cr_config.retrieval.retrieval_cache_ttl_days
         # Pass company_domain only if it's a real company host (not generic/shared)
         retrieval_domain = company_homepage if company_host else None
         retrieval_snippets = _run_retrieval_queries(
@@ -1070,10 +1084,14 @@ def research_company(
     _verify_dossier_sources(result, retrieval_snippets, extra_verified_urls=extra_verified)
 
     # 4. Apply Phase 3 thresholds
-    staleness_months = cr_config.staleness_months if cr_config else 18
-    confidence_floor = cr_config.confidence_floor if cr_config else 0.3
-    mismatch_confidence = cr_config.mismatch_confidence if cr_config else 0.2
-    source_trust_order = cr_config.source_trust_order if cr_config else []
+    # Use CompanyResearchConfig() to get canonical model defaults when cr_config
+    # failed to load — avoids duplicating magic numbers in two places.
+    from seeker_os.config import CompanyResearchConfig as _CRCfg
+    _cr = cr_config or _CRCfg()
+    staleness_months = _cr.staleness_months
+    confidence_floor = _cr.confidence_floor
+    mismatch_confidence = _cr.mismatch_confidence
+    source_trust_order = _cr.source_trust_order
     _apply_staleness_flags(result, staleness_months)
     # Verification degradation runs AFTER _verify_dossier_sources (*0.5 halving)
     # and BEFORE _apply_confidence_floor (is_stub). The min() clamp ensures

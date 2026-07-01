@@ -309,6 +309,20 @@ class ScoringConfig(BaseModel):
     # Provenance values that earn full trust (comp_target bonus, floor clearing).
     trusted_comp_sources: list[str] = ["structured", "manual"]
 
+    # Evidence gate: minimum JD character length to score (shorter JDs are
+    # rejected as insufficient evidence). Configurable per rubric.
+    min_jd_length: int = 500
+
+    # Location fallback patterns: if the location field is empty but the JD
+    # text matches any of these patterns, the evidence gate passes (the job is
+    # clearly remote or US-based). Uses re.search with IGNORECASE.
+    # Also used by the location_only modifier to detect remote-job bypass.
+    location_fallback_patterns: list[str] = ["remote", "united states", r"\bus\b"]
+
+    # Metadata extraction: max characters of JD text sent to the LLM for
+    # structured-field extraction (company, comp, seniority, etc.).
+    metadata_max_jd_chars: int = 8000
+
 
 class FilterConfig(BaseModel):
     # Required — no silent defaults. User must explicitly choose whether to

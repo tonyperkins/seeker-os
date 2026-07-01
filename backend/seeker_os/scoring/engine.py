@@ -29,6 +29,7 @@ def _check_modifier(
     seniority_level: str | None = None,
     accepted_cities: list[str] | None = None,
     comp_trusted: bool = True,
+    location_fallback_patterns: list[str] | None = None,
 ) -> bool:
     """Check if a modifier rule matches. Returns True if the modifier applies."""
 
@@ -100,7 +101,9 @@ def _check_modifier(
             return False
         if mod.unless and _check_pattern(jd_text, mod.unless):
             return False
-        if workplace_type and _check_pattern(workplace_type, "remote"):
+        _lfp = location_fallback_patterns or ["remote"]
+        _combined_lfp = "|".join(f"(?:{p})" for p in _lfp)
+        if workplace_type and re.search(_combined_lfp, workplace_type, re.IGNORECASE):
             return False
         if not location:
             return False  # missing_location handles no-location penalty
@@ -114,14 +117,16 @@ def _check_modifier(
         # Located role that is NOT in an accepted city and NOT remote.
         # This is the city_only_no_remote penalty — fires when:
         # 1. There is a location (not empty)
-        # 2. JD does not mention remote
+        # 2. JD does not mention remote (per location_fallback_patterns)
         # 3. workplace_type is not remote (if known)
         # 4. The location does NOT match any accepted_city
         if not location:
             return False
-        if _check_pattern(jd_text, "remote"):
+        _lfp = location_fallback_patterns or ["remote"]
+        _combined_lfp = "|".join(f"(?:{p})" for p in _lfp)
+        if re.search(_combined_lfp, jd_text, re.IGNORECASE):
             return False
-        if workplace_type and _check_pattern(workplace_type, "remote"):
+        if workplace_type and re.search(_combined_lfp, workplace_type, re.IGNORECASE):
             return False
         # If the location matches an accepted city, this is NOT a city-only-no-remote
         if accepted_cities:
@@ -193,17 +198,24 @@ def score_job(
     gaps: list[str] = []
 
     # Step 1: Evidence gate
-    if len(jd_text) < 500:
+    if len(jd_text) < rubric.min_jd_length:
         return ScoreResult(
-            score=0, reasons=["Evidence gate: JD too short (<500 chars)"],
+            score=0, reasons=[f"Evidence gate: JD too short (<{rubric.min_jd_length} chars)"],
             hard_reject=True, reject_reason="insufficient_jd",
         )
 
-    if not location and not re.search(r"remote|united states|\bus\b", jd_text, re.IGNORECASE):
-        return ScoreResult(
-            score=0, reasons=["Evidence gate: no location information"],
-            hard_reject=True, reject_reason="no_location",
-        )
+    if not location:
+        fallbacks = rubric.location_fallback_patterns
+        if fallbacks:
+            _combined = "|".join(f"(?:{p})" for p in fallbacks)
+            has_location_signal = bool(re.search(_combined, jd_text, re.IGNORECASE))
+        else:
+            has_location_signal = False
+        if not has_location_signal:
+            return ScoreResult(
+                score=0, reasons=["Evidence gate: no location information"],
+                hard_reject=True, reject_reason="no_location",
+            )
 
     # Step 2: Hard reject checks (from profile.hard_rejects)
     full_text = f"{title} {jd_text}"
@@ -271,7 +283,8 @@ def score_job(
     for mod in rubric.positive_modifiers:
         if _check_modifier(mod, title, jd_text, location, effective_comp_min, effective_comp_max,
                            workplace_type=workplace_type, seniority_level=seniority_level,
-                           accepted_cities=accepted_cities, comp_trusted=comp_trusted):
+                           accepted_cities=accepted_cities, comp_trusted=comp_trusted,
+                           location_fallback_patterns=rubric.location_fallback_patterns):
             positive_total += mod.points
             fired_modifiers[mod.signal] = mod.points
             reasons.append(f"+{mod.points} {mod.signal}")
@@ -281,7 +294,8 @@ def score_job(
     for mod in rubric.negative_modifiers:
         if _check_modifier(mod, title, jd_text, location, effective_comp_min, effective_comp_max,
                            workplace_type=workplace_type, seniority_level=seniority_level,
-                           accepted_cities=accepted_cities, comp_trusted=comp_trusted):
+                           accepted_cities=accepted_cities, comp_trusted=comp_trusted,
+                           location_fallback_patterns=rubric.location_fallback_patterns):
             negative_total += mod.points
             fired_modifiers[mod.signal] = mod.points
             reasons.append(f"{mod.points} {mod.signal}")

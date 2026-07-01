@@ -53,6 +53,7 @@ def _build_critique_prompt(
     question: str,
     user_draft: str,
     accuracy_rules_text: str = "",
+    identity_text: str = "",
 ) -> str:
     """Build the user prompt for critiquing a user-supplied draft."""
     return _CRITIQUE_USER_TEMPLATE.format(
@@ -60,7 +61,23 @@ def _build_critique_prompt(
         question=question,
         user_draft=user_draft,
         accuracy_rules_text=accuracy_rules_text,
+        identity_text=identity_text,
     )
+
+
+def _load_identity_text(settings: Settings) -> str:
+    """Load identity rules (never_claim + honest_qualifiers) for the critique prompt."""
+    identity = settings.identity
+    if not identity:
+        return "(no identity rules configured)"
+    lines: list[str] = []
+    if identity.never_claim:
+        lines.append(f"Never claim: {', '.join(identity.never_claim)}")
+    if identity.honest_qualifiers:
+        lines.append("Honest qualifiers (do not upgrade these in the draft):")
+        for hq in identity.honest_qualifiers:
+            lines.append(f"  - {hq.skill}: {hq.framing}")
+    return "\n".join(lines) if lines else "(no identity rules configured)"
 
 
 def _load_accuracy_rules_text(settings: Settings) -> str:
@@ -312,8 +329,9 @@ def critique_application_answer(
 
     master_resume = master_path.read_text()
 
-    # 3. Load accuracy rules for the critique prompt
+    # 3. Load accuracy rules and identity for the critique prompt
     accuracy_rules_text = _load_accuracy_rules_text(settings)
+    identity_text = _load_identity_text(settings)
 
     # 4. Build prompt
     user_prompt = _build_critique_prompt(
@@ -321,6 +339,7 @@ def critique_application_answer(
         question=question,
         user_draft=user_draft,
         accuracy_rules_text=accuracy_rules_text,
+        identity_text=identity_text,
     )
 
     # 5. Call LLM

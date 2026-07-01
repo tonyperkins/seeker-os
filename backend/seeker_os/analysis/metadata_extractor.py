@@ -110,10 +110,11 @@ def extract_metadata_from_jd(
 
     router = ModelRouter(settings)
 
+    max_chars = settings.scoring.metadata_max_jd_chars if settings.scoring else 8000
     user_prompt = (
         f"Job Title: {title or 'Unknown'}\n"
         f"Location: {location or 'Unknown'}\n"
-        f"\nJob Description:\n{jd_text[:8000]}\n\n"
+        f"\nJob Description:\n{jd_text[:max_chars]}\n\n"
         f"Extract the structured metadata as JSON."
     )
 
