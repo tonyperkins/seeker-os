@@ -552,7 +552,7 @@ class TestStaleFlag:
             "occurred_at": past_date,
         })
 
-        jobs = client.get("/api/jobs?status=applied").json()
+        jobs = client.get("/api/jobs?status=applied").json()["jobs"]
         test_jobs = [j for j in jobs if j["id"] == job_id]
         assert len(test_jobs) == 1
         assert test_jobs[0]["is_stale"] is True
