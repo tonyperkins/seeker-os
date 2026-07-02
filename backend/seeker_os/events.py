@@ -44,11 +44,13 @@ Event types (closed vocabulary — use EventType constants, not raw strings):
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
-import warnings
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _VALID_COLUMN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
@@ -282,10 +284,12 @@ def record_event(
     Returns the event ID.
     """
     if event_type not in EventType._ALL:
-        warnings.warn(
-            f"Unknown event_type '{event_type}' — not in EventType catalog. "
-            f"Known types: {sorted(EventType._ALL)}",
-            stacklevel=2,
+        # The timeline intentionally accepts free-form event types, but an
+        # unknown one is usually a typo. Log via the standard logger so it lands
+        # in backend.log (a UserWarning under uvicorn goes nowhere users look).
+        logger.warning(
+            "Unknown event_type '%s' — not in EventType catalog. Known types: %s",
+            event_type, sorted(EventType._ALL),
         )
     if actor not in Actor._ALL:
         raise ValueError(

@@ -388,27 +388,53 @@ MIGRATIONS: list[str | callable] = [
 ]
 
 
+def _split_sql_statements(script: str) -> list[str]:
+    """Split a migration script into individual statements on ';'.
+
+    The migrations here are plain CREATE/ALTER/INDEX statements with no triggers
+    (no BEGIN...END bodies) and no ';' inside string literals, so a simple split
+    is safe and lets each statement run inside one explicit transaction. If a
+    future migration needs a trigger, give it its own callable migration.
+    """
+    return [s.strip() for s in script.split(";") if s.strip()]
+
+
 def run_migrations(db_path: Path | str | None = None) -> None:
     """Apply pending migrations based on PRAGMA user_version.
 
-    Each entry in MIGRATIONS is either a SQL string (executed via executescript)
-    or a callable(conn) that runs Python code (for data backfills that need
-    application-level logic like normalize_company).
+    Each entry in MIGRATIONS is either a SQL string or a callable(conn) that runs
+    Python code (for data backfills that need application-level logic like
+    normalize_company).
+
+    Each migration runs in an explicit transaction and only bumps user_version
+    on full success. This avoids the executescript() hazard where an implicit
+    COMMIT could leave a multi-statement migration (e.g. several non-idempotent
+    ADD COLUMNs) partially applied with user_version un-bumped — which would then
+    hard-fail on the next startup's retry.
     """
     db_path = Path(db_path) if db_path is not None else _db_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(db_path))
+    conn.isolation_level = None  # manual BEGIN/COMMIT/ROLLBACK control
     try:
         current_version = conn.execute("PRAGMA user_version").fetchone()[0]
         for i in range(current_version, len(MIGRATIONS)):
             migration = MIGRATIONS[i]
-            if callable(migration):
-                migration(conn)
-            else:
-                conn.executescript(migration)
-            conn.execute(f"PRAGMA user_version = {i + 1}")
-            conn.commit()
+            conn.execute("BEGIN")
+            try:
+                if callable(migration):
+                    migration(conn)
+                else:
+                    for stmt in _split_sql_statements(migration):
+                        conn.execute(stmt)
+                # user_version is stored in the DB header and participates in the
+                # transaction, so it rolls back with the statements on failure.
+                conn.execute(f"PRAGMA user_version = {i + 1}")
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
             print(f"  Migration v{i + 1} applied")
     finally:
         conn.close()
