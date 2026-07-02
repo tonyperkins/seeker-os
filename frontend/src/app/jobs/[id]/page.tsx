@@ -28,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { JobActions } from "@/components/job-actions";
+import { JobEditDialog } from "@/components/job-edit-dialog";
 import { AIPolicyToggle } from "@/components/ai-policy-toggle";
 import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { JDRenderer } from "@/components/jd-renderer";
@@ -182,6 +183,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
           <RunAllButton jobId={job.id} />
           <CopyAllButton job={job} />
           <RefilterRescoreButton jobIds={[job.id]} />
+          <JobEditDialog job={job} />
         </div>
       </div>
 

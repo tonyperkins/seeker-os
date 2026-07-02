@@ -209,6 +209,26 @@ class JobUpdate(BaseModel):
     notes: str | None = None
     is_pinned: bool | None = None
     ai_policy: str | None = None
+    # Editable job details
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    workplace_type: str | None = None
+    seniority_level: str | None = None
+    role_type: str | None = None
+    comp_min: int | None = None
+    comp_max: int | None = None
+    comp_currency: str | None = None
+    company_homepage: str | None = None
+    apply_url: str | None = None
+    jd_full: str | None = None
+
+    @field_validator("comp_min", "comp_max", mode="before")
+    @classmethod
+    def _round_comp(cls, v):
+        if v is None:
+            return None
+        return int(round(float(v)))
 
 
 class JobReject(BaseModel):

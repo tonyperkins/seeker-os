@@ -471,7 +471,24 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ note, target_status: targetStatus || "ready" }),
       }),
-    update: (id: number, data: { status?: string; notes?: string; is_pinned?: boolean; ai_policy?: string }) =>
+    update: (id: number, data: {
+      status?: string;
+      notes?: string;
+      is_pinned?: boolean;
+      ai_policy?: string;
+      title?: string;
+      company?: string;
+      location?: string;
+      workplace_type?: string;
+      seniority_level?: string;
+      role_type?: string;
+      comp_min?: number;
+      comp_max?: number;
+      comp_currency?: string;
+      company_homepage?: string;
+      apply_url?: string;
+      jd_full?: string;
+    }) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     reject: (id: number, reason: string, details?: string) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/reject`, {

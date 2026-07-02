@@ -825,7 +825,7 @@ def get_job(job_id: int):
 
 @router.patch("/{job_id}", response_model=MessageResponse)
 def update_job(job_id: int, update: JobUpdate):
-    """Update job status, notes, or pinned state."""
+    """Update job status, notes, pinned state, or editable job details."""
     db = get_connection()
     try:
         row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
@@ -849,6 +849,28 @@ def update_job(job_id: int, update: JobUpdate):
             if update.ai_policy not in valid_policies:
                 raise HTTPException(status_code=422, detail=f"ai_policy must be one of: {', '.join(valid_policies)}")
             db.execute("UPDATE jobs SET ai_policy=?, updated_at=? WHERE id=?", (update.ai_policy, now, job_id))
+
+        # Editable job details — only update fields that are explicitly provided
+        detail_fields = {
+            "title": update.title,
+            "company": update.company,
+            "location": update.location,
+            "workplace_type": update.workplace_type,
+            "seniority_level": update.seniority_level,
+            "role_type": update.role_type,
+            "comp_min": update.comp_min,
+            "comp_max": update.comp_max,
+            "comp_currency": update.comp_currency,
+            "company_homepage": update.company_homepage,
+            "apply_url": update.apply_url,
+            "jd_full": update.jd_full,
+        }
+        updates = {k: v for k, v in detail_fields.items() if v is not None}
+        if updates:
+            set_clauses = ", ".join(f"{k}=?" for k in updates)
+            params = list(updates.values()) + [now, job_id]
+            db.execute(f"UPDATE jobs SET {set_clauses}, updated_at=? WHERE id=?", params)
+
         db.commit()
         return MessageResponse(message=f"Job {job_id} updated")
     finally:
