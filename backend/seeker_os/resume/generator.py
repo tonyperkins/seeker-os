@@ -356,6 +356,93 @@ def generate_resume(
     }
 
 
+def create_manual_resume(settings: Settings, job_id: int, resume_text: str) -> dict:
+    """Save a hand-built (user-pasted) markdown resume for a job.
+
+    Skips LLM generation and accuracy/traceability validation — the user
+    authored this content directly, so there is no master-resume claim set
+    to validate against. Stored and tracked identically to a generated
+    resume otherwise (file on disk, DB row, job status transition).
+
+    Args:
+        settings: App settings
+        job_id: Database job ID
+        resume_text: Markdown resume text supplied by the user
+
+    Returns:
+        Dict with resume metadata (same shape as generate_resume's result,
+        minus LLM-specific fields).
+    """
+    resume_text = resume_text.strip()
+    if not resume_text:
+        raise ValueError("resume_text is empty")
+
+    db = get_connection()
+    job = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    if not job:
+        db.close()
+        raise ValueError(f"Job {job_id} not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    output_dir = Path(
+        settings.profile.resume.output_dir if settings.profile and settings.profile.resume else "data/resumes"
+    ).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_company = (job["company"] or "unknown").replace(" ", "_").replace("/", "_")
+    safe_title = (job["title"] or "resume").replace(" ", "_").replace("/", "_")[:50]
+    md_filename = f"{safe_company}_{safe_title}_{job_id}_{now[:10]}_manual.md"
+    md_path = output_dir / md_filename
+    md_path.write_text(resume_text)
+
+    master_path = None
+    if settings.profile and settings.profile.resume:
+        candidate = Path(settings.profile.resume.master_path).expanduser()
+        if candidate.exists():
+            master_path = candidate
+
+    cursor = db.execute(
+        """
+        INSERT INTO resumes
+        (job_id, task, provider, model, resume_text, master_resume_path,
+         validation_passed, validation_violations, validation_checked_at,
+         input_tokens, output_tokens, latency_ms, generated_at, updated_at,
+         markdown_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            job_id, "manual", "manual", "user_provided",
+            resume_text, str(master_path) if master_path else None,
+            True, json.dumps([]), None,
+            0, 0, 0,
+            now, now, str(md_path),
+        ),
+    )
+    resume_id = cursor.lastrowid
+
+    transition_status(
+        db, job_id, "interested", EventType.RESUME_GENERATED, Actor.SYSTEM,
+        metadata={"resume_id": resume_id, "source": "manual"},
+    )
+    db.commit()
+    db.close()
+
+    return {
+        "resume_id": resume_id,
+        "job_id": job_id,
+        "task": "manual",
+        "provider": "manual",
+        "model": "user_provided",
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_ms": 0,
+        "validation_passed": True,
+        "validation_violations": [],
+        "markdown_path": str(md_path),
+        "generated_at": now,
+    }
+
+
 def list_resumes(job_id: int | None = None, limit: int = 50) -> list[dict]:
     """List generated resumes."""
     db = get_connection()

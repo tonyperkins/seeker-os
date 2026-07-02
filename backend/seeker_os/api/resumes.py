@@ -320,6 +320,12 @@ class ResumeGenerateRequest(BaseModel):
     max_tokens: int | None = None  # None = resolve from config/defaults
 
 
+class ResumeManualCreate(BaseModel):
+    """POST /api/resumes/manual — save a hand-built markdown resume."""
+    job_id: int
+    resume_text: str
+
+
 class ResumeSummary(BaseModel):
     """Resume summary for list views."""
     id: int
@@ -476,6 +482,23 @@ def generate_resume(body: ResumeGenerateRequest):
     except Exception:
         logger.exception("Resume generation failed for job_id=%s", body.job_id)
         raise HTTPException(status_code=500, detail="Generation failed — see server logs for details")
+
+
+@router.post("/manual", response_model=dict)
+def create_manual_resume_route(body: ResumeManualCreate):
+    """Save a hand-built (user-pasted) markdown resume for a job."""
+    from seeker_os.config import Settings
+    from seeker_os.resume.generator import create_manual_resume
+
+    settings = Settings()
+    try:
+        result = create_manual_resume(settings, job_id=body.job_id, resume_text=body.resume_text)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Manual resume save failed for job_id=%s", body.job_id)
+        raise HTTPException(status_code=500, detail="Save failed — see server logs for details")
 
 
 @router.post("/generate/stream")

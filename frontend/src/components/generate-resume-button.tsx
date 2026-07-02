@@ -37,6 +37,26 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
   const [task, setTask] = useState("resume_generation_standard");
   const [events, setEvents] = useState<ResumeProgressEvent[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const [mode, setMode] = useState<"ai" | "manual">("ai");
+  const [manualText, setManualText] = useState("");
+  const [manualBusy, setManualBusy] = useState(false);
+
+  async function saveManual() {
+    if (!manualText.trim()) {
+      setError("Paste your resume markdown before saving");
+      return;
+    }
+    setManualBusy(true);
+    setError(null);
+    try {
+      const res = await api.resumes.createManual(jobId, manualText);
+      setResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setManualBusy(false);
+    }
+  }
 
   async function generate() {
     setBusy(true);
@@ -123,6 +143,8 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
       setEvents([]);
       setError(null);
       setResult(null);
+      setMode("ai");
+      setManualText("");
     }
   }
 
@@ -154,18 +176,42 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
       />
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Generate tailored resume</DialogTitle>
+          <DialogTitle>{mode === "ai" ? "Generate tailored resume" : "Add a hand-built resume"}</DialogTitle>
           <DialogDescription>
-            This will use the LLM to tailor your master resume for this job.
-            The result is validated against your accuracy rules.
+            {mode === "ai"
+              ? "This will use the LLM to tailor your master resume for this job. The result is validated against your accuracy rules."
+              : "Paste the markdown for a resume you wrote yourself. It is saved as-is — no LLM generation or accuracy validation is run."}
           </DialogDescription>
         </DialogHeader>
+
+        {!busy && !result && (
+          <div className="flex gap-1 rounded-lg bg-muted p-1">
+            <button
+              type="button"
+              onClick={() => setMode("ai")}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                mode === "ai" ? "bg-background shadow-sm" : "text-muted-foreground"
+              }`}
+            >
+              Generate with AI
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("manual")}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                mode === "manual" ? "bg-background shadow-sm" : "text-muted-foreground"
+              }`}
+            >
+              Paste my own
+            </button>
+          </div>
+        )}
 
         {error && (
           <ErrorBanner message={error} />
         )}
 
-        {busy && (
+        {busy && mode === "ai" && (
           <div className="flex flex-col gap-3 rounded-md border border-border p-4">
             {/* Overall progress bar */}
             <div className="flex flex-col gap-1">
@@ -227,7 +273,9 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
         {result ? (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 text-sm">
-              {result.validation_passed ? (
+              {mode === "manual" ? (
+                <><CheckCircle2 className="h-4 w-4 text-green-500" /> Resume saved</>
+              ) : result.validation_passed ? (
                 <><CheckCircle2 className="h-4 w-4 text-green-500" /> Resume generated and validated</>
               ) : (
                 <><XCircle className="h-4 w-4 text-destructive" /> Resume generated with validation violations</>
@@ -241,7 +289,7 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
               View resume →
             </Button>
           </div>
-        ) : !busy && (
+        ) : !busy && mode === "ai" ? (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Model tier</label>
@@ -255,16 +303,34 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
               </select>
             </div>
           </div>
+        ) : !busy && mode === "manual" && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium">Resume markdown</label>
+            <textarea
+              value={manualText}
+              onChange={(e) => setManualText(e.target.value)}
+              placeholder="Paste your hand-built resume in markdown here…"
+              rows={14}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            />
+          </div>
         )}
 
         <DialogFooter>
           {!result && (
             <>
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-              <Button disabled={busy} onClick={generate}>
-                {busy ? <Loader2 className="animate-spin" /> : <FileText />}
-                Generate
-              </Button>
+              {mode === "ai" ? (
+                <Button disabled={busy} onClick={generate}>
+                  {busy ? <Loader2 className="animate-spin" /> : <FileText />}
+                  Generate
+                </Button>
+              ) : (
+                <Button disabled={manualBusy} onClick={saveManual}>
+                  {manualBusy ? <Loader2 className="animate-spin" /> : <Save />}
+                  Save
+                </Button>
+              )}
             </>
           )}
           {result && (

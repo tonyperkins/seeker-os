@@ -209,6 +209,72 @@ class TestMasterResume:
             assert r.status_code == 404
 
 
+class _FakeResumePrefs:
+    def __init__(self, output_dir: str, master_path: str = "/nonexistent/master.md"):
+        self.output_dir = output_dir
+        self.master_path = master_path
+
+
+class _FakeProfile:
+    def __init__(self, output_dir: str):
+        self.resume = _FakeResumePrefs(output_dir)
+
+
+class _FakeSettings:
+    def __init__(self, output_dir: str):
+        self.profile = _FakeProfile(output_dir)
+
+
+class TestManualResume:
+    """POST /api/resumes/manual — save a hand-built markdown resume."""
+
+    def _patch_settings(self, monkeypatch, tmp_path):
+        fake_settings = _FakeSettings(str(tmp_path / "resumes_out"))
+        monkeypatch.setattr("seeker_os.config.Settings", lambda: fake_settings)
+
+    def test_create_manual_resume(self, client, tmp_path, monkeypatch):
+        self._patch_settings(monkeypatch, tmp_path)
+        db_path = tmp_path / "test.db"
+        job_id = _insert_job(db_path)
+
+        r = client.post("/api/resumes/manual", json={
+            "job_id": job_id,
+            "resume_text": "# My Resume\n\nHand-written content.",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["job_id"] == job_id
+        assert data["validation_passed"] is True
+        assert data["provider"] == "manual"
+        assert "resume_id" in data
+
+        # Saved and retrievable via the normal resume detail endpoint
+        detail = client.get(f"/api/resumes/{data['resume_id']}").json()
+        assert detail["resume_text"] == "# My Resume\n\nHand-written content."
+        assert detail["task"] == "manual"
+
+        # File written to disk
+        assert Path(detail["markdown_path"]).exists()
+
+        # Job transitions to 'interested' just like AI-generated resumes
+        job = client.get(f"/api/jobs/{job_id}").json()
+        assert job["status"] == "interested"
+
+    def test_create_manual_resume_empty_text(self, client, tmp_path, monkeypatch):
+        self._patch_settings(monkeypatch, tmp_path)
+        db_path = tmp_path / "test.db"
+        job_id = _insert_job(db_path)
+
+        r = client.post("/api/resumes/manual", json={"job_id": job_id, "resume_text": "   "})
+        assert r.status_code == 400
+
+    def test_create_manual_resume_job_not_found(self, client, tmp_path, monkeypatch):
+        self._patch_settings(monkeypatch, tmp_path)
+
+        r = client.post("/api/resumes/manual", json={"job_id": 99999, "resume_text": "# Resume"})
+        assert r.status_code == 400
+
+
 class TestRevalidate:
     def test_revalidate_resume(self, client, tmp_path):
         db_path = tmp_path / "test.db"

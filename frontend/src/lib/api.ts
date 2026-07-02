@@ -575,6 +575,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ job_id: jobId, task: task || "resume_generation_standard" }),
       }),
+    createManual: (jobId: number, resumeText: string) =>
+      fetchAPI<{ resume_id: number; validation_passed: boolean }>("/api/resumes/manual", {
+        method: "POST",
+        body: JSON.stringify({ job_id: jobId, resume_text: resumeText }),
+      }),
     generateStream: (jobId: number, task?: string) => {
       const controller = new AbortController();
       const response = fetch(`${API_BASE}/api/resumes/generate/stream`, {
