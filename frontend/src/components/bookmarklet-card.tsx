@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Bookmark, Copy, Check, ExternalLink } from "lucide-react";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ export function BookmarkletCard() {
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
   const [bookmarkletJs, setBookmarkletJs] = useState("");
-  const linkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     const o = window.location.origin;
@@ -43,9 +42,6 @@ export function BookmarkletCard() {
       `location.href=u;` +
     `}())`;
     setBookmarkletJs(js);
-    if (linkRef.current) {
-      linkRef.current.href = js;
-    }
   }, []);
 
   const targetUrl = `${origin}/jobs/new`;
@@ -66,8 +62,7 @@ export function BookmarkletCard() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3">
             <a
-              ref={linkRef}
-              href="#"
+              href={bookmarkletJs || "#"}
               onClick={(e) => e.preventDefault()}
               className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground cursor-grab"
               title="Drag me to your bookmarks bar"
