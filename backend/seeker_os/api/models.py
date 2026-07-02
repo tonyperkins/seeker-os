@@ -252,49 +252,53 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
     if not providers_yml_path.exists():
         raise HTTPException(status_code=404, detail="providers.yml not found")
 
-    with open(providers_yml_path) as f:
-        raw = yaml.safe_load(f)
+    # Serialize the read-modify-write of providers.yml under the same lock as
+    # update_tier/update_task so concurrent config edits can't lose each other's
+    # writes (read-modify-write on the same file is otherwise a lost-update race).
+    with _providers_yml_lock:
+        with open(providers_yml_path) as f:
+            raw = yaml.safe_load(f)
 
-    providers_list = raw.get("providers", [])
-    provider_found = None
-    for p in providers_list:
-        if p.get("id") == provider_id:
-            provider_found = p
-            break
+        providers_list = raw.get("providers", [])
+        provider_found = None
+        for p in providers_list:
+            if p.get("id") == provider_id:
+                provider_found = p
+                break
 
-    if provider_found is None:
-        raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found in providers.yml")
+        if provider_found is None:
+            raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found in providers.yml")
 
-    # Apply updates
-    env_updates: dict[str, str] = {}
+        # Apply updates
+        env_updates: dict[str, str] = {}
 
-    if body.label is not None:
-        provider_found["label"] = body.label
-    if body.base_url is not None:
-        provider_found["base_url"] = body.base_url
-    if body.enabled is not None:
-        provider_found["enabled"] = body.enabled
-    if body.auto_fetch_models is not None:
-        provider_found["auto_fetch_models"] = body.auto_fetch_models
+        if body.label is not None:
+            provider_found["label"] = body.label
+        if body.base_url is not None:
+            provider_found["base_url"] = body.base_url
+        if body.enabled is not None:
+            provider_found["enabled"] = body.enabled
+        if body.auto_fetch_models is not None:
+            provider_found["auto_fetch_models"] = body.auto_fetch_models
 
-    if body.api_key is not None:
-        # Store the API key in .env, reference it in providers.yml
-        env_var_name = f"{provider_id.upper()}_API_KEY"
-        env_updates[env_var_name] = body.api_key
-        provider_found["api_key"] = f"${{{env_var_name}}}"
+        if body.api_key is not None:
+            # Store the API key in .env, reference it in providers.yml
+            env_var_name = f"{provider_id.upper()}_API_KEY"
+            env_updates[env_var_name] = body.api_key
+            provider_found["api_key"] = f"${{{env_var_name}}}"
 
-    # Write .env updates (append or update)
-    if env_updates:
-        from seeker_os.env_utils import write_env
-        write_env(env_updates)
+        # Write .env updates (append or update)
+        if env_updates:
+            from seeker_os.env_utils import write_env
+            write_env(env_updates)
 
-    # Write providers.yml back
-    with open(providers_yml_path, "w") as f:
-        yaml.dump(raw, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        # Write providers.yml back
+        with open(providers_yml_path, "w") as f:
+            yaml.dump(raw, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-    # Invalidate cached settings so the next Settings() re-reads from disk
-    from seeker_os.config import invalidate_settings_cache
-    invalidate_settings_cache()
+        # Invalidate cached settings so the next Settings() re-reads from disk
+        from seeker_os.config import invalidate_settings_cache
+        invalidate_settings_cache()
 
     # Reload and return updated provider
     settings = Settings()
@@ -366,6 +370,38 @@ import threading as _threading
 
 _providers_yml_lock = _threading.Lock()
 
+# Canonical routing tiers (mirrors ModelRouter._infer_tier). A tier mapping
+# written under any other key would never be resolved.
+_VALID_TIERS = frozenset({"heavy", "moderate", "light"})
+
+
+def _validate_provider_model(provider: str, model: str | None) -> None:
+    """Reject an unknown provider; warn (don't reject) on an unknown model.
+
+    A tier/task mapping pointing at a missing provider silently breaks resolve()
+    mid-generation, so it's rejected here. Model lists can be auto-fetched and
+    may lag config, so an unknown model is only logged.
+    """
+    from seeker_os.config import Settings
+
+    settings = Settings()
+    providers = settings.providers.providers if settings.providers else []
+    pc = next((p for p in providers if p.id == provider), None)
+    if pc is None:
+        known = sorted(p.id for p in providers)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown provider '{provider}'. Configured providers: {known}",
+        )
+    if model:
+        known_models = {m.id for m in (pc.models or [])}
+        if known_models and model not in known_models:
+            logger.warning(
+                "Model '%s' is not in provider '%s' config (known: %s) — "
+                "writing anyway; verify it is valid.",
+                model, provider, sorted(known_models),
+            )
+
 
 def _write_providers_yml(raw: dict) -> None:
     """Write the providers.yml config back to disk."""
@@ -392,6 +428,12 @@ def _read_providers_yml() -> dict:
 @router.put("/tiers/{tier}", response_model=TierMappingResponse)
 def update_tier(tier: str, body: TierUpdateRequest):
     """Update a tier mapping in providers.yml."""
+    if tier not in _VALID_TIERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown tier '{tier}'. Valid tiers: {', '.join(sorted(_VALID_TIERS))}",
+        )
+    _validate_provider_model(body.provider, body.model)
     with _providers_yml_lock:
         raw = _read_providers_yml()
         tiers = raw.setdefault("tiers", {})
@@ -403,6 +445,13 @@ def update_tier(tier: str, body: TierUpdateRequest):
 @router.put("/tasks/{task}", response_model=TaskOverrideResponse)
 def update_task(task: str, body: TaskUpdateRequest):
     """Update a task override in providers.yml."""
+    if body.tier not in _VALID_TIERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown tier '{body.tier}'. Valid tiers: {', '.join(sorted(_VALID_TIERS))}",
+        )
+    if body.provider is not None:
+        _validate_provider_model(body.provider, body.model)
     with _providers_yml_lock:
         raw = _read_providers_yml()
         tasks = raw.setdefault("tasks", {})

@@ -228,15 +228,27 @@ class TestUpdateTier:
         assert tier["provider"] == PROVIDER_KILO
         assert tier["model"] == "kilo-model"
 
-    def test_update_new_tier(self, client):
-        """Updating a tier that doesn't yet exist should create it."""
+    def test_unknown_tier_rejected(self, client):
+        """A tier name outside {heavy, moderate, light} is a typo → 422, not created.
+
+        Regression (§2.7): arbitrary tier keys used to be written silently and
+        only surfaced later as a resolve() failure mid-generation.
+        """
         r = client.put(
             "/api/models/tiers/custom_tier",
             json={"provider": PROVIDER_OLLAMA, "model": "m1"},
         )
-        assert r.status_code == 200
+        assert r.status_code == 422
         r2 = client.get("/api/models")
-        assert "custom_tier" in r2.json()["tiers"]
+        assert "custom_tier" not in r2.json()["tiers"]
+
+    def test_unknown_provider_rejected(self, client):
+        """A tier mapping pointing at a missing provider is rejected."""
+        r = client.put(
+            f"/api/models/tiers/{TIER_HEAVY}",
+            json={"provider": "nonexistent_provider", "model": "m1"},
+        )
+        assert r.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +292,14 @@ class TestUpdateTask:
         assert r.status_code == 200
         r2 = client.get("/api/models")
         assert "custom_task" in r2.json()["tasks"]
+
+    def test_task_unknown_tier_rejected(self, client):
+        """A task override naming a non-canonical tier is rejected (§2.7)."""
+        r = client.put(
+            f"/api/models/tasks/{TASK_RESUME_GEN_HIGH}",
+            json={"tier": "bogus_tier"},
+        )
+        assert r.status_code == 422
 
 
 # ---------------------------------------------------------------------------
