@@ -28,7 +28,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from seeker_os.config import CONFIG_DIR, DATA_DIR, PROJECT_ROOT
-from seeker_os.database import _db_path, MIGRATIONS
+from seeker_os.database import _db_path, MIGRATIONS, run_migrations
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backup", tags=["backup"])
@@ -304,6 +304,7 @@ async def restore_db_backup(file: UploadFile = File(...)):
 
     # Write uploaded bytes to a temp file
     tmp_path = _db_path().parent / f"_restore_tmp_{os.getpid()}.db"
+    snapshot_path = None  # bound below; init so error paths can reference it safely
     try:
         tmp_path.write_bytes(raw)
 
@@ -345,6 +346,14 @@ async def restore_db_backup(file: UploadFile = File(...)):
             source.close()
 
         logger.info("Database restored from uploaded file (%d bytes)", len(raw))
+
+        # Bring an older restored DB up to the current schema immediately, rather
+        # than relying on the next get_connection() to lazily migrate it.
+        if db_version < len(MIGRATIONS):
+            run_migrations(_db_path())
+            logger.info(
+                "Restored DB migrated from version %d to %d", db_version, len(MIGRATIONS)
+            )
     finally:
         if tmp_path.exists():
             tmp_path.unlink()

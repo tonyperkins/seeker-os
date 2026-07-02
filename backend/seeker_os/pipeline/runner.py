@@ -5,7 +5,6 @@ See docs/PHASE1_SPEC.md §3.10 for the full spec.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -394,8 +393,6 @@ def run_pipeline(
                     jd_delay = src.jd_fetch_delay_seconds
                     break
 
-        checkpoint_path = Path("data/checkpoint.json")
-
         for i, row in enumerate(jobs):
             jd_result = fetch_jd(
                 job_id=row["id"],
@@ -439,23 +436,16 @@ def run_pipeline(
                 )
                 result.tier3_failed += 1
 
-            # Checkpoint after each fetch
-            checkpoint_path.write_text(json.dumps({
-                "run_id": run_id,
-                "last_job_id": row["id"],
-                "fetched_count": result.tier3_fetched,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }))
+            # Commit per job: each JD fetch is independent, so a crash mid-tier
+            # keeps completed fetches instead of rolling back the whole tier.
+            # Re-running picks up the still-pending / newly-failed jobs.
+            db.commit()
 
             _emit("jd_fetch", "JD Fetch", "in_progress",
                   current=i + 1, total=len(jobs),
                   detail=f"{result.tier3_fetched} fetched, {result.tier3_failed} failed — {row['title'][:40]}")
 
         db.commit()
-
-        # Clean up checkpoint on successful completion
-        if checkpoint_path.exists():
-            checkpoint_path.unlink()
 
         print(f"  Fetched: {result.tier3_fetched}")
         print(f"  Failed: {result.tier3_failed}")

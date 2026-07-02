@@ -15,6 +15,20 @@ from seeker_os.database import get_connection
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
+# A pipeline run mutates shared job rows over several minutes. Allow only one at
+# a time across the whole process (plain runs, tier runs, and the SSE-streamed
+# run all share this lock) so overlapping runs can't interleave writes to the
+# same rows. A blocked caller gets 409 rather than racing an in-flight run.
+_run_lock = threading.Lock()
+
+_RUN_IN_PROGRESS = "A pipeline run is already in progress"
+
+
+@router.get("/running")
+def pipeline_running():
+    """Report whether a pipeline run is currently active (for the UI run state)."""
+    return {"running": _run_lock.locked()}
+
 
 @router.post("/run", response_model=PipelineRunSummary)
 def run_pipeline(body: PipelineRunRequest):
@@ -22,15 +36,20 @@ def run_pipeline(body: PipelineRunRequest):
     from seeker_os.config import Settings
     from seeker_os.pipeline.runner import run_pipeline as _run
 
-    settings = Settings()
-    result = _run(
-        settings,
-        queries=body.queries,
-        tiers=body.tiers,
-        dry_run=body.dry_run,
-        force_full_pull=body.force_full_pull,
-    )
-    return result.model_dump()
+    if not _run_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail=_RUN_IN_PROGRESS)
+    try:
+        settings = Settings()
+        result = _run(
+            settings,
+            queries=body.queries,
+            tiers=body.tiers,
+            dry_run=body.dry_run,
+            force_full_pull=body.force_full_pull,
+        )
+        return result.model_dump()
+    finally:
+        _run_lock.release()
 
 
 @router.post("/run/stream")
@@ -43,28 +62,41 @@ def run_pipeline_stream(body: PipelineRunRequest):
     from seeker_os.config import Settings
     from seeker_os.pipeline.runner import run_pipeline as _run
 
-    settings = Settings()
-    event_queue: queue.Queue = queue.Queue()
+    if not _run_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail=_RUN_IN_PROGRESS)
 
-    def progress_cb(event):
-        event_queue.put(event)
+    try:
+        settings = Settings()
+        event_queue: queue.Queue = queue.Queue()
 
-    def run_in_thread():
-        try:
-            result = _run(
-                settings,
-                queries=body.queries,
-                tiers=body.tiers,
-                dry_run=body.dry_run,
-                progress_cb=progress_cb,
-                force_full_pull=body.force_full_pull,
-            )
-            event_queue.put(("done", result))
-        except Exception as e:
-            event_queue.put(("error", str(e)))
+        def progress_cb(event):
+            event_queue.put(event)
 
-    thread = threading.Thread(target=run_in_thread, daemon=True)
-    thread.start()
+        def run_in_thread():
+            # The worker owns the lock for the run's lifetime and releases it on
+            # completion — including if the client disconnects and the SSE
+            # generator is GC'd, so a second run is refused until this finishes.
+            try:
+                result = _run(
+                    settings,
+                    queries=body.queries,
+                    tiers=body.tiers,
+                    dry_run=body.dry_run,
+                    progress_cb=progress_cb,
+                    force_full_pull=body.force_full_pull,
+                )
+                event_queue.put(("done", result))
+            except Exception as e:
+                event_queue.put(("error", str(e)))
+            finally:
+                _run_lock.release()
+
+        thread = threading.Thread(target=run_in_thread, daemon=True)
+        thread.start()
+    except Exception:
+        # Never reached the worker (which owns the release) — free the lock.
+        _run_lock.release()
+        raise
 
     def event_stream():
         while True:
@@ -95,20 +127,27 @@ def run_tier(tier: int):
     if tier < 1 or tier > 5:
         raise HTTPException(status_code=400, detail="Tier must be 1-5")
 
-    settings = Settings()
-    result = _run(settings, tiers=[tier])
-    return result.model_dump()
+    if not _run_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail=_RUN_IN_PROGRESS)
+    try:
+        settings = Settings()
+        result = _run(settings, tiers=[tier])
+        return result.model_dump()
+    finally:
+        _run_lock.release()
 
 
 @router.get("/runs", response_model=list[PipelineRunRecord])
 def list_runs(limit: int = 20):
     """List pipeline run history."""
     db = get_connection()
-    rows = db.execute(
-        "SELECT * FROM pipeline_runs ORDER BY started_at DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
-    db.close()
+    try:
+        rows = db.execute(
+            "SELECT * FROM pipeline_runs ORDER BY started_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    finally:
+        db.close()
     return [
         PipelineRunRecord(
             id=r["id"],
@@ -131,10 +170,12 @@ def list_runs(limit: int = 20):
 def get_run(run_id: str):
     """Get details of a specific pipeline run."""
     db = get_connection()
-    row = db.execute(
-        "SELECT * FROM pipeline_runs WHERE run_id = ?", (run_id,)
-    ).fetchone()
-    db.close()
+    try:
+        row = db.execute(
+            "SELECT * FROM pipeline_runs WHERE run_id = ?", (run_id,)
+        ).fetchone()
+    finally:
+        db.close()
     if not row:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return PipelineRunRecord(
