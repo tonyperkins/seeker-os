@@ -446,6 +446,11 @@ def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row  # dict-like access
+    # WAL lets readers and a writer proceed concurrently; busy_timeout makes a
+    # blocked connection wait (up to 5s) for a lock instead of immediately
+    # raising "database is locked" under the threaded API + background pipeline.
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 

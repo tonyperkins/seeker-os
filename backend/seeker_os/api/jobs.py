@@ -835,10 +835,13 @@ def update_job(job_id: int, update: JobUpdate):
         now = datetime.now(timezone.utc).isoformat()
         if update.status is not None:
             old_status = row["status"]
-            transition_status(
-                db, job_id, update.status, EventType.STATUS_CHANGED, Actor.CANDIDATE,
-                metadata={"from": old_status, "to": update.status},
-            )
+            try:
+                transition_status(
+                    db, job_id, update.status, EventType.STATUS_CHANGED, Actor.CANDIDATE,
+                    metadata={"from": old_status, "to": update.status},
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
         if update.is_pinned is not None:
             db.execute("UPDATE jobs SET is_pinned=?, updated_at=? WHERE id=?", (update.is_pinned, now, job_id))
         if update.ai_policy is not None:
@@ -968,14 +971,36 @@ def delete_job(job_id: int):
     """Delete a job and all dependent records."""
     db = get_connection()
     try:
-        row = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        row = db.execute("SELECT id, company_norm FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        for table in ("dedup_registry", "resumes", "company_research",
+        for table in ("dedup_registry", "resumes",
                        "job_analyses", "cover_letters", "application_answers",
                        "application_events"):
             db.execute(f"DELETE FROM {table} WHERE job_id = ?", (job_id,))
+
+        # company_research dossiers are company-keyed (looked up by company_norm)
+        # and shared across sibling jobs at the same company. Only delete this
+        # job's research rows when no other job references the same company —
+        # otherwise siblings suffer silent cache misses and paid re-fetches.
+        company_norm = row["company_norm"]
+        sibling = None
+        if company_norm:
+            sibling = db.execute(
+                "SELECT id FROM jobs WHERE company_norm = ? AND id != ? LIMIT 1",
+                (company_norm, job_id),
+            ).fetchone()
+        if sibling is None:
+            db.execute("DELETE FROM company_research WHERE job_id = ?", (job_id,))
+        else:
+            # Preserve the dossier for the sibling but re-point its job_id FK so
+            # the jobs-row delete below doesn't violate the foreign key.
+            db.execute(
+                "UPDATE company_research SET job_id = ? WHERE job_id = ?",
+                (sibling["id"], job_id),
+            )
+
         db.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         db.commit()
         return MessageResponse(message=f"Job {job_id} deleted")

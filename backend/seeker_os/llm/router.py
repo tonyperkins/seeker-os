@@ -131,7 +131,7 @@ class ModelRouter:
                     if tier_provider:
                         # Check if the override model exists on the tier provider
                         tier_models = tier_provider.list_models() if hasattr(tier_provider, "list_models") else []
-                        if task_config.model in tier_models:
+                        if task_config.model in {m.id for m in tier_models}:
                             return tier_provider, task_config.model
             # Fall through to tier default if override provider unavailable
 
