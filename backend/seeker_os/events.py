@@ -342,6 +342,9 @@ def transition_status(
 
     Returns the event ID.
     """
+    if new_status not in JobStatus._ALL:
+        raise ValueError(f"Invalid status: {new_status!r}")
+
     now = _utc_now_iso()
 
     set_parts = ["status = ?", "updated_at = ?"]
