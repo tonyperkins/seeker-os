@@ -101,17 +101,13 @@ def get_providers_config():
         except Exception:
             pass
 
-        # Check health if provider is available
+        # Health is intentionally NOT probed here: this endpoint is hit on every
+        # dashboard load and a synchronous test_connection() per provider adds N
+        # network round-trips (seconds when a provider is down). healthy=None
+        # means "unknown — not yet checked"; the UI calls POST /test/{id} (or
+        # /test-all) on demand. See audit §2.11.
         healthy = None
         health_message = ""
-        if pc.id in router_client._providers:
-            try:
-                health = router_client._providers[pc.id].test_connection()
-                healthy = health.healthy
-                health_message = health.message
-            except Exception as e:
-                healthy = False
-                health_message = str(e)
 
         # Check if auth is available — an unresolved ${VAR_NAME} placeholder
         # means the env var is not set, so we must not treat it as a real key.

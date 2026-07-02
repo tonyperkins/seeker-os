@@ -35,17 +35,34 @@ def parse_greenhouse_url(url: str) -> tuple[str, str] | None:
 
 
 def _strip_html(html: str) -> str:
-    """Strip HTML tags, decode entities, normalize whitespace."""
+    """Strip HTML to text while preserving block structure as line breaks.
+
+    A flat tag-strip collapses lists and headings onto a single line, which
+    degrades the JD text fed to scoring/generation. This converts block-element
+    boundaries (<br>, </p>, headings, list items, table rows, …) to newlines and
+    bullets list items, so the JD's structure survives. Whitespace is normalized
+    per line but newlines are preserved.
+    """
     import html as html_mod
-    # Remove script and style blocks
-    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
-    # Remove all HTML tags
+    if not html:
+        return ""
+    # Remove script and style blocks entirely (tag + contents)
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    # <br> and block-closing tags become line breaks (li handled below)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"</(p|div|h[1-6]|tr|ul|ol|section|article|header|footer|blockquote|pre|dd|dt)\s*>",
+        "\n", text, flags=re.IGNORECASE,
+    )
+    # List items start on a new line with a bullet
+    text = re.sub(r"<li[^>]*>", "\n- ", text, flags=re.IGNORECASE)
+    # Remove all remaining tags
     text = re.sub(r"<[^>]+>", " ", text)
     # Decode HTML entities (covers &mdash;, &ndash;, &nbsp;, &amp;, numeric entities, etc.)
     text = html_mod.unescape(text)
-    # Normalize whitespace
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    # Normalize spaces/tabs within each line, drop blank lines, preserve breaks
+    lines = [re.sub(r"[ \t\r\f\v]+", " ", ln).strip() for ln in text.splitlines()]
+    return "\n".join(ln for ln in lines if ln)
 
 
 def _fetch_url(url: str, user_agent: str, timeout: int = 15) -> str:

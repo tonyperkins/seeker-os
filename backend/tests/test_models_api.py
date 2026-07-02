@@ -88,6 +88,17 @@ class TestGetProvidersConfig:
         assert provider["type"] == "openai_compatible"
         assert isinstance(provider["models"], list)
 
+    def test_health_is_lazy_not_probed_on_list(self, client):
+        """GET /api/models must not probe provider health (§2.11) — healthy is None.
+
+        Health is checked on demand via POST /test/{id}; probing here added an
+        N-provider network round-trip to every dashboard load.
+        """
+        client.put(f"/api/models/providers/{PROVIDER_OLLAMA}", json={"enabled": True})
+        r = client.get("/api/models")
+        for provider in r.json()["providers"]:
+            assert provider["healthy"] is None
+
     def test_tiers_structure(self, client):
         r = client.get("/api/models")
         tiers = r.json()["tiers"]

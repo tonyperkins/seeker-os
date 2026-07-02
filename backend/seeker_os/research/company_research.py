@@ -265,6 +265,24 @@ def _strip_code_fences(text: str) -> str:
     return text
 
 
+def _loads_dossier_json(text: str) -> dict:
+    """Parse dossier JSON, with a bounded repair for minor malformation.
+
+    Models occasionally emit a stray prefix/suffix around the JSON object (a
+    lead-in sentence, a trailing note). On a decode failure, retry once against
+    the substring spanning the outermost braces before giving up. Raises
+    json.JSONDecodeError if the text still can't be parsed.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end > start:
+            return json.loads(text[start:end + 1])  # may re-raise JSONDecodeError
+        raise
+
+
 def fetch_llm_dossier(
     company: str,
     company_domain: str | None = None,
@@ -361,9 +379,25 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
             user_prompt=user_prompt,
             temperature=0.3,
         )
-        text = _strip_code_fences(response.text)
-        data = json.loads(text)
+    except Exception:
+        logger.exception("LLM dossier generation call failed for company='%s'", company)
+        return None
 
+    # Parse the response separately so a malformed model reply (recoverable, and
+    # distinct from a programming error) is diagnosable — and salvageable via a
+    # bounded repair — rather than being swallowed by one broad except.
+    text = _strip_code_fences(response.text)
+    try:
+        data = _loads_dossier_json(text)
+    except json.JSONDecodeError as e:
+        logger.error(
+            "LLM dossier JSON parse failed for company='%s': %s. "
+            "Wasted 2 paid research calls. Raw response (first 500 chars): %r",
+            company, e, text[:500],
+        )
+        return None
+
+    try:
         # Build the result from LLM output
         now = datetime.now(timezone.utc).isoformat()
 
@@ -448,7 +482,9 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
             sources_used=["llm_dossier"],
         )
     except Exception:
-        logger.exception("LLM dossier generation failed for company='%s'", company)
+        logger.exception(
+            "Failed to assemble dossier for company='%s' from parsed JSON", company
+        )
         return None
 
 
