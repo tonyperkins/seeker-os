@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
-from seeker_os.api.schemas import FunnelStats, ResponseRateStats
+from fastapi import APIRouter, HTTPException, Query
+from seeker_os.api.schemas import CalibrationReport, FunnelStats, ResponseRateStats
+from seeker_os.config import get_settings
 from seeker_os.database import get_connection
+from seeker_os.scoring.calibration import build_calibration_report
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -111,6 +113,36 @@ def get_funnel_stats():
             rejection_reasons=rejection_reasons,
             score_distribution=score_dist,
         )
+    finally:
+        db.close()
+
+
+@router.get("/calibration", response_model=CalibrationReport)
+def get_calibration_report(
+    bucket_width: float | None = Query(
+        default=None,
+        gt=0,
+        description="Override the configured net-score bucket width for this request",
+    ),
+):
+    """Scoring calibration report — rubric scores vs. actual apply/skip decisions.
+
+    Joins jobs (score, research_adjusted_score, net_score, analysis_verdict)
+    against the application_events log. Produces the score-bucket vs.
+    decision-rate table, false-positive/false-negative miss lists, and
+    per-modifier empirical precision. Bucket width and miss thresholds come
+    from scoring_rubric.yml (calibration section).
+    """
+    scoring = get_settings().scoring
+    if scoring is None:
+        raise HTTPException(
+            status_code=409,
+            detail="No scoring rubric configured — scoring_rubric.yml is required for calibration",
+        )
+
+    db = get_connection()
+    try:
+        return build_calibration_report(db, scoring, bucket_width=bucket_width)
     finally:
         db.close()
 

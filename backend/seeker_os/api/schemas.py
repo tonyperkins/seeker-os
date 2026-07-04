@@ -559,6 +559,68 @@ class ResponseRateStats(BaseModel):
     by_source: dict[str, dict] = {}
 
 
+class ScoreBucket(BaseModel):
+    """One net-score bucket in the calibration report."""
+    bucket: str                  # display label, e.g. "6–7"
+    min_score: float             # inclusive lower edge
+    max_score: float             # exclusive upper edge
+    total: int = 0
+    applied: int = 0
+    skipped: int = 0
+    ignored: int = 0
+    applied_pct: float = 0.0
+    skipped_pct: float = 0.0
+    ignored_pct: float = 0.0
+
+
+class CalibrationMiss(BaseModel):
+    """A scoring miss — high-score-but-skipped or low-score-but-applied job.
+
+    Carries the full fired-signal breakdown so the cause is inspectable.
+    """
+    job_id: int
+    title: str | None = None
+    company: str | None = None
+    net_score: float
+    base_score: float | None = None
+    research_adjusted_score: float | None = None
+    analysis_verdict: str | None = None
+    decision: str                # applied | skipped
+    decision_reason: str | None = None
+    base_score_label: str | None = None        # fired base-score pattern label
+    positive_modifiers: dict[str, float] = {}  # signal → realized points (>= 0)
+    negative_modifiers: dict[str, float] = {}  # signal → realized points (< 0)
+    research_factors: list[dict] = []          # [{factor, delta, confidence, source_section}]
+
+
+class ModifierPrecision(BaseModel):
+    """Empirical precision of one rubric signal — of jobs where it fired, how many were applied to."""
+    signal: str
+    in_rubric: bool = True       # False = fired historically but no longer in the rubric
+    fired: int = 0
+    applied: int = 0
+    skipped: int = 0
+    ignored: int = 0
+    precision: float = 0.0                     # applied / fired
+    decided_precision: float | None = None     # applied / (applied + skipped); None if no decisions
+
+
+class CalibrationReport(BaseModel):
+    """GET /api/analytics/calibration."""
+    bucket_width: float
+    high_score_threshold: float  # false positives: skipped with net >= this
+    low_score_threshold: float   # false negatives: applied with net < this
+    total_scored: int = 0
+    total_unscored: int = 0      # jobs with no score at all (excluded from the report)
+    total_applied: int = 0
+    total_skipped: int = 0
+    total_ignored: int = 0
+    buckets: list[ScoreBucket] = []
+    false_positives: list[CalibrationMiss] = []
+    false_negatives: list[CalibrationMiss] = []
+    modifier_precision: list[ModifierPrecision] = []
+
+
 # ---------------------------------------------------------------------------
 # Generic
 # ---------------------------------------------------------------------------

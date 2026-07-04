@@ -40,6 +40,7 @@ _ALLOWED_PATHS = {
     "/api/models/tiers",
     "/api/models/tasks",
     "/api/analytics/funnel",
+    "/api/analytics/calibration",
     "/api/analytics/response-rate",
     "/api/backup",
 }

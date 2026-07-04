@@ -177,3 +177,13 @@ scoring:
   # structured-field extraction (company name, comp range, seniority, etc.).
   # Increase if salary ranges are routinely appearing past the 8000-char mark.
   metadata_max_jd_chars: 8000
+
+  # Scoring calibration report (GET /api/analytics/calibration).
+  # bucket_width: width of the net-score buckets in the decision-rate table.
+  # high_score_threshold: skipped jobs with net >= this are false positives.
+  # low_score_threshold: applied jobs with net < this are false negatives.
+  # Null thresholds default to post_threshold.
+  calibration:
+    bucket_width: 1.0
+    high_score_threshold: null
+    low_score_threshold: null

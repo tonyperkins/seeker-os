@@ -264,6 +264,7 @@ def test_demo_guard_allowlist_does_not_wave_through_get_side_effects(demo_client
         "/api/models/tiers",
         "/api/models/tasks",
         "/api/analytics/funnel",
+        "/api/analytics/calibration",
         "/api/analytics/response-rate",
         "/api/backup",
         "/api/backup/db",

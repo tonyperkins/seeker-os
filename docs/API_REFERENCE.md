@@ -148,7 +148,38 @@ Router prefix is `/api` — these endpoints are at the top level, not under `/ap
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/analytics/funnel` | Pipeline funnel stats — cumulative counts at each tier and by status |
+| `GET` | `/api/analytics/calibration` | Scoring calibration report — rubric scores vs. actual apply/skip decisions |
 | `GET` | `/api/analytics/response-rate` | Response rate stats (application tracking) |
+
+### `GET /api/analytics/calibration`
+
+Joins the jobs table (`score`, `research_adjusted_score`, `net_score`,
+`analysis_verdict`) against the `application_events` log to derive the user's
+actual decision per job — `applied` (candidate `applied` event), `skipped`
+(candidate `skipped` or `rejected` event), or `ignored` (no decision
+recorded). The event log is authoritative; job status is not consulted.
+Jobs are bucketed by their effective net score (`net_score` →
+`research_adjusted_score` → `score` fallback); jobs with no score are counted
+in `total_unscored` and excluded.
+
+Query params:
+
+| Param | Default | Description |
+|---|---|---|
+| `bucket_width` | config `calibration.bucket_width` (1.0) | Net-score bucket width for this request; must be > 0 |
+
+Response (`CalibrationReport`):
+
+| Field | Description |
+|---|---|
+| `buckets` | Score-bucket vs. decision-rate table: per bucket, counts and percentages of applied/skipped/ignored |
+| `false_positives` | High-score-but-skipped jobs (net ≥ `high_score_threshold`), worst first — each with the fired base-score pattern, positive/negative modifiers, research factors, and verdict |
+| `false_negatives` | Low-score-but-applied jobs (net < `low_score_threshold`), lowest first — same inspectable breakdown |
+| `modifier_precision` | Per rubric signal: of jobs where it fired, the fraction applied to (`precision`), plus `decided_precision` (applied / applied+skipped) |
+
+Bucket width and miss thresholds come from `scoring_rubric.yml` (`calibration`
+section); thresholds default to `post_threshold` when unset. Returns `409` if
+no scoring rubric is configured.
 
 ---
 

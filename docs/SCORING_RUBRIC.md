@@ -202,6 +202,52 @@ All three score components are preserved separately in the `jobs` table:
 | `min_jd_length` | `500` | Minimum JD character count to pass the evidence gate |
 | `location_fallback_patterns` | `["remote", "united states", "\\bus\\b"]` | Regex patterns that signal remote/US work when location field is empty; used in evidence gate and `location_only` modifier |
 | `metadata_max_jd_chars` | `8000` | Max JD characters sent to the LLM metadata extractor (company, comp, seniority) |
+| `calibration` | see below | Calibration report settings |
 
 The Net score is never computed if no analysis has run — the UI falls back to
 showing the base or research-adjusted score.
+
+## Calibration Report
+
+`GET /api/analytics/calibration` measures how well rubric scores predict what
+the user actually does. It joins the jobs table against the
+`application_events` log to derive the decision per job:
+
+- **applied** — a candidate `applied` event exists (an apply always wins over
+  an earlier or later skip)
+- **skipped** — a candidate `skipped` or `rejected` event exists
+- **ignored** — no decision recorded
+
+The event log is authoritative — job status is not consulted, because status
+`rejected` is also written by the pipeline (`scored_rejected`), which is not a
+user decision. Jobs are keyed by their effective net score (`net_score` →
+`research_adjusted_score` → `score` fallback); unscored jobs are excluded and
+counted separately.
+
+Three outputs:
+
+1. **Score-bucket vs. decision-rate table** — per net-score bucket, counts and
+   percentages of applied/skipped/ignored. A well-calibrated rubric shows
+   applied-rate rising monotonically with score.
+2. **Miss lists** — *false positives* (skipped with net ≥
+   `high_score_threshold`) and *false negatives* (applied with net <
+   `low_score_threshold`). Each entry carries the fired base-score pattern
+   label, positive/negative modifiers (signal → realized points), research
+   factors, and the AI verdict, so the cause of each miss is inspectable.
+3. **Per-modifier precision** — for each rubric signal, of the jobs where it
+   fired, what fraction were applied to (`precision`), plus
+   `decided_precision` = applied / (applied + skipped), which excludes
+   ignored jobs. This identifies miscalibrated modifiers empirically. Signals
+   that fired historically but are no longer in the rubric are flagged
+   `in_rubric: false`.
+
+### Config (`scoring_rubric.yml` `calibration` section)
+
+| Field | Default | Description |
+|---|---|---|
+| `bucket_width` | `1.0` | Net-score bucket width (must be > 0); overridable per request via the `bucket_width` query param |
+| `high_score_threshold` | `null` → `post_threshold` | Skipped jobs with net ≥ this are false positives |
+| `low_score_threshold` | `null` → `post_threshold` | Applied jobs with net < this are false negatives |
+
+All values are config-driven — no thresholds are hardcoded in Python. When the
+`calibration` section is absent the defaults above apply.

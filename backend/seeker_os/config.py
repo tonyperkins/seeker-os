@@ -18,7 +18,7 @@ from typing import Any
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # Path helpers
@@ -289,6 +289,18 @@ class ResearchModifierConfig(BaseModel):
     suppresses: str | None = None
 
 
+class CalibrationConfig(BaseModel):
+    """Scoring calibration report settings (scoring_rubric.yml `calibration` section).
+
+    Thresholds of None resolve to the rubric's post_threshold at report time:
+    "high" (false-positive floor) defaults to >= post_threshold, "low"
+    (false-negative ceiling) defaults to < post_threshold.
+    """
+    bucket_width: float = Field(default=1.0, gt=0)
+    high_score_threshold: float | None = None
+    low_score_threshold: float | None = None
+
+
 class ScoringConfig(BaseModel):
     post_threshold: float = 6.0
     per_company_cap: int = 3
@@ -300,6 +312,7 @@ class ScoringConfig(BaseModel):
     freshness: FreshnessConfig = FreshnessConfig()
     research_modifiers: list[ResearchModifierConfig] = []
     verdict_caps: dict[str, float | None] = {}
+    calibration: CalibrationConfig = CalibrationConfig()
 
     # Comp provenance: values above this are implausible regardless of source.
     # For parsed/none → treated as comp-unknown (no floor clear, no bonus).
