@@ -227,11 +227,18 @@ def build_calibration_report(
     ordered_signals = [s for s in rubric_signals if s in modifier_tallies]
     ordered_signals += sorted(s for s in modifier_tallies if s not in rubric_signals)
 
+    # Base apply rate across all scored jobs. A broad modifier that fires on
+    # nearly everything converges toward this rate — lift (precision /
+    # base_rate) is the meaningful read, not absolute precision.
+    total_scored = sum(totals.values())
+    base_rate = totals[DECISION_APPLIED] / total_scored if total_scored else 0.0
+
     modifier_precision: list[dict] = []
     for signal in ordered_signals:
         tally = modifier_tallies[signal]
         fired_count = sum(tally.values())
         decided = tally[DECISION_APPLIED] + tally[DECISION_SKIPPED]
+        precision = tally[DECISION_APPLIED] / fired_count if fired_count else 0.0
         modifier_precision.append({
             "signal": signal,
             "in_rubric": signal in rubric_signals,
@@ -239,10 +246,11 @@ def build_calibration_report(
             "applied": tally[DECISION_APPLIED],
             "skipped": tally[DECISION_SKIPPED],
             "ignored": tally[DECISION_IGNORED],
-            "precision": tally[DECISION_APPLIED] / fired_count if fired_count else 0.0,
+            "precision": precision,
             "decided_precision": (
                 tally[DECISION_APPLIED] / decided if decided else None
             ),
+            "lift": precision / base_rate if base_rate else None,
         })
 
     false_positives.sort(key=lambda m: m["net_score"], reverse=True)
@@ -252,8 +260,9 @@ def build_calibration_report(
         "bucket_width": bucket_width,
         "high_score_threshold": high_threshold,
         "low_score_threshold": low_threshold,
-        "total_scored": sum(totals.values()),
+        "total_scored": total_scored,
         "total_unscored": unscored,
+        "base_apply_rate": base_rate,
         "total_applied": totals[DECISION_APPLIED],
         "total_skipped": totals[DECISION_SKIPPED],
         "total_ignored": totals[DECISION_IGNORED],

@@ -311,11 +311,15 @@ class TestModifierPrecision:
         assert aws["precision"] == pytest.approx(0.5)
         assert aws["decided_precision"] == pytest.approx(2 / 3)
         assert aws["in_rubric"] is True
+        # base rate = 2 applied / 4 scored = 0.5 → aws lift = 0.5 / 0.5 = 1.0
+        assert report["base_apply_rate"] == pytest.approx(0.5)
+        assert aws["lift"] == pytest.approx(1.0)
 
         oncall = by_signal["oncall"]
         assert oncall["fired"] == 1
         assert oncall["applied"] == 1
         assert oncall["precision"] == pytest.approx(1.0)
+        assert oncall["lift"] == pytest.approx(2.0)
 
         # terraform never fired → not reported
         assert "terraform" not in by_signal
@@ -335,6 +339,9 @@ class TestModifierPrecision:
         aws = report["modifier_precision"][0]
         assert aws["precision"] == 0.0
         assert aws["decided_precision"] is None
+        # No applies at all → base rate 0 → lift undefined, not divide-by-zero
+        assert report["base_apply_rate"] == 0.0
+        assert aws["lift"] is None
 
 
 class TestCalibrationEndpoint:

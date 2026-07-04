@@ -175,7 +175,7 @@ Response (`CalibrationReport`):
 | `buckets` | Score-bucket vs. decision-rate table: per bucket, counts and percentages of applied/skipped/ignored |
 | `false_positives` | High-score-but-skipped jobs (net ≥ `high_score_threshold`), worst first — each with the fired base-score pattern, positive/negative modifiers, research factors, and verdict |
 | `false_negatives` | Low-score-but-applied jobs (net < `low_score_threshold`), lowest first — same inspectable breakdown |
-| `modifier_precision` | Per rubric signal: of jobs where it fired, the fraction applied to (`precision`), plus `decided_precision` (applied / applied+skipped) |
+| `modifier_precision` | Per rubric signal: of jobs where it fired, the fraction applied to (`precision`), `decided_precision` (applied / applied+skipped), and `lift` (precision / `base_apply_rate` — the meaningful read for broad signals; > 1 selects for applies, null when no applies yet) |
 
 Bucket width and miss thresholds come from `scoring_rubric.yml` (`calibration`
 section); thresholds default to `post_threshold` when unset. Returns `409` if

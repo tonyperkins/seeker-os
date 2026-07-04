@@ -241,6 +241,13 @@ Three outputs:
    that fired historically but are no longer in the rubric are flagged
    `in_rubric: false`.
 
+   **Read `lift`, not absolute precision.** A broad modifier that fires on
+   nearly every job converges toward the overall apply rate
+   (`base_apply_rate` = applied / scored), so low absolute precision on a
+   broad signal is noise-shaped. `lift` = precision / base_apply_rate: > 1
+   means the signal selects for jobs you apply to, < 1 selects against, ≈ 1
+   carries no selective signal. `lift` is null when there are no applies yet.
+
 ### Config (`scoring_rubric.yml` `calibration` section)
 
 | Field | Default | Description |

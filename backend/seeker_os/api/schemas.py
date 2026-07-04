@@ -603,6 +603,7 @@ class ModifierPrecision(BaseModel):
     ignored: int = 0
     precision: float = 0.0                     # applied / fired
     decided_precision: float | None = None     # applied / (applied + skipped); None if no decisions
+    lift: float | None = None                  # precision / base_apply_rate; None if base rate is 0
 
 
 class CalibrationReport(BaseModel):
@@ -612,6 +613,7 @@ class CalibrationReport(BaseModel):
     low_score_threshold: float   # false negatives: applied with net < this
     total_scored: int = 0
     total_unscored: int = 0      # jobs with no score at all (excluded from the report)
+    base_apply_rate: float = 0.0 # total_applied / total_scored — reference point for modifier lift
     total_applied: int = 0
     total_skipped: int = 0
     total_ignored: int = 0
