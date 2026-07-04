@@ -12,6 +12,8 @@ import {
   RotateCcw,
   Trash2,
   Send,
+  Users,
+  Hand,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +52,24 @@ const REASON_HINTS: Record<string, string> = {
   not_relevant: "e.g. 'Solutions architect role, not infra/SRE'",
   other: "Describe what specifically doesn't fit...",
 };
+
+type TransitionDef = { status: string; label: string; icon: React.ComponentType<{ className?: string }>; variant?: "default" | "outline" | "destructive" };
+
+const POST_APPLY_TRANSITIONS: Record<string, TransitionDef[]> = {
+  applied: [
+    { status: "engaged", label: "Mark Engaged", icon: Users, variant: "default" },
+    { status: "company_rejected", label: "Company Rejected", icon: XCircle, variant: "outline" },
+    { status: "withdrawn", label: "Withdraw", icon: Hand, variant: "outline" },
+  ],
+  engaged: [
+    { status: "offer_accepted", label: "Offer Accepted", icon: Send, variant: "default" },
+    { status: "offer_declined", label: "Offer Declined", icon: XCircle, variant: "outline" },
+    { status: "company_rejected", label: "Company Rejected", icon: XCircle, variant: "outline" },
+    { status: "withdrawn", label: "Withdraw", icon: Hand, variant: "outline" },
+  ],
+};
+
+const POST_APPLY_STATUSES = new Set(["applied", "engaged", "company_rejected", "withdrawn", "offer_accepted", "offer_declined"]);
 
 export function JobActions({ jobId, currentStatus }: { jobId: number; currentStatus: string }) {
   const { demoMode } = useDemoMode();
@@ -100,47 +120,67 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
           {error}
         </div>
       )}
+      {/* Post-apply transition CTAs */}
+      {POST_APPLY_TRANSITIONS[currentStatus] && (
+        <div className="flex flex-wrap gap-2 border-b border-border pb-3">
+          {POST_APPLY_TRANSITIONS[currentStatus].map((t) => (
+            <Button
+              key={t.status}
+              variant={t.variant || "outline"}
+              disabled={busy !== null || demoMode}
+              onClick={() => doAction(`transition-${t.status}`, () => api.jobs.transition(jobId, t.status))}
+            >
+              {busy === `transition-${t.status}` ? <Loader2 className="animate-spin" /> : <t.icon />}
+              {t.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          disabled={busy !== null || currentStatus === "reviewing" || demoMode}
-          onClick={() => doAction("reviewing", () => api.jobs.update(jobId, { status: "reviewing" }))}
-        >
-          {busy === "reviewing" ? <Loader2 className="animate-spin" /> : <Eye />}
-          Mark Reviewing
-        </Button>
+        {/* Pre-apply actions — hidden when in post-apply states */}
+        {!POST_APPLY_STATUSES.has(currentStatus) && (
+          <>
+            <Button
+              variant="outline"
+              disabled={busy !== null || currentStatus === "reviewing" || demoMode}
+              onClick={() => doAction("reviewing", () => api.jobs.update(jobId, { status: "reviewing" }))}
+            >
+              {busy === "reviewing" ? <Loader2 className="animate-spin" /> : <Eye />}
+              Mark Reviewing
+            </Button>
 
-        <Button
-          variant="outline"
-          disabled={busy !== null || currentStatus === "interested" || demoMode}
-          onClick={() => doAction("interested", () => api.jobs.update(jobId, { status: "interested" }))}
-        >
-          {busy === "interested" ? <Loader2 className="animate-spin" /> : <Star />}
-          Mark Interested
-        </Button>
+            <Button
+              variant="outline"
+              disabled={busy !== null || currentStatus === "interested" || demoMode}
+              onClick={() => doAction("interested", () => api.jobs.update(jobId, { status: "interested" }))}
+            >
+              {busy === "interested" ? <Loader2 className="animate-spin" /> : <Star />}
+              Mark Interested
+            </Button>
 
-        {/* Mark Applied — records APPLIED event */}
-        <Button
-          variant="default"
-          disabled={busy !== null || currentStatus === "applied" || demoMode}
-          onClick={() => doAction("apply", () => api.jobs.apply(jobId))}
-        >
-          {busy === "apply" ? <Loader2 className="animate-spin" /> : <Send />}
-          Mark Applied
-        </Button>
+            {/* Mark Applied — records APPLIED event */}
+            <Button
+              variant="default"
+              disabled={busy !== null || currentStatus === "applied" || demoMode}
+              onClick={() => doAction("apply", () => api.jobs.apply(jobId))}
+            >
+              {busy === "apply" ? <Loader2 className="animate-spin" /> : <Send />}
+              Mark Applied
+            </Button>
 
-        {/* Skip — removes from active queue */}
-        <Button
-          variant="outline"
-          disabled={busy !== null || demoMode}
-          onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
-        >
-          {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
-          Skip
-        </Button>
+            {/* Skip — removes from active queue */}
+            <Button
+              variant="outline"
+              disabled={busy !== null || demoMode}
+              onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
+            >
+              {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
+              Skip
+            </Button>
 
-        {/* Reject with reason dialog */}
-        <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+            {/* Reject with reason dialog */}
+            <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
           <DialogTrigger
             render={
               <Button variant="destructive" disabled={busy !== null || demoMode}>
@@ -219,6 +259,8 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
             </DialogFooter>
           </DialogContent>
         </Dialog>
+          </>
+        )}
 
         {currentStatus !== "ready" && (
           <Button
@@ -228,6 +270,18 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
           >
             {busy === "ready" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
             Reset to Ready
+          </Button>
+        )}
+
+        {/* Skip — available in post-apply states too */}
+        {POST_APPLY_STATUSES.has(currentStatus) && (
+          <Button
+            variant="outline"
+            disabled={busy !== null || demoMode}
+            onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
+          >
+            {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
+            Skip
           </Button>
         )}
 
