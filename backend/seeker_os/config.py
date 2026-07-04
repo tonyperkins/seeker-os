@@ -301,6 +301,18 @@ class CalibrationConfig(BaseModel):
     low_score_threshold: float | None = None
 
 
+class AutoAnalysisConfig(BaseModel):
+    """Auto-analysis policy (scoring_rubric.yml `auto_analysis` section).
+
+    When enabled, jobs whose effective net score meets min_score and have no
+    analysis verdict are analyzed automatically at the end of a pipeline run.
+    Disabled by default — analysis stays manual/on-demand unless opted in.
+    """
+    enabled: bool = False
+    min_score: float | None = None  # None → post_threshold at policy-eval time
+    max_per_run: int = Field(default=10, ge=1)
+
+
 class ScoringConfig(BaseModel):
     post_threshold: float = 6.0
     per_company_cap: int = 3
@@ -313,6 +325,7 @@ class ScoringConfig(BaseModel):
     research_modifiers: list[ResearchModifierConfig] = []
     verdict_caps: dict[str, float | None] = {}
     calibration: CalibrationConfig = CalibrationConfig()
+    auto_analysis: AutoAnalysisConfig = AutoAnalysisConfig()
 
     # Comp provenance: values above this are implausible regardless of source.
     # For parsed/none → treated as comp-unknown (no floor clear, no bonus).

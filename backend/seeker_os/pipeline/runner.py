@@ -5,6 +5,7 @@ See docs/PHASE1_SPEC.md §3.10 for the full spec.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -28,6 +29,8 @@ from seeker_os.discovery.ats_fetch import fetch_jd
 from seeker_os.crossref.jobsearch_repo import sync_repo, check_cross_reference
 from seeker_os.models import JobCard, PipelineProgressEvent, PipelineRunResult
 from seeker_os.events import record_event, transition_status, EventType, Actor
+
+logger = logging.getLogger(__name__)
 
 
 def _insert_job(db: sqlite3.Connection, job: JobCard, run_id: str | None = None) -> int:
@@ -586,6 +589,31 @@ def run_pipeline(
         print(f"  Cross-ref matches: {result.cross_ref_matches}")
         _emit("ranking", "Ranking", "completed",
               detail=f"{result.tier5_ready} ready, {result.tier5_capped} capped, {result.cross_ref_matches} cross-ref matches")
+
+    # -----------------------------------------------------------------------
+    # Auto-analysis (post-scoring, opt-in via scoring_rubric.yml auto_analysis)
+    # -----------------------------------------------------------------------
+    if (
+        not dry_run
+        and 4 in tier_set
+        and settings.scoring is not None
+        and settings.scoring.auto_analysis.enabled
+    ):
+        _emit("analysis", "Auto-Analysis", "started",
+              detail="Analyzing unanalyzed high-scoring jobs…")
+        try:
+            from seeker_os.analysis.auto_policy import run_auto_analysis
+            auto_result = run_auto_analysis(settings, db)
+            print(f"\nAuto-analysis: {auto_result['analyzed']} analyzed, "
+                  f"{auto_result['failed']} failed "
+                  f"(of {auto_result['candidates']} candidates)")
+            _emit("analysis", "Auto-Analysis", "completed",
+                  total=auto_result["candidates"],
+                  detail=f"{auto_result['analyzed']} analyzed, {auto_result['failed']} failed")
+        except Exception:
+            # Auto-analysis is best-effort enrichment — never fail the run.
+            logger.exception("Auto-analysis step failed")
+            _emit("analysis", "Auto-Analysis", "completed", detail="failed — see logs")
 
     # Record pipeline run
     if not dry_run:

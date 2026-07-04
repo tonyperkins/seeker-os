@@ -40,6 +40,7 @@ return `text/event-stream`.
 | `GET` | `/api/jobs/{job_id}/cross-ref` | Check job against cross-reference repo |
 | `GET` | `/api/jobs/{job_id}/analysis` | Get latest cached JD analysis |
 | `POST` | `/api/jobs/{job_id}/analysis` | Run JD analysis for a job (LLM-powered) |
+| `POST` | `/api/jobs/analysis/backfill` | One-shot analysis backfill for unanalyzed high-scorers — resyncs lost verdicts (no LLM), then analyzes up to `max_per_run` (body: `{limit}` to override); idempotent, re-run for large backlogs |
 | `GET` | `/api/jobs/{job_id}/company-research` | Get cached company research |
 | `POST` | `/api/jobs/{job_id}/company-research?force_refresh=false` | Run company research (retrieval + LLM dossier + URL verification) |
 
@@ -178,8 +179,10 @@ Response (`CalibrationReport`):
 | `modifier_precision` | Per rubric signal: of jobs where it fired, the fraction applied to (`precision`), `decided_precision` (applied / applied+skipped), and `lift` (precision / `base_apply_rate` — the meaningful read for broad signals; > 1 selects for applies, null when no applies yet) |
 
 Bucket width and miss thresholds come from `scoring_rubric.yml` (`calibration`
-section); thresholds default to `post_threshold` when unset. Returns `409` if
-no scoring rubric is configured.
+section); thresholds default to `post_threshold` when unset. The report also
+carries `high_score_unanalyzed` — scored jobs at/above `high_score_threshold`
+with no analysis verdict (uncapped net scores). Returns `409` if no scoring
+rubric is configured.
 
 ---
 

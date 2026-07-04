@@ -8,7 +8,7 @@ These are separate from the internal models in models.py because:
 
 from __future__ import annotations
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -559,6 +559,22 @@ class ResponseRateStats(BaseModel):
     by_source: dict[str, dict] = {}
 
 
+class AnalysisBackfillRequest(BaseModel):
+    """POST /api/jobs/analysis/backfill body."""
+    limit: int | None = Field(default=None, ge=1)  # None → auto_analysis.max_per_run
+
+
+class AnalysisBackfillResponse(BaseModel):
+    """POST /api/jobs/analysis/backfill result."""
+    resynced: int = 0            # verdicts re-denormalized from existing analyses (no LLM)
+    candidates: int = 0          # jobs selected for LLM analysis this batch
+    analyzed: int = 0
+    failed: int = 0
+    job_ids: list[int] = []
+    errors: list[str] = []
+    remaining_unanalyzed: int = 0  # high-scorers still without a verdict after this batch
+
+
 class ScoreBucket(BaseModel):
     """One net-score bucket in the calibration report."""
     bucket: str                  # display label, e.g. "6–7"
@@ -613,6 +629,7 @@ class CalibrationReport(BaseModel):
     low_score_threshold: float   # false negatives: applied with net < this
     total_scored: int = 0
     total_unscored: int = 0      # jobs with no score at all (excluded from the report)
+    high_score_unanalyzed: int = 0  # net >= high threshold but no analysis verdict (uncapped scores)
     base_apply_rate: float = 0.0 # total_applied / total_scored — reference point for modifier lift
     total_applied: int = 0
     total_skipped: int = 0

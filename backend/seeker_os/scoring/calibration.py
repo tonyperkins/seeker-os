@@ -163,6 +163,7 @@ def build_calibration_report(
     false_negatives: list[dict] = []
     modifier_tallies: dict[str, dict[str, int]] = {}
     unscored = 0
+    high_score_unanalyzed = 0
     totals = {DECISION_APPLIED: 0, DECISION_SKIPPED: 0, DECISION_IGNORED: 0}
 
     for row in job_rows:
@@ -176,6 +177,11 @@ def build_calibration_report(
             continue
 
         totals[decision] += 1
+
+        # Coverage gap: a high scorer with no verdict has no verdict cap on its
+        # net score — the same jobs the auto_analysis policy targets.
+        if net >= high_threshold and row["analysis_verdict"] is None:
+            high_score_unanalyzed += 1
 
         idx = _bucket_index(net, bucket_width)
         counts = bucket_counts.setdefault(
@@ -262,6 +268,7 @@ def build_calibration_report(
         "low_score_threshold": low_threshold,
         "total_scored": total_scored,
         "total_unscored": unscored,
+        "high_score_unanalyzed": high_score_unanalyzed,
         "base_apply_rate": base_rate,
         "total_applied": totals[DECISION_APPLIED],
         "total_skipped": totals[DECISION_SKIPPED],

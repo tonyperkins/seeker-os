@@ -6,7 +6,11 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from seeker_os.api.schemas import JobAnalysisResponse
+from seeker_os.api.schemas import (
+    AnalysisBackfillRequest,
+    AnalysisBackfillResponse,
+    JobAnalysisResponse,
+)
 from seeker_os.analysis.jd_analyzer import analyze_job, get_latest_analysis
 
 logger = logging.getLogger(__name__)
@@ -57,6 +61,52 @@ def _dict_to_response(data: dict) -> JobAnalysisResponse:
         red_flags=data.get("red_flags", []),
         confidence=data.get("confidence", 0.0),
     )
+
+
+@router.post("/analysis/backfill", response_model=AnalysisBackfillResponse)
+def backfill_analysis(body: AnalysisBackfillRequest | None = None):
+    """One-shot backfill of analysis for unanalyzed high-scoring jobs.
+
+    Two phases, both idempotent (already-analyzed jobs are skipped):
+    1. Resync — jobs with an existing job_analyses row but a NULL
+       analysis_verdict get the verdict re-denormalized, no LLM call.
+    2. Analyze — remaining verdict-less jobs at/above the auto_analysis
+       min_score are analyzed, respecting max_per_run (or the request's
+       limit override). Re-run the endpoint to work through a large backlog
+       in rate-limited batches.
+    """
+    from seeker_os.analysis.auto_policy import (
+        count_unanalyzed_high_scorers,
+        resync_verdicts_from_analyses,
+        run_auto_analysis,
+    )
+    from seeker_os.config import get_settings
+    from seeker_os.database import get_connection
+
+    settings = get_settings()
+    if settings.scoring is None:
+        raise HTTPException(
+            status_code=409,
+            detail="No scoring rubric configured — scoring_rubric.yml is required for backfill",
+        )
+
+    limit = body.limit if body else None
+    db = get_connection()
+    try:
+        resynced = resync_verdicts_from_analyses(db, settings.scoring)
+        result = run_auto_analysis(settings, db, limit=limit)
+        remaining = count_unanalyzed_high_scorers(db, settings.scoring)
+        return AnalysisBackfillResponse(
+            resynced=resynced,
+            candidates=result["candidates"],
+            analyzed=result["analyzed"],
+            failed=result["failed"],
+            job_ids=result["job_ids"],
+            errors=result["errors"],
+            remaining_unanalyzed=remaining,
+        )
+    finally:
+        db.close()
 
 
 @router.get("/{job_id}/analysis", response_model=JobAnalysisResponse)

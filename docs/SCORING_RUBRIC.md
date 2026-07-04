@@ -258,3 +258,33 @@ Three outputs:
 
 All values are config-driven — no thresholds are hardcoded in Python. When the
 `calibration` section is absent the defaults above apply.
+
+The report also surfaces `high_score_unanalyzed` — scored jobs at/above
+`high_score_threshold` with no analysis verdict. These jobs have no verdict
+cap on their net score, so a pure keyword-matched score presents uncapped;
+the count makes the coverage gap visible in the same place misses are.
+
+## Auto-Analysis Policy
+
+JD analysis is manual/on-demand by default (the Analyze button →
+`POST /api/jobs/{id}/analysis`). The `auto_analysis` section of
+`scoring_rubric.yml` opts in to automatic analysis at the end of each
+pipeline run for jobs whose effective net score (`net_score` →
+`research_adjusted_score` → `score`) meets `min_score` and that have no
+verdict yet. Candidates are analyzed highest-score-first so the rate limit
+spends LLM budget where it matters; per-job failures are logged and never
+fail the pipeline run.
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `false` | Turn the policy on; absent section = disabled (current behavior preserved) |
+| `min_score` | `null` → `post_threshold` | Effective-net-score floor for auto-analysis |
+| `max_per_run` | `10` | Max LLM analyses per pipeline run / backfill batch |
+
+For existing backlogs, `POST /api/jobs/analysis/backfill` runs one batch on
+demand: it first re-denormalizes verdicts for jobs that already have a
+`job_analyses` row but a NULL `jobs.analysis_verdict` (no LLM call — repairs
+rows damaged by DB restores), then analyzes remaining verdict-less
+high-scorers up to `max_per_run` (or the request's `limit`). Already-analyzed
+jobs are always skipped, so re-running the endpoint is safe and works through
+a large backlog in batches.

@@ -187,3 +187,13 @@ scoring:
     bucket_width: 1.0
     high_score_threshold: null
     low_score_threshold: null
+
+  # Auto-analysis policy — run JD analysis automatically at the end of a
+  # pipeline run for jobs whose effective net score meets min_score and that
+  # have no analysis verdict yet. Disabled by default (analysis stays
+  # manual/on-demand). min_score null defaults to post_threshold.
+  # max_per_run caps LLM calls per pipeline run / backfill batch.
+  auto_analysis:
+    enabled: false
+    min_score: null
+    max_per_run: 10
