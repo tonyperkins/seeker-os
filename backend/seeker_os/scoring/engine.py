@@ -165,7 +165,28 @@ def _check_modifier(
             return True
         return False
 
+    elif check == "domain_mismatch":
+        # Off-domain pattern density check: fires when the number of DISTINCT
+        # patterns from mod.patterns matching the JD text meets min_distinct_hits.
+        # This catches roles that match the title (e.g. "SRE") but actually
+        # belong to a different engineering domain (e.g. carrier/network engineering).
+        if not mod.patterns:
+            return False
+        matched = _domain_mismatch_matches(mod.patterns, jd_text)
+        if len(matched) >= mod.min_distinct_hits:
+            return True
+        return False
+
     return False
+
+
+def _domain_mismatch_matches(patterns: list[str], jd_text: str) -> list[str]:
+    """Return the list of patterns that match in jd_text (distinct, case-insensitive)."""
+    matched = []
+    for p in patterns:
+        if _check_pattern(jd_text, p):
+            matched.append(p)
+    return matched
 
 
 def score_job(
@@ -298,7 +319,11 @@ def score_job(
                            location_fallback_patterns=rubric.location_fallback_patterns):
             negative_total += mod.points
             fired_modifiers[mod.signal] = mod.points
-            reasons.append(f"{mod.points} {mod.signal}")
+            if mod.check == "domain_mismatch" and mod.patterns:
+                matched = _domain_mismatch_matches(mod.patterns, jd_text)
+                reasons.append(f"{mod.points} {mod.signal} (matched: {', '.join(matched)})")
+            else:
+                reasons.append(f"{mod.points} {mod.signal}")
 
     # Step 6: Clamp
     raw_score = base_score + positive_total + negative_total

@@ -266,6 +266,8 @@ class ModifierRule(BaseModel):
     threshold_max: int | None = None
     requires_comp_below: int | None = None
     requires_comp_at_least: int | None = None
+    patterns: list[str] | None = None  # for domain_mismatch check: off-domain term regexes
+    min_distinct_hits: int = 3  # for domain_mismatch check: distinct pattern matches needed to fire
 
 
 class FreshnessConfig(BaseModel):

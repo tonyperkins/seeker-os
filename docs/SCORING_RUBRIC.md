@@ -74,6 +74,36 @@ All matching patterns are summed. Configured in `scoring_rubric.yml` under
 | Large enterprise | -1.5 | `fortune\s*(?:500\|100\|50)` |
 | Staffing agency | -1.5 | `staffing\|consulting llc\|recruiting agency` |
 | Missing location + no remote | -1.5 | No location AND no "remote" in JD |
+| Domain mismatch | -4.0 | Off-domain pattern density — fires when ≥ `min_distinct_hits` (default 3) **distinct** patterns from `patterns` match the JD text |
+
+**Domain mismatch check (`domain_mismatch`):** Catches roles that match the
+title (e.g. "Senior SRE") but actually belong to a different engineering
+domain (e.g. carrier/network engineering). The rubric entry supplies a
+`patterns` list of off-domain term regexes and a `min_distinct_hits`
+threshold (default 3). The check fires when the number of **distinct**
+patterns matching the JD text meets the threshold — the same term repeated
+many times counts as 1 distinct hit. Matched patterns are recorded in the
+score breakdown reason string for auditability. Penalty magnitude, pattern
+list, and threshold all live in `scoring_rubric.yml` — nothing domain-specific
+in Python.
+
+Example config:
+
+```yaml
+- signal: "domain_mismatch"
+  check: "domain_mismatch"
+  points: -4.0
+  min_distinct_hits: 3
+  patterns:
+    - "\\bcisco\\s+ios\\b"
+    - "\\bjuniper\\b"
+    - "\\bbgp\\b"
+    - "\\bospf\\b"
+    - "sd.?wan"
+    - "\\bnoc\\b"
+    - "carrier.?grade"
+    - "\\bmpls\\b"
+```
 
 **Note on comp thresholds vs Tier 2 hard filter:**
 The Tier 2 hard filter rejects jobs with structured comp below the configured floor.

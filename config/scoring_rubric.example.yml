@@ -99,6 +99,24 @@ scoring:
     - signal: "missing_location"
       points: -1.5
       check: "no_location_no_remote"
+    # Domain mismatch — fires when enough off-domain patterns match the JD,
+    # indicating the role belongs to a different engineering domain despite a
+    # matching title. patterns is a list of regexes; min_distinct_hits is the
+    # number of DISTINCT patterns that must match to fire (default 3).
+    # Customize the patterns for domains you want to penalize.
+    - signal: "domain_mismatch"
+      check: "domain_mismatch"
+      points: -4.0
+      min_distinct_hits: 3
+      patterns:
+        - "\\bcisco\\s+ios\\b"
+        - "\\bjuniper\\b"
+        - "\\bbgp\\b"
+        - "\\bospf\\b"
+        - "sd.?wan"
+        - "\\bnoc\\b"
+        - "carrier.?grade"
+        - "\\bmpls\\b"
 
   # Freshness (minor ranking factor, not a score modifier)
   freshness:
