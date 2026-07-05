@@ -262,6 +262,18 @@ def build_calibration_report(
     false_positives.sort(key=lambda m: m["net_score"], reverse=True)
     false_negatives.sort(key=lambda m: m["net_score"])
 
+    # --- Skip reason summary -------------------------------------------------
+    # Count how many skipped decisions have each reason (and how many have none).
+    skip_reason_summary: dict[str, int] = {}
+    skip_no_reason = 0
+    for entry in decisions.values():
+        if entry["decision"] == DECISION_SKIPPED:
+            reason = entry["reason"]
+            if reason:
+                skip_reason_summary[reason] = skip_reason_summary.get(reason, 0) + 1
+            else:
+                skip_no_reason += 1
+
     return {
         "bucket_width": bucket_width,
         "high_score_threshold": high_threshold,
@@ -273,6 +285,8 @@ def build_calibration_report(
         "total_applied": totals[DECISION_APPLIED],
         "total_skipped": totals[DECISION_SKIPPED],
         "total_ignored": totals[DECISION_IGNORED],
+        "skip_reason_summary": skip_reason_summary,
+        "skip_no_reason": skip_no_reason,
         "buckets": buckets,
         "false_positives": false_positives,
         "false_negatives": false_negatives,

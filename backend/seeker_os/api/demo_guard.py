@@ -42,6 +42,7 @@ _ALLOWED_PATHS = {
     "/api/analytics/funnel",
     "/api/analytics/calibration",
     "/api/analytics/response-rate",
+    "/api/jobs/skipped/no-reason",  # read-only: list skips missing reasons
     "/api/backup",
 }
 

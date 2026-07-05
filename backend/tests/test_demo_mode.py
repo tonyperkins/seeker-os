@@ -244,6 +244,7 @@ def test_demo_guard_allowlist_does_not_wave_through_get_side_effects(demo_client
         "/api/jobs/{job_id}/cross-ref",
         "/api/jobs/{job_id}/company-research",
         "/api/jobs/{job_id}/analysis",
+        "/api/jobs/skipped/no-reason",
         "/api/pipeline/runs",
         "/api/pipeline/runs/{run_id}",
         "/api/resumes",

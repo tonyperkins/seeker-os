@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { api, type JobSummary } from "@/lib/api";
 import { AddJobDialog } from "@/components/add-job-dialog";
+import { BulkAnnotateSkips } from "@/components/bulk-annotate-skips";
 import { usePersistentState } from "@/lib/use-persistent-state";
 import {
   DropdownMenu,
@@ -332,7 +333,10 @@ function JobsPageInner() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Jobs</h1>
         </div>
-        <AddJobDialog onCreated={fetchJobs} />
+        <div className="flex items-center gap-2">
+          <BulkAnnotateSkips />
+          <AddJobDialog onCreated={fetchJobs} />
+        </div>
       </div>
 
       {/* Filters */}

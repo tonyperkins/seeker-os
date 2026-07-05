@@ -69,6 +69,7 @@ config/queries.yml
 config/providers.yml
 config/filters.yml
 config/company_research.yml
+config/skip_reasons.yml
 config/blacklist.txt
 
 # Environment

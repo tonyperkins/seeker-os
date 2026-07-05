@@ -600,6 +600,19 @@ class CompanyResearchConfig(BaseModel):
     fit_preferences: FitPreferencesConfig = FitPreferencesConfig()
 
 
+class SkipReason(BaseModel):
+    """A single structured skip/reject reason from skip_reasons.yml."""
+    key: str
+    label: str = ""
+    hint: str = ""
+    free_text: bool = False
+
+
+class SkipReasonsConfig(BaseModel):
+    """Config for skip_reasons.yml — structured reason choices for skip/reject."""
+    skip_reasons: list[SkipReason] = []
+
+
 # ---------------------------------------------------------------------------
 # Settings — top-level config container
 # ---------------------------------------------------------------------------
@@ -626,6 +639,7 @@ class Settings:
         self.identity: IdentityConfig | None = None
         self.channel_rules: ChannelRulesConfig | None = None
         self.company_research: CompanyResearchConfig | None = None
+        self.skip_reasons: SkipReasonsConfig | None = None
         self.lifecycle: LifecycleConfig = LifecycleConfig()
 
         self._load_all()
@@ -683,6 +697,11 @@ class Settings:
             if data:
                 self.company_research = CompanyResearchConfig(**data)
 
+        if (self.config_dir / "skip_reasons.demo.yml").exists():
+            data = self._load_yaml("skip_reasons.demo.yml")
+            if data:
+                self.skip_reasons = SkipReasonsConfig(**data)
+
         # Demo mode has no live sources, queries, or providers.
         self.sources = SourcesConfig()
         self.queries = QueriesConfig()
@@ -732,6 +751,11 @@ class Settings:
             data = self._load_yaml("company_research.yml")
             if data:
                 self.company_research = CompanyResearchConfig(**data)
+
+        if (self.config_dir / "skip_reasons.yml").exists():
+            data = self._load_yaml("skip_reasons.yml")
+            if data:
+                self.skip_reasons = SkipReasonsConfig(**data)
 
     def load_blacklist(self) -> list[str]:
         """Load blacklist.txt (flat list, one company per line)."""

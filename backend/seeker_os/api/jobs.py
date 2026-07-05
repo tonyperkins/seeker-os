@@ -6,10 +6,11 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from seeker_os.api.schemas import (
-    JobSummary, JobDetail, JobUpdate, JobReject, JobCreate, JobCreateResponse,
+    JobSummary, JobDetail, JobUpdate, JobReject, JobSkip, JobCreate, JobCreateResponse,
     JobOverride, MessageResponse, ApplicationEvent, ApplicationEventCreate,
     PostApplyTransition, EngagedEventCreate, CleanStartCreate,
     RefilterRescoreRequest, RefilterRescoreResult,
+    SkipReasonAnnotate, NoReasonSkip,
 )
 from seeker_os.database import get_connection, json_decode, json_encode
 from seeker_os.events import (
@@ -898,20 +899,129 @@ def reject_job(job_id: int, body: JobReject):
 
 
 @router.post("/{job_id}/skip", response_model=MessageResponse)
-def skip_job(job_id: int):
-    """Skip a job — removes it from the active queue (sets status to 'skipped')."""
+def skip_job(job_id: int, body: JobSkip | None = None):
+    """Skip a job — removes it from the active queue (sets status to 'skipped').
+
+    Optionally accepts a structured reason and free-text details, written to
+    the event metadata so the calibration report can pick them up.
+    """
     db = get_connection()
     try:
         row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
+        metadata = None
+        extra_sets = {"reject_reason": None}
+        if body and body.reason:
+            metadata = {"reason": body.reason}
+            if body.details:
+                metadata["details"] = body.details
+            extra_sets["reject_reason"] = body.reason
+
         transition_status(
             db, job_id, "skipped", EventType.SKIPPED, Actor.CANDIDATE,
-            extra_sets={"reject_reason": None},
+            extra_sets=extra_sets,
+            metadata=metadata,
         )
         db.commit()
         return MessageResponse(message=f"Job {job_id} skipped")
+    finally:
+        db.close()
+
+
+@router.get("/skipped/no-reason", response_model=list[NoReasonSkip])
+def list_no_reason_skips():
+    """List skipped/rejected jobs whose most recent candidate skip/rejected event
+    has no reason in its metadata.
+
+    Used by the bulk-annotate view to find jobs that need a skip reason.
+    """
+    db = get_connection()
+    try:
+        rows = db.execute(
+            """
+            SELECT j.id, j.title, j.company, j.status,
+                   e.id AS event_id, e.event_type, e.occurred_at, e.metadata
+            FROM jobs j
+            JOIN application_events e ON e.job_id = j.id
+            WHERE e.actor = ?
+              AND e.event_type IN (?, ?)
+              AND e.id = (
+                  SELECT MAX(e2.id) FROM application_events e2
+                  WHERE e2.job_id = j.id
+                    AND e2.actor = ?
+                    AND e2.event_type IN (?, ?)
+              )
+              AND (e.metadata IS NULL
+                   OR json_extract(e.metadata, '$.reason') IS NULL
+                   OR json_extract(e.metadata, '$.reason') = '')
+            ORDER BY e.occurred_at DESC
+            """,
+            (
+                Actor.CANDIDATE, EventType.SKIPPED, EventType.REJECTED,
+                Actor.CANDIDATE, EventType.SKIPPED, EventType.REJECTED,
+            ),
+        ).fetchall()
+        return [
+            NoReasonSkip(
+                job_id=r["id"],
+                title=r["title"],
+                company=r["company"],
+                status=r["status"],
+                event_id=r["event_id"],
+                event_type=r["event_type"],
+                occurred_at=r["occurred_at"],
+            )
+            for r in rows
+        ]
+    finally:
+        db.close()
+
+
+@router.post("/{job_id}/annotate-skip", response_model=MessageResponse)
+def annotate_skip(job_id: int, body: SkipReasonAnnotate):
+    """Add a reason to the most recent candidate skip/rejected event for a job.
+
+    Updates the event metadata in-place (the event itself is not changed —
+    only its metadata gains a reason field). Also updates the job's
+    reject_reason column for consistency.
+    """
+    db = get_connection()
+    try:
+        row = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        event_row = db.execute(
+            """
+            SELECT id, metadata FROM application_events
+            WHERE job_id = ? AND actor = ? AND event_type IN (?, ?)
+            ORDER BY id DESC LIMIT 1
+            """,
+            (job_id, Actor.CANDIDATE, EventType.SKIPPED, EventType.REJECTED),
+        ).fetchone()
+        if not event_row:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No skip/rejected event found for job {job_id}",
+            )
+
+        metadata = json_decode(event_row["metadata"]) or {}
+        metadata["reason"] = body.reason
+        if body.details:
+            metadata["details"] = body.details
+
+        db.execute(
+            "UPDATE application_events SET metadata = ? WHERE id = ?",
+            (json_encode(metadata), event_row["id"]),
+        )
+        db.execute(
+            "UPDATE jobs SET reject_reason = ? WHERE id = ?",
+            (body.reason, job_id),
+        )
+        db.commit()
+        return MessageResponse(message=f"Job {job_id} skip reason annotated: {body.reason}")
     finally:
         db.close()
 

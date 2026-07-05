@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
-from seeker_os.api.schemas import SettingsResponse, SettingUpdate, MessageResponse
+from seeker_os.api.schemas import SettingsResponse, SettingUpdate, MessageResponse, SkipReasonOption
 from seeker_os.config import Settings
 from seeker_os.database import get_connection
 
@@ -45,6 +45,16 @@ def get_settings():
         )
         profile_configured = not is_placeholder
 
+    # Skip reasons from config
+    skip_reasons = []
+    if settings.skip_reasons and settings.skip_reasons.skip_reasons:
+        skip_reasons = [
+            SkipReasonOption(
+                key=r.key, label=r.label, hint=r.hint, free_text=r.free_text,
+            )
+            for r in settings.skip_reasons.skip_reasons
+        ]
+
     return SettingsResponse(
         filters=filters_data,
         scoring=scoring_data,
@@ -52,6 +62,7 @@ def get_settings():
         profile_loaded=settings.profile is not None,
         profile_configured=profile_configured,
         queries_count=len(settings.queries.queries) if settings.queries else 0,
+        skip_reasons=skip_reasons,
     )
 
 

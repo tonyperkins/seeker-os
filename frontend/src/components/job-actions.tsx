@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   XCircle,
@@ -28,30 +28,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { api } from "@/lib/api";
+import { api, type SkipReasonOption } from "@/lib/api";
 import { useDemoMode } from "@/lib/demo";
-
-const REJECT_REASONS = [
-  "comp_too_low",
-  "wrong_seniority",
-  "wrong_location",
-  "tech_stack_mismatch",
-  "not_remote",
-  "duplicate",
-  "not_relevant",
-  "other",
-];
-
-const REASON_HINTS: Record<string, string> = {
-  comp_too_low: "e.g. 'Max is $140K, below my floor of $150K'",
-  wrong_seniority: "e.g. 'Entry-level role, I need senior+'",
-  wrong_location: "e.g. 'Requires relocation to NYC'",
-  tech_stack_mismatch: "e.g. 'Heavy on Java, I'm Python/Go'",
-  not_remote: "e.g. '4 days onsite, I need full remote'",
-  duplicate: "e.g. 'Same job as #42, different ATS posting'",
-  not_relevant: "e.g. 'Solutions architect role, not infra/SRE'",
-  other: "Describe what specifically doesn't fit...",
-};
 
 type TransitionDef = { status: string; label: string; icon: React.ComponentType<{ className?: string }>; variant?: "default" | "outline" | "destructive" };
 
@@ -79,9 +57,24 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
   const [rejectReason, setRejectReason] = useState("");
   const [rejectDetails, setRejectDetails] = useState("");
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [skipOpen, setSkipOpen] = useState(false);
+  const [skipReason, setSkipReason] = useState("");
+  const [skipDetails, setSkipDetails] = useState("");
+  const [skipReasons, setSkipReasons] = useState<SkipReasonOption[]>([]);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideNote, setOverrideNote] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  useEffect(() => {
+    api.settings.get().then((s) => {
+      if (s.skip_reasons?.length) setSkipReasons(s.skip_reasons);
+    }).catch(() => {});
+  }, []);
+
+  const reasonHint = (key: string): string => {
+    const r = skipReasons.find((sr) => sr.key === key);
+    return r?.hint || "What specifically about this job doesn't fit?";
+  };
 
   async function doAction(
     key: string,
@@ -169,15 +162,91 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
               Mark Applied
             </Button>
 
-            {/* Skip — removes from active queue */}
-            <Button
-              variant="outline"
-              disabled={busy !== null || demoMode}
-              onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
-            >
-              {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
-              Skip
-            </Button>
+            {/* Skip — opens optional reason dialog (dismissible — skip proceeds without reason) */}
+            <Dialog open={skipOpen} onOpenChange={setSkipOpen}>
+          <DialogTrigger
+            render={
+              <Button variant="outline" disabled={busy !== null || demoMode}>
+                {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
+                Skip
+              </Button>
+            }
+          />
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Skip job</DialogTitle>
+              <DialogDescription>
+                Optional: choose a reason to help calibrate scoring. You can skip
+                without a reason — just click Skip below.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="skip-reason">
+                  Reason
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    (optional)
+                  </span>
+                </Label>
+                <select
+                  id="skip-reason"
+                  value={skipReason}
+                  onChange={(e) => {
+                    setSkipReason(e.target.value);
+                    setSkipDetails("");
+                  }}
+                  className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                >
+                  <option value="" className="bg-background text-foreground">No reason (just skip)</option>
+                  {skipReasons.map((r) => (
+                    <option key={r.key} value={r.key} className="bg-background text-foreground">
+                      {r.label || r.key}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {skipReason && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="skip-details">
+                    Details
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      (optional but helpful)
+                    </span>
+                  </Label>
+                  <Textarea
+                    id="skip-details"
+                    value={skipDetails}
+                    onChange={(e) => setSkipDetails(e.target.value)}
+                    placeholder={reasonHint(skipReason)}
+                    rows={3}
+                    className="text-sm"
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button
+                variant="outline"
+                disabled={busy !== null || demoMode}
+                onClick={() =>
+                  doAction(
+                    "skip",
+                    () => api.jobs.skip(jobId, skipReason || undefined, skipDetails.trim() || undefined),
+                    true,
+                  ).then(() => {
+                    setSkipOpen(false);
+                    setSkipReason("");
+                    setSkipDetails("");
+                  })
+                }
+              >
+                {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
+                Skip{skipReason ? " with reason" : ""}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
             {/* Reject with reason dialog */}
             <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
@@ -210,9 +279,9 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
                   className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                 >
                   <option value="" className="bg-background text-foreground">Select a reason…</option>
-                  {REJECT_REASONS.map((r) => (
-                    <option key={r} value={r} className="bg-background text-foreground">
-                      {r}
+                  {skipReasons.map((r) => (
+                    <option key={r.key} value={r.key} className="bg-background text-foreground">
+                      {r.label || r.key}
                     </option>
                   ))}
                 </select>
@@ -229,7 +298,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
                     id="reject-details"
                     value={rejectDetails}
                     onChange={(e) => setRejectDetails(e.target.value)}
-                    placeholder={REASON_HINTS[rejectReason] || "What specifically about this job makes you reject it?"}
+                    placeholder={reasonHint(rejectReason)}
                     rows={3}
                     className="text-sm"
                   />
@@ -273,12 +342,12 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
           </Button>
         )}
 
-        {/* Skip — available in post-apply states too */}
+        {/* Skip — available in post-apply states too (opens reason dialog) */}
         {POST_APPLY_STATUSES.has(currentStatus) && (
           <Button
             variant="outline"
             disabled={busy !== null || demoMode}
-            onClick={() => doAction("skip", () => api.jobs.skip(jobId))}
+            onClick={() => setSkipOpen(true)}
           >
             {busy === "skip" ? <Loader2 className="animate-spin" /> : <SkipForward />}
             Skip

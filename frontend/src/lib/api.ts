@@ -261,6 +261,23 @@ export interface FunnelStats {
   score_distribution: Record<string, number>;
 }
 
+export interface SkipReasonOption {
+  key: string;
+  label: string;
+  hint: string;
+  free_text: boolean;
+}
+
+export interface NoReasonSkip {
+  job_id: number;
+  title: string | null;
+  company: string | null;
+  status: string;
+  event_id: number;
+  event_type: string;
+  occurred_at: string;
+}
+
 export interface SettingsResponse {
   filters: Record<string, unknown> | null;
   scoring: Record<string, unknown> | null;
@@ -268,6 +285,7 @@ export interface SettingsResponse {
   profile_loaded: boolean;
   profile_configured: boolean;
   queries_count: number;
+  skip_reasons: SkipReasonOption[];
 }
 
 export interface ContactInfo {
@@ -495,8 +513,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ reason, details }),
       }),
-    skip: (id: number) =>
-      fetchAPI<{ message: string }>(`/api/jobs/${id}/skip`, { method: "POST" }),
+    skip: (id: number, reason?: string, details?: string) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/skip`, {
+        method: "POST",
+        body: JSON.stringify({ reason, details }),
+      }),
     apply: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/apply`, { method: "POST" }),
     delete: (id: number) =>
@@ -528,6 +549,13 @@ export const api = {
     },
     refilterRescore: (data: { job_ids?: number[]; run_id?: string }) =>
       fetchAPI<RefilterRescoreResult[]>(`/api/jobs/refilter-rescore`, { method: "POST", body: JSON.stringify(data) }),
+    listNoReasonSkips: () =>
+      fetchAPI<NoReasonSkip[]>("/api/jobs/skipped/no-reason"),
+    annotateSkip: (id: number, reason: string, details?: string) =>
+      fetchAPI<{ message: string }>(`/api/jobs/${id}/annotate-skip`, {
+        method: "POST",
+        body: JSON.stringify({ reason, details }),
+      }),
   },
 
   // Pipeline

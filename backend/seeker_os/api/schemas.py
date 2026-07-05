@@ -237,6 +237,37 @@ class JobReject(BaseModel):
     details: str | None = None  # free-text feedback on why the job was rejected
 
 
+class JobSkip(BaseModel):
+    """POST /api/jobs/{id}/skip."""
+    reason: str | None = None
+    details: str | None = None
+
+
+class SkipReasonAnnotate(BaseModel):
+    """POST /api/jobs/{id}/annotate-skip — add a reason to an existing skip/rejected event."""
+    reason: str
+    details: str | None = None
+
+
+class SkipReasonOption(BaseModel):
+    """A single skip reason option for the UI."""
+    key: str
+    label: str = ""
+    hint: str = ""
+    free_text: bool = False
+
+
+class NoReasonSkip(BaseModel):
+    """A skipped/rejected job with no reason in its event metadata."""
+    job_id: int
+    title: str | None = None
+    company: str | None = None
+    status: str
+    event_id: int
+    event_type: str
+    occurred_at: str
+
+
 class MessageResponse(BaseModel):
     """Generic message response."""
     message: str
@@ -430,6 +461,7 @@ class SettingsResponse(BaseModel):
     profile_loaded: bool = False
     profile_configured: bool = False
     queries_count: int = 0
+    skip_reasons: list[SkipReasonOption] = []
 
 
 class SettingUpdate(BaseModel):
@@ -634,6 +666,8 @@ class CalibrationReport(BaseModel):
     total_applied: int = 0
     total_skipped: int = 0
     total_ignored: int = 0
+    skip_reason_summary: dict[str, int] = {}   # reason key → count
+    skip_no_reason: int = 0                    # skipped with no reason in metadata
     buckets: list[ScoreBucket] = []
     false_positives: list[CalibrationMiss] = []
     false_negatives: list[CalibrationMiss] = []

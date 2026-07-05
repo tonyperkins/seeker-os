@@ -28,8 +28,10 @@ return `text/event-stream`.
 | `GET` | `/api/jobs/{job_id}` | Full job detail — all fields, score, research, analysis |
 | `PATCH` | `/api/jobs/{job_id}` | Update job status, notes, or pinned state (status_changed event) |
 | `DELETE` | `/api/jobs/{job_id}` | Delete job + all dependent records (resumes, events, research, analyses) |
-| `POST` | `/api/jobs/{job_id}/reject` | Reject with reason (rejected event) |
-| `POST` | `/api/jobs/{job_id}/skip` | Skip — removes from active queue (skipped event) |
+| `POST` | `/api/jobs/{job_id}/reject` | Reject with reason (rejected event, body: `{reason, details}`) |
+| `POST` | `/api/jobs/{job_id}/skip` | Skip — removes from active queue (skipped event, optional body: `{reason, details}`) |
+| `POST` | `/api/jobs/{job_id}/annotate-skip` | Add a reason to an existing skip/rejected event (body: `{reason, details}`) |
+| `GET` | `/api/jobs/skipped/no-reason` | List skipped/rejected jobs whose latest event has no reason in metadata |
 | `POST` | `/api/jobs/{job_id}/override` | Override a rejection — auditable (overridden event) |
 | `POST` | `/api/jobs/{job_id}/apply` | Mark as applied (applied event, actor=candidate) |
 | `POST` | `/api/jobs/{job_id}/transition` | Post-apply status transition (company_rejected, withdrawn, engaged, offer_accepted, offer_declined) |
@@ -177,12 +179,18 @@ Response (`CalibrationReport`):
 | `false_positives` | High-score-but-skipped jobs (net ≥ `high_score_threshold`), worst first — each with the fired base-score pattern, positive/negative modifiers, research factors, and verdict |
 | `false_negatives` | Low-score-but-applied jobs (net < `low_score_threshold`), lowest first — same inspectable breakdown |
 | `modifier_precision` | Per rubric signal: of jobs where it fired, the fraction applied to (`precision`), `decided_precision` (applied / applied+skipped), and `lift` (precision / `base_apply_rate` — the meaningful read for broad signals; > 1 selects for applies, null when no applies yet) |
+| `skip_reason_summary` | Dict of skip reason key → count (from `application_events` metadata) |
+| `skip_no_reason` | Count of skipped/rejected jobs with no reason in their event metadata |
 
 Bucket width and miss thresholds come from `scoring_rubric.yml` (`calibration`
 section); thresholds default to `post_threshold` when unset. The report also
 carries `high_score_unanalyzed` — scored jobs at/above `high_score_threshold`
 with no analysis verdict (uncapped net scores). Returns `409` if no scoring
 rubric is configured.
+
+Skip reasons are sourced from `config/skip_reasons.yml` (see
+`config/skip_reasons.example.yml` for the template). The `GET /api/settings`
+endpoint includes the configured `skip_reasons` array for the frontend.
 
 ---
 
