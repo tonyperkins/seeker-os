@@ -141,17 +141,75 @@ class TestVerdictCaps:
         # adjusted = 2.0, SKIP cap = 3.0 → min(2.0, 3.0) = 2.0 (cap only lowers)
         assert result == 2.0
 
-    def test_unknown_verdict_no_cap(self):
-        """An unrecognized verdict gets no cap (treated like APPLY)."""
+    def test_unknown_verdict_falls_back_to_conditional_cap(self):
+        """An unrecognized verdict with no unknown_verdict_cap configured
+        falls back to the CONDITIONAL cap (7.0) — rogue LLM output like
+        "CONDITIONAL_PLUS" should not rank higher than well-formed CONDITIONAL."""
         result = compute_net_score(
-            base_score=7.0,
+            base_score=9.0,
             research_delta=0.0,
-            analysis_verdict="UNKNOWN_VERDICT",
+            analysis_verdict="CONDITIONAL_PLUS",
             verdict_caps=_DEFAULT_CAPS,
             max_score=10.0,
             min_score=0.0,
         )
-        assert result == 7.0
+        assert result == 7.0  # capped at CONDITIONAL fallback
+
+    def test_unknown_verdict_with_explicit_cap(self):
+        """An unrecognized verdict with unknown_verdict_cap configured
+        applies that cap instead of the CONDITIONAL fallback."""
+        result = compute_net_score(
+            base_score=9.0,
+            research_delta=0.0,
+            analysis_verdict="ROGUE_VERDICT",
+            verdict_caps=_DEFAULT_CAPS,
+            max_score=10.0,
+            min_score=0.0,
+            unknown_verdict_cap=6.0,
+        )
+        assert result == 6.0  # capped at explicit unknown_verdict_cap
+
+    def test_unknown_verdict_explicit_cap_lower_than_adjusted(self):
+        """Explicit unknown_verdict_cap only lowers, never raises."""
+        result = compute_net_score(
+            base_score=4.0,
+            research_delta=0.0,
+            analysis_verdict="ROGUE_VERDICT",
+            verdict_caps=_DEFAULT_CAPS,
+            max_score=10.0,
+            min_score=0.0,
+            unknown_verdict_cap=6.0,
+        )
+        assert result == 4.0  # adjusted 4.0 < cap 6.0 → cap doesn't raise
+
+    def test_unknown_verdict_no_conditional_in_caps_no_cap(self):
+        """If CONDITIONAL is not in verdict_caps and unknown_verdict_cap is
+        not configured, no cap is applied (preserves legacy behavior when
+        neither is present)."""
+        caps = {"APPLY": None, "MONITOR": 5.0, "SKIP": 3.0}  # no CONDITIONAL
+        result = compute_net_score(
+            base_score=9.0,
+            research_delta=0.0,
+            analysis_verdict="UNKNOWN",
+            verdict_caps=caps,
+            max_score=10.0,
+            min_score=0.0,
+        )
+        assert result == 9.0  # no cap to apply
+
+    def test_unknown_verdict_explicit_cap_overrides_conditional_fallback(self):
+        """When both unknown_verdict_cap and CONDITIONAL are configured,
+        the explicit unknown_verdict_cap takes precedence."""
+        result = compute_net_score(
+            base_score=9.0,
+            research_delta=0.0,
+            analysis_verdict="ROGUE",
+            verdict_caps=_DEFAULT_CAPS,  # CONDITIONAL = 7.0
+            max_score=10.0,
+            min_score=0.0,
+            unknown_verdict_cap=5.0,  # explicit, overrides CONDITIONAL fallback
+        )
+        assert result == 5.0
 
 
 class TestUnanalyzedFallback:

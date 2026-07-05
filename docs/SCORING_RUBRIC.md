@@ -105,6 +105,42 @@ Example config:
     - "\\bmpls\\b"
 ```
 
+**Never-claim density check (`never_claim_density`):** Scaled penalty for
+technologies in the `identity_rules.yml` `never_claim` list appearing in the
+JD text. No technology names are hardcoded in Python or duplicated into the
+rubric — the list is read from identity config at runtime and passed to the
+engine as the `never_claim` parameter.
+
+The check counts **distinct** never-claim technologies in the JD (word-boundary,
+case-insensitive matching) and applies a scaled penalty:
+
+- **Scaled:** `points_per_hit × distinct_count`, clamped at `max_penalty`
+- **Primary stack:** `primary_stack_penalty` applies instead when a never-claim
+  term appears in the job **title** or ≥ `primary_stack_min_mentions` times in
+  the JD (indicating it's the core stack, not incidental)
+- **Density exclude:** `density_exclude` is a list of never-claim terms to skip
+  in the density count and primary-stack check (scoring-layer only; the identity
+  `never_claim` list itself is unchanged and still gates resumes). Useful for
+  terms that commonly appear as boilerplate alternatives (e.g. "GCP" in
+  "AWS/GCP/Azure") rather than core stack — `gcp_primary` already covers
+  GCP-centrality.
+
+Matched technology names are recorded in the score breakdown reason string for
+auditability. All thresholds and magnitudes live in `scoring_rubric.yml`.
+
+Example config:
+
+```yaml
+- signal: "never_claim_density"
+  check: "never_claim_density"
+  points_per_hit: -0.5
+  max_penalty: -2.5
+  primary_stack_penalty: -3.0
+  primary_stack_min_mentions: 3
+  density_exclude:
+    - "GCP"
+```
+
 **Note on comp thresholds vs Tier 2 hard filter:**
 The Tier 2 hard filter rejects jobs with structured comp below the configured floor.
 The scoring rubric's comp modifiers apply to **JD-text-parsed comp** (jobs where

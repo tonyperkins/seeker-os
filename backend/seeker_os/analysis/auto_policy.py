@@ -125,6 +125,7 @@ def resync_verdicts_from_analyses(
             verdict_caps=scoring.verdict_caps,
             max_score=float(scoring.max_score),
             min_score=float(scoring.min_score),
+            unknown_verdict_cap=scoring.unknown_verdict_cap,
         )
         db.execute(
             "UPDATE jobs SET analysis_verdict = ?, net_score = ? WHERE id = ?",

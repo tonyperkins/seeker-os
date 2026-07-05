@@ -30,6 +30,7 @@ def _check_modifier(
     accepted_cities: list[str] | None = None,
     comp_trusted: bool = True,
     location_fallback_patterns: list[str] | None = None,
+    never_claim: list[str] | None = None,
 ) -> bool:
     """Check if a modifier rule matches. Returns True if the modifier applies."""
 
@@ -177,6 +178,25 @@ def _check_modifier(
             return True
         return False
 
+    elif check == "never_claim_density":
+        # Scaled penalty for never-claim technology density in the JD.
+        # Reads the never_claim list from identity_rules.yml (passed in as
+        # never_claim param) — no technology names hardcoded in Python.
+        # Fires when at least 1 never-claim tech appears in the JD text.
+        # The actual penalty is computed in score_job (not here) because it
+        # is dynamic (points_per_hit * distinct_count, clamped at max_penalty,
+        # or primary_stack_penalty when a term is in the title or heavily mentioned).
+        # Terms in mod.density_exclude are skipped (scoring-layer only; identity
+        # never_claim list itself is unchanged and still gates resumes).
+        if not never_claim:
+            return False
+        exclude = set(mod.density_exclude or [])
+        effective = [t for t in never_claim if t not in exclude]
+        matched = _never_claim_matches(effective, jd_text)
+        if matched:
+            return True
+        return False
+
     return False
 
 
@@ -187,6 +207,76 @@ def _domain_mismatch_matches(patterns: list[str], jd_text: str) -> list[str]:
         if _check_pattern(jd_text, p):
             matched.append(p)
     return matched
+
+
+def _never_claim_matches(never_claim: list[str], jd_text: str) -> list[str]:
+    """Return the list of never-claim technologies found in jd_text.
+
+    Uses word-boundary, case-insensitive matching. Each technology is counted
+    at most once (distinct). Returns the list of matched technology names.
+    """
+    matched = []
+    for tech in never_claim:
+        pattern = rf"\b{re.escape(tech)}\b"
+        if re.search(pattern, jd_text, re.IGNORECASE):
+            matched.append(tech)
+    return matched
+
+
+def _never_claim_jd_mention_count(tech: str, jd_text: str) -> int:
+    """Count occurrences of a never-claim tech in JD text (case-insensitive, word-boundary)."""
+    pattern = rf"\b{re.escape(tech)}\b"
+    return len(re.findall(pattern, jd_text, re.IGNORECASE))
+
+
+def _compute_never_claim_penalty(
+    mod: ModifierRule,
+    never_claim: list[str],
+    title: str,
+    jd_text: str,
+) -> tuple[float, list[str], str]:
+    """Compute the never_claim_density penalty.
+
+    Returns (penalty, matched_techs, reason_detail).
+
+    Terms in mod.density_exclude are skipped — they don't count toward the
+    density count or the primary-stack check. The identity never_claim list
+    itself is unchanged (it still gates resumes); density_exclude is a
+    scoring-layer override only.
+
+    Logic:
+    1. If any (non-excluded) never-claim tech appears in the title → primary_stack_penalty.
+    2. If any (non-excluded) never-claim tech appears >= primary_stack_min_mentions times in JD → primary_stack_penalty.
+    3. Otherwise → points_per_hit * distinct_count, clamped at max_penalty.
+    """
+    exclude = set(mod.density_exclude or [])
+    effective = [t for t in never_claim if t not in exclude]
+    matched = _never_claim_matches(effective, jd_text)
+    if not matched:
+        return 0.0, [], ""
+
+    # Check for primary stack: title hit or high mention count
+    primary_tech = None
+    for tech in matched:
+        title_pattern = rf"\b{re.escape(tech)}\b"
+        if re.search(title_pattern, title, re.IGNORECASE):
+            primary_tech = tech
+            break
+        if _never_claim_jd_mention_count(tech, jd_text) >= mod.primary_stack_min_mentions:
+            primary_tech = tech
+            break
+
+    if primary_tech and mod.primary_stack_penalty is not None:
+        return mod.primary_stack_penalty, matched, f"primary_stack: {primary_tech}"
+
+    # Scaled penalty
+    if mod.points_per_hit is not None:
+        scaled = mod.points_per_hit * len(matched)
+        if mod.max_penalty is not None:
+            scaled = max(scaled, mod.max_penalty)  # both negative → max clamps toward zero
+        return scaled, matched, f"{len(matched)} distinct: {', '.join(matched)}"
+
+    return 0.0, matched, ""
 
 
 def score_job(
@@ -201,6 +291,7 @@ def score_job(
     workplace_type: str | None = None,
     seniority_level: str | None = None,
     comp_source: str = "none",
+    never_claim: list[str] | None = None,
 ) -> ScoreResult:
     """Score a job against a config-driven rubric.
 
@@ -316,13 +407,23 @@ def score_job(
         if _check_modifier(mod, title, jd_text, location, effective_comp_min, effective_comp_max,
                            workplace_type=workplace_type, seniority_level=seniority_level,
                            accepted_cities=accepted_cities, comp_trusted=comp_trusted,
-                           location_fallback_patterns=rubric.location_fallback_patterns):
-            negative_total += mod.points
-            fired_modifiers[mod.signal] = mod.points
-            if mod.check == "domain_mismatch" and mod.patterns:
+                           location_fallback_patterns=rubric.location_fallback_patterns,
+                           never_claim=never_claim):
+            if mod.check == "never_claim_density" and never_claim:
+                penalty, matched_techs, detail = _compute_never_claim_penalty(
+                    mod, never_claim, title, jd_text,
+                )
+                negative_total += penalty
+                fired_modifiers[mod.signal] = penalty
+                reasons.append(f"{penalty} {mod.signal} ({detail})")
+            elif mod.check == "domain_mismatch" and mod.patterns:
                 matched = _domain_mismatch_matches(mod.patterns, jd_text)
+                negative_total += mod.points
+                fired_modifiers[mod.signal] = mod.points
                 reasons.append(f"{mod.points} {mod.signal} (matched: {', '.join(matched)})")
             else:
+                negative_total += mod.points
+                fired_modifiers[mod.signal] = mod.points
                 reasons.append(f"{mod.points} {mod.signal}")
 
     # Step 6: Clamp

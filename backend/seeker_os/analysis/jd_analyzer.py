@@ -447,6 +447,7 @@ def analyze_job(
         verdict_caps=verdict_caps,
         max_score=max_score,
         min_score=min_score,
+        unknown_verdict_cap=settings.scoring.unknown_verdict_cap if settings.scoring else None,
     )
     db.execute(
         # TODO: analysis_delta is vestigial (always 0.0 — never computed). Remove or implement.

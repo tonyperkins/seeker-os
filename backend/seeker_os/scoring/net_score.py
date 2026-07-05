@@ -29,6 +29,7 @@ def compute_net_score(
     verdict_caps: dict[str, float | None],
     max_score: float = 10.0,
     min_score: float = 0.0,
+    unknown_verdict_cap: float | None = None,
 ) -> float:
     """Compute the composite Net score.
 
@@ -39,6 +40,9 @@ def compute_net_score(
         verdict_caps: Config-driven caps per verdict. null = no cap.
         max_score: Clamp ceiling (from scoring_rubric.yml).
         min_score: Clamp floor (from scoring_rubric.yml).
+        unknown_verdict_cap: Cap for unrecognized verdicts. If None, falls back
+            to the CONDITIONAL cap value if present in verdict_caps, else no cap
+            (preserving legacy behavior when unconfigured).
 
     Returns:
         Net score, clamped to [min_score, max_score].
@@ -63,11 +67,18 @@ def compute_net_score(
         # treated as APPLY.
         logger.warning(
             "compute_net_score: unrecognized verdict %r not in verdict_caps %s "
-            "— no cap applied (treated as APPLY)",
+            "— applying conservative cap",
             analysis_verdict,
             list(verdict_caps.keys()),
         )
-        net = adjusted
+        # Determine the fallback cap: explicit config, else CONDITIONAL cap, else none
+        fallback_cap = unknown_verdict_cap
+        if fallback_cap is None:
+            fallback_cap = verdict_caps.get("CONDITIONAL")
+        if fallback_cap is not None:
+            net = min(adjusted, fallback_cap)
+        else:
+            net = adjusted
 
     # Step 4: clamp to [min_score, max_score] (belt + suspenders)
     return max(min_score, min(max_score, net))

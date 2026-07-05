@@ -117,6 +117,26 @@ scoring:
         - "\\bnoc\\b"
         - "carrier.?grade"
         - "\\bmpls\\b"
+    # Never-claim density — scaled penalty for technologies in the
+    # identity_rules.yml never_claim list appearing in the JD. No technology
+    # names are hardcoded here or in Python — the list comes from identity
+    # config at runtime. points_per_hit is per distinct tech; max_penalty
+    # clamps the scaled total; primary_stack_penalty applies instead when a
+    # never-claim term appears in the title or >= primary_stack_min_mentions
+    # times in the JD (indicating it's the core stack, not incidental).
+    # density_exclude: never-claim terms to skip in the density count and
+    # primary-stack check (scoring-layer only; the identity never_claim list
+    # itself is unchanged and still gates resumes). Useful for terms that
+    # commonly appear as boilerplate alternatives (e.g. "GCP" in "AWS/GCP/Azure")
+    # rather than core stack — gcp_primary already covers GCP-centrality.
+    - signal: "never_claim_density"
+      check: "never_claim_density"
+      points_per_hit: -0.5
+      max_penalty: -2.5
+      primary_stack_penalty: -3.0
+      primary_stack_min_mentions: 3
+      density_exclude:
+        - "GCP"
 
   # Freshness (minor ranking factor, not a score modifier)
   freshness:
@@ -168,6 +188,10 @@ scoring:
     CONDITIONAL: 7.0
     MONITOR: 5.0
     SKIP: 3.0
+  # Cap for unrecognized verdicts (rogue LLM output, e.g. "CONDITIONAL_PLUS").
+  # If null, falls back to the CONDITIONAL cap value. If CONDITIONAL is also
+  # absent, no cap is applied (legacy behavior).
+  unknown_verdict_cap: null
 
   # Comp provenance: values above this are implausible regardless of source.
   # For parsed/none → treated as comp-unknown (no floor clear, no bonus).

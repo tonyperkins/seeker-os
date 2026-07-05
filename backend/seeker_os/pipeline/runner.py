@@ -480,6 +480,7 @@ def run_pipeline(
                 workplace_type=row["workplace_type"],
                 seniority_level=row["seniority_level"],
                 comp_source=row["comp_source"] if "comp_source" in row.keys() else "none",
+                never_claim=settings.identity.never_claim if settings.identity else None,
             )
 
             if score_result.hard_reject:

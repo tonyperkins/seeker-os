@@ -167,6 +167,7 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
     ).fetchone()
     analysis_verdict = job_row["analysis_verdict"] if job_row else None
     verdict_caps = settings.scoring.verdict_caps if settings.scoring else {}
+    unknown_verdict_cap = settings.scoring.unknown_verdict_cap if settings.scoring else None
     net = compute_net_score(
         base_score=float(job["score"]),
         research_delta=result.research_delta,
@@ -174,6 +175,7 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
         verdict_caps=verdict_caps,
         max_score=settings.scoring.max_score,
         min_score=settings.scoring.min_score,
+        unknown_verdict_cap=unknown_verdict_cap,
     )
 
     db.execute(
@@ -704,6 +706,7 @@ def create_job(body: JobCreate):
             workplace_type=eff_workplace,
             seniority_level=eff_seniority,
             comp_source=eff_comp_source,
+            never_claim=settings.identity.never_claim if settings.identity else None,
         )
 
         # Insert — manual jobs always go to 'ready' (DECISION 1)
@@ -1479,6 +1482,7 @@ def _refilter_rescore_job(db, row, settings) -> RefilterRescoreResult:
         workplace_type=row["workplace_type"],
         seniority_level=row["seniority_level"],
         comp_source=row["comp_source"] if "comp_source" in row.keys() else "none",
+        never_claim=settings.identity.never_claim if settings.identity else None,
     )
 
     now = datetime.now(timezone.utc).isoformat()
@@ -1536,6 +1540,7 @@ def _refilter_rescore_job(db, row, settings) -> RefilterRescoreResult:
         verdict_caps=settings.scoring.verdict_caps,
         max_score=settings.scoring.max_score,
         min_score=settings.scoring.min_score,
+        unknown_verdict_cap=settings.scoring.unknown_verdict_cap,
     )
     extra_sets["net_score"] = net
     extra_sets["updated_at"] = now

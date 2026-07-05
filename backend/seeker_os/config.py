@@ -257,7 +257,7 @@ class BaseScoreRule(BaseModel):
 class ModifierRule(BaseModel):
     signal: str
     pattern: str | None = None
-    points: float
+    points: float | None = None  # required for non-dynamic check types; validator enforces
     check: str
     requires: str | None = None
     unless: str | None = None
@@ -268,6 +268,25 @@ class ModifierRule(BaseModel):
     requires_comp_at_least: int | None = None
     patterns: list[str] | None = None  # for domain_mismatch check: off-domain term regexes
     min_distinct_hits: int = 3  # for domain_mismatch check: distinct pattern matches needed to fire
+    # never_claim_density check: scaled penalty for never-claim tech density in JD
+    points_per_hit: float | None = None  # e.g. -0.5 per distinct never-claim tech
+    max_penalty: float | None = None  # clamp on scaled penalty, e.g. -2.5
+    primary_stack_penalty: float | None = None  # applied instead of scaled when a never-claim term is in the title or heavily mentioned
+    primary_stack_min_mentions: int = 3  # JD mention count threshold for primary_stack_penalty
+    density_exclude: list[str] | None = None  # never-claim terms to skip in density count (scoring-layer only; identity list unchanged)
+
+    # Check types that compute penalty dynamically (points not required)
+    _DYNAMIC_PENALTY_CHECKS: frozenset[str] = frozenset({"never_claim_density"})
+
+    @model_validator(mode="after")
+    def _validate_points_required(self) -> ModifierRule:
+        """Fail loud if points is missing on a non-dynamic check type."""
+        if self.points is None and self.check not in self._DYNAMIC_PENALTY_CHECKS:
+            raise ValueError(
+                f"Modifier '{self.signal}' (check={self.check}) is missing required 'points' field. "
+                f"Only check types {sorted(self._DYNAMIC_PENALTY_CHECKS)} may omit points."
+            )
+        return self
 
 
 class FreshnessConfig(BaseModel):
@@ -326,6 +345,7 @@ class ScoringConfig(BaseModel):
     freshness: FreshnessConfig = FreshnessConfig()
     research_modifiers: list[ResearchModifierConfig] = []
     verdict_caps: dict[str, float | None] = {}
+    unknown_verdict_cap: float | None = None  # cap for unrecognized verdicts; defaults to CONDITIONAL cap if present
     calibration: CalibrationConfig = CalibrationConfig()
     auto_analysis: AutoAnalysisConfig = AutoAnalysisConfig()
 

@@ -199,6 +199,7 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
         verdict_caps=verdict_caps,
         max_score=scoring.max_score if scoring else 10,
         min_score=scoring.min_score if scoring else 0,
+        unknown_verdict_cap=scoring.unknown_verdict_cap if scoring else None,
     )
 
     db.execute(
