@@ -632,10 +632,10 @@ function ProviderCard({
           </div>
         )}
 
-        {/* Edit dialog for non-Anthropic providers */}
-        {!isAnthropic && editingOpen && (
+        {editingOpen && (
           <EditProviderInline
             provider={provider}
+            isAnthropic={isAnthropic}
             onClose={onEditClose}
             onSaved={onSaved}
           />
@@ -647,10 +647,12 @@ function ProviderCard({
 
 function EditProviderInline({
   provider,
+  isAnthropic,
   onClose,
   onSaved,
 }: {
   provider: ProvidersConfigResponse["providers"][number];
+  isAnthropic: boolean;
   onClose: () => void;
   onSaved: () => Promise<ProvidersConfigResponse | null>;
 }) {
@@ -668,8 +670,10 @@ function EditProviderInline({
         label,
         enabled: true,
         auto_fetch_models: true,
-        base_url: baseUrl,
       };
+      if (!isAnthropic) {
+        body.base_url = baseUrl;
+      }
       if (apiKey.trim()) {
         body.api_key = apiKey.trim();
       }
@@ -700,15 +704,17 @@ function EditProviderInline({
           className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm"
         />
       </div>
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground">Base URL</label>
-        <input
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm font-mono"
-          placeholder="https://gateway.example.com/v1"
-        />
-      </div>
+      {!isAnthropic && (
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground">Base URL</label>
+          <input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            className="h-8 w-full rounded-md border border-border bg-background px-2 text-sm font-mono"
+            placeholder="https://gateway.example.com/v1"
+          />
+        </div>
+      )}
       <div className="space-y-2">
         <label className="text-xs text-muted-foreground">
           API Key {provider.api_key_set && "(currently set — leave blank to keep)"}
