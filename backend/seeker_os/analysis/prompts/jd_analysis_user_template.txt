@@ -1,0 +1,45 @@
+## Injected context (authoritative — do not contradict)
+
+### MASTER_RESUME
+---
+{master_resume}
+---
+
+### PREFERENCES
+---
+{prefs_text}
+---
+
+### IDENTITY (positioning, honest qualifiers, never-claim)
+---
+{identity_text}
+---
+
+### RULES (accuracy + never-claim guardrails)
+---
+{rules_text}
+---
+
+### RUBRIC (weighted scoring dimensions, bonuses, penalties, blockers)
+---
+{rubric_text}
+---
+
+### JOB_POSTING
+---
+{jd_text}
+---
+
+### JOB_META
+- Company: {company}
+- Title: {title}
+- Location: {location}
+- Comp (if posted): {comp_str}
+- URL: {url}
+
+### COMPANY_RESEARCH (dossier — use for company_fit, red_flags, and comp assessment)
+---
+{company_research_text}
+---
+
+Produce the analysis now. Return ONLY valid JSON matching the output schema.

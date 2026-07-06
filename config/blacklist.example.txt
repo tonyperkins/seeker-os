@@ -1,0 +1,8 @@
+# Seeker OS — Company Blacklist (EXAMPLE TEMPLATE)
+# Copy to blacklist.txt and add your blacklisted companies (one per line).
+# blacklist.txt is .gitignore'd. This is the flat list version;
+# the structured version is in profile.yml.
+# Lines starting with # are comments and are ignored.
+
+example-company-1
+example-company-2

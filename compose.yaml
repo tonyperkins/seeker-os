@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        - INSTALL_BROWSER=${INSTALL_BROWSER:-true}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    environment:
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - DEMO_MODE=${DEMO_MODE:-true}
+      # API keys are NOT passed through here. When the host var is unset,
+      # ${VAR:-} evaluates to empty string, and load_dotenv(override=False)
+      # treats that as "already set" — blocking the real key in data/.env.
+      # Instead, keys live in data/.env (mounted volume, persists across
+      # rebuilds) and are loaded by load_dotenv at startup.
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - SERVER_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped

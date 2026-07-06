@@ -1,0 +1,67 @@
+# Seeker OS — LLM Providers & Models (EXAMPLE TEMPLATE)
+# Copy to providers.yml and fill in your settings. providers.yml is .gitignore'd.
+# API keys are env var references (${VAR_NAME}), never literal in config files.
+# See docs/LLM_ROUTING.md for full details.
+
+providers:
+  - id: anthropic_direct
+    type: anthropic
+    label: "Anthropic Direct"
+    api_key: ${ANTHROPIC_API_KEY}
+    enabled: false
+    auto_fetch_models: true
+    models:
+      - id: claude-opus-4-8
+        label: "Claude Opus 4.8"
+        context_window: 200000
+        max_output: 32000
+        tags: [heavy]
+      - id: claude-sonnet-4-6
+        label: "Claude Sonnet 4.6"
+        context_window: 200000
+        max_output: 16000
+        tags: [heavy, moderate]
+      - id: claude-haiku-4-5-20251001
+        label: "Claude Haiku 4.5"
+        context_window: 200000
+        max_output: 8192
+        tags: [light]
+
+  - id: kilo
+    type: openai_compatible
+    label: "Kilo Gateway"
+    base_url: "https://api.kilo.ai/api/gateway"
+    api_key: ${KILO_API_KEY}
+    auto_fetch_models: true
+    enabled: false
+    models: []
+
+  - id: ollama_local
+    type: openai_compatible
+    label: "Ollama (local)"
+    base_url: "http://localhost:11434/v1"
+    auto_fetch_models: true
+    enabled: false
+    models: []
+
+tiers:
+  heavy:    { provider: anthropic_direct, model: claude-opus-4-8 }
+  moderate: { provider: anthropic_direct, model: claude-sonnet-4-6 }
+  light:    { provider: anthropic_direct, model: claude-haiku-4-5-20251001 }
+
+tasks:
+  resume_generation_high_value: { tier: heavy }
+  resume_generation_standard:   { tier: heavy }
+  accuracy_validation:          { tier: light }
+  onboarding_interview:         { tier: moderate }
+  resume_parsing:               { tier: moderate }
+  cover_letter_generation:      { tier: heavy }
+  application_answer_generation: { tier: heavy }
+  application_answer_critique:  { tier: moderate }
+  # Per-task max_tokens override (optional). If omitted, built-in defaults are used:
+  #   jd_analysis: 4096, resume_generation_*: 16000, cover_letter_generation: 4000,
+  #   application_answer_generation: 2000, application_answer_critique: 2000,
+  #   accuracy_validation: 16000, metadata_extraction: 1000, resume_parsing: 2000,
+  #   company_dossier_generation: 16000, onboarding_interview: 4096
+  # Example override:
+  # jd_analysis: { tier: moderate, max_tokens: 8192 }

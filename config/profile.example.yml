@@ -1,0 +1,66 @@
+# Seeker OS — User Profile (EXAMPLE TEMPLATE)
+# Copy to profile.yml and fill in your values. profile.yml is .gitignore'd.
+
+user:
+  name: "Your Name"
+  email: "you@example.com"
+  location: "Your City, ST"
+
+location:
+  remote_only: true
+  accepted_cities:
+    - your_city
+  accepted_states: [your_state]
+  rejected_cities: []  # e.g. [new york, san francisco] — cities you don't want to work in
+
+comp:
+  floor: 120000              # hard reject if comp_max < this (ceiling below floor)
+  target: 140000             # positive scoring modifier at this level (comp_min >= target)
+  stretch: 180000            # ranking/display context only
+
+experience:
+  years: 20
+  anchor_phrase: "20+ years"  # the only acceptable experience claim
+
+employment:
+  commitment: "Full Time"     # required commitment type
+  reject_commitments: []      # e.g. ["Part Time", "Contract"]
+  role_type: "Individual Contributor"
+  reject_role_types: ["Manager", "VP"]
+
+blacklist:
+  - example-company-1
+  - example-company-2
+
+defense_blocklist:
+  - example-defense-contractor-1
+  - example-defense-contractor-2
+
+resume:
+  master_path: "data/master_resume.md"
+  accuracy_rules_path: "config/accuracy_rules.yml"
+  output_dir: "data/resumes"
+  contact_urls:
+    - "https://your-website.com"
+    - "https://linkedin.com/in/yourprofile"
+    - "https://github.com/yourusername"
+
+cross_reference:
+  repo_path: "~/projects/job-search"
+  auto_pull: true
+
+# Hard rejects — jobs matching these patterns are auto-rejected before scoring.
+# Customize these for your own search. Remove entries that don't apply to you.
+hard_rejects:
+  - reason: "Relocation required"
+    pattern: "relocation required"
+  - reason: "Clearance required"
+    pattern: "security clearance|active clearance|ts/sci|top secret"
+    # Add more hard rejects as needed, e.g.:
+    # - reason: "Customer-facing/solutions role"
+    #   pattern: "pre.?sales|solutions architect|customer success"
+    # - reason: "Early career/junior"
+    #   pattern: "early.?career|entry.?level|new.?grad|\\bjunior\\b|\\bintern\\b"
+
+lifecycle:
+  stale_after_days: 14  # jobs in applied/engaged with no activity for this many days are flagged stale

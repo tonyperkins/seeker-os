@@ -1,0 +1,247 @@
+# Seeker OS — Scoring Rubric (EXAMPLE TEMPLATE)
+# Copy to scoring_rubric.yml and adjust. scoring_rubric.yml is .gitignore'd.
+# The scoring engine reads this file — no scoring logic is hardcoded in Python.
+# Customize the patterns below for your target role(s) and preferences.
+
+scoring:
+  post_threshold: 6.0
+  per_company_cap: 3
+  max_score: 10
+  min_score: 0
+
+  # Base score — first matching pattern wins
+  # Customize these patterns for your target role(s)
+  base_scores:
+    - pattern: "(principal|staff).*engineer"
+      score: 4.5
+      label: "Principal/Staff Engineer"
+    - pattern: "(senior|sr\\.?).*engineer"
+      score: 3.5
+      label: "Senior Engineer"
+    - pattern: "engineer"
+      score: 2.0
+      label: "Engineer title match"
+    # JD-keyword fallback: if no title pattern matched, check the JD text for
+    # your target-role keywords. Customize `patterns` for your target field.
+    # - check: "jd_infra_role"
+    #   patterns:
+    #     - "your_target_keyword_1"
+    #     - "your_target_keyword_2"
+    #   score: 2.0
+    #   label: "JD matches target role (no title match)"
+    - score: 0
+      label: "No title match"
+
+  # Positive modifiers — all matching patterns are summed
+  positive_modifiers:
+    - signal: "your_city"
+      pattern: "your_city|your_state"
+      points: 1.5
+      check: "location_or_jd"
+    - signal: "key_skill_1"
+      pattern: "your_key_skill"
+      points: 1.0
+      check: "jd"
+    - signal: "key_skill_2"
+      pattern: "another_key_skill"
+      points: 1.0
+      check: "jd"
+    - signal: "remote_us"
+      pattern: "remote"
+      points: 1.0
+      check: "jd"
+      requires: "united states|us.?based|within the us"
+    - signal: "comp_target"
+      points: 1.0
+      check: "structured_comp"
+      threshold: 140000
+    - signal: "small_company"
+      pattern: "small team|startup|series [abc]"
+      points: 0.5
+      check: "jd"
+
+  # Negative modifiers — all matching patterns are summed
+  negative_modifiers:
+    - signal: "relocation_required"
+      pattern: "on.?site only|in.?office only|must.*relocat|relocation required"
+      points: -3.0
+      check: "jd"
+    - signal: "hybrid_non_local"
+      pattern: "hybrid"
+      points: -3.0
+      check: "jd"
+      unless: "your_city|remote"
+    - signal: "city_only_no_remote"
+      points: -2.0
+      check: "location_only"
+    - signal: "comp_below_floor"
+      points: -3.0
+      check: "structured_comp"
+      threshold_max: 120000
+    - signal: "comp_marginal"
+      points: -1.5
+      check: "structured_comp"
+      threshold_min: 120000
+      threshold_max: 140000
+    - signal: "people_management"
+      pattern: "performance review|headcount|hiring decision|manage.*team of"
+      points: -2.0
+      check: "jd"
+    - signal: "large_enterprise"
+      pattern: "fortune\\s*(?:500|100|50)|\\b\\d{2,3},000\\+?\\s*employees"
+      points: -1.5
+      check: "jd"
+      unless: "our customers|customers include|customers range|client.*fortune|fortune.*customer"
+    - signal: "staffing_agency"
+      pattern: "staffing|consulting llc|recruiting agency"
+      points: -1.5
+      check: "jd"
+    - signal: "missing_location"
+      points: -1.5
+      check: "no_location_no_remote"
+    # Domain mismatch — fires when enough off-domain patterns match the JD,
+    # indicating the role belongs to a different engineering domain despite a
+    # matching title. patterns is a list of regexes; min_distinct_hits is the
+    # number of DISTINCT patterns that must match to fire (default 3).
+    # Customize the patterns for domains you want to penalize.
+    - signal: "domain_mismatch"
+      check: "domain_mismatch"
+      points: -4.0
+      min_distinct_hits: 3
+      patterns:
+        - "\\bcisco\\s+ios\\b"
+        - "\\bjuniper\\b"
+        - "\\bbgp\\b"
+        - "\\bospf\\b"
+        - "sd.?wan"
+        - "\\bnoc\\b"
+        - "carrier.?grade"
+        - "\\bmpls\\b"
+    # Never-claim density — scaled penalty for technologies in the
+    # identity_rules.yml never_claim list appearing in the JD. No technology
+    # names are hardcoded here or in Python — the list comes from identity
+    # config at runtime. points_per_hit is per distinct tech; max_penalty
+    # clamps the scaled total; primary_stack_penalty applies instead when a
+    # never-claim term appears in the title or >= primary_stack_min_mentions
+    # times in the JD (indicating it's the core stack, not incidental).
+    # density_exclude: never-claim terms to skip in the density count and
+    # primary-stack check (scoring-layer only; the identity never_claim list
+    # itself is unchanged and still gates resumes). Useful for terms that
+    # commonly appear as boilerplate alternatives (e.g. "GCP" in "AWS/GCP/Azure")
+    # rather than core stack — gcp_primary already covers GCP-centrality.
+    - signal: "never_claim_density"
+      check: "never_claim_density"
+      points_per_hit: -0.5
+      max_penalty: -2.5
+      primary_stack_penalty: -3.0
+      primary_stack_min_mentions: 3
+      density_exclude:
+        - "GCP"
+
+  # Freshness (minor ranking factor, not a score modifier)
+  freshness:
+    boost_days: 7           # ranking boost within N days
+    neutral_days: 14        # neutral between boost and penalty
+    penalty_days: 30        # slight ranking penalty after N days
+    hard_filter_days: 30    # hard reject at Tier 2 if older than N days
+
+  # Research-adjusted scoring (Phase 3.2)
+  # Deterministic, confidence-gated modifiers derived from the company research dossier.
+  # A modifier only applies if the relevant dossier section's confidence ≥ confidence_threshold.
+  # If the dossier is a stub or retrieval didn't run, NO adjustment is applied.
+  # The base score is never mutated — both base_score and adjusted_score are preserved.
+  research_modifiers:
+    - factor: "recent_layoffs"
+      delta: -1.5
+      confidence_threshold: 0.5
+      source_section: "funding"
+    - factor: "down_round_runway_risk"
+      delta: -2.0
+      confidence_threshold: 0.5
+      source_section: "funding"
+    - factor: "healthy_runway"
+      delta: 0.5
+      confidence_threshold: 0.5
+      source_section: "funding"
+    - factor: "remote_walkback_rto"
+      delta: -1.5
+      confidence_threshold: 0.5
+      source_section: "fit"
+    - factor: "strong_negative_sentiment"
+      delta: -1.0
+      confidence_threshold: 0.6
+      source_section: "sentiment"
+
+  # AI analysis verdict caps — the verdict from the JD analyzer CAPS the
+  # composite (net) score rather than adding to it. The AI verdict is the layer
+  # that read the JD against the profile, so it sets a ceiling on how high a
+  # keyword-matched score can present.
+  #
+  # Net = min(adjusted_score, verdict_cap) where adjusted = base + research_delta
+  # APPLY → no cap (null = full adjusted score shows)
+  # CONDITIONAL → cap at 7.0 (partial-fit cannot present as a top match)
+  # MONITOR → cap at 5.0
+  # SKIP → cap at 3.0
+  # If no analysis exists, Net falls back to the research-adjusted (or base) score.
+  verdict_caps:
+    APPLY: null
+    CONDITIONAL: 7.0
+    MONITOR: 5.0
+    SKIP: 3.0
+  # Cap for unrecognized verdicts (rogue LLM output, e.g. "CONDITIONAL_PLUS").
+  # If null, falls back to the CONDITIONAL cap value. If CONDITIONAL is also
+  # absent, no cap is applied (legacy behavior).
+  unknown_verdict_cap: null
+
+  # Comp provenance: values above this are implausible regardless of source.
+  # For parsed/none → treated as comp-unknown (no floor clear, no bonus).
+  # For structured/manual → flagged/logged but still trusted.
+  comp_sanity_max: 10000000
+  # Provenance values that earn full trust (comp_target bonus, floor clearing).
+  trusted_comp_sources: ["structured", "manual"]
+
+  # Evidence gate: reject JDs shorter than this many characters as insufficient.
+  # Increase if you see false-rejects on short API job cards; decrease if you
+  # want to score very sparse listings.
+  min_jd_length: 500
+
+  # Location fallback patterns: if the location field is empty but the JD text
+  # matches any of these regex patterns, the evidence gate passes (the job is
+  # clearly remote or US-based). Also used by the location_only modifier to
+  # skip the city-no-remote penalty for remote roles.
+  # Uses re.search with IGNORECASE. Customize for your geography.
+  location_fallback_patterns:
+    - "remote"
+    - "united states"
+    - "\\bus\\b"
+
+  # Metadata extraction: max characters of JD text forwarded to the LLM for
+  # structured-field extraction (company name, comp range, seniority, etc.).
+  # Increase if salary ranges are routinely appearing past the 8000-char mark.
+  metadata_max_jd_chars: 8000
+
+  # Scoring calibration report (GET /api/analytics/calibration).
+  # bucket_width: width of the net-score buckets in the decision-rate table.
+  # high_score_threshold: skipped jobs with net >= this are false positives.
+  # low_score_threshold: applied jobs with net < this are false negatives.
+  # Null thresholds default to post_threshold.
+  calibration:
+    bucket_width: 1.0
+    high_score_threshold: null
+    low_score_threshold: null
+
+  # Auto-analysis policy — run JD analysis automatically at the end of a
+  # pipeline run for jobs whose effective net score meets min_score and that
+  # have no analysis verdict yet. Disabled by default (analysis stays
+  # manual/on-demand). min_score null defaults to post_threshold.
+  # max_per_run caps LLM calls per pipeline run / backfill batch.
+  auto_analysis:
+    enabled: false
+    min_score: null
+    max_per_run: 10
+    # Statuses considered decided-dead — excluded from analysis coverage
+    # (high_score_unanalyzed metric and auto-analysis candidate selection).
+    # Analyzing already-rejected jobs wastes LLM spend.
+    analysis_excluded_statuses:
+      - "rejected"
+      - "company_rejected"

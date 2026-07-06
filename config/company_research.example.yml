@@ -1,0 +1,92 @@
+# Company Research Configuration
+#
+# Controls how the company research module gathers data.
+# All sources are optional — the module gracefully degrades when a source
+# is unavailable or unconfigured.
+
+# Wikipedia (free, no auth)
+wikipedia:
+  enabled: true
+  language: "en"        # Wikipedia language edition
+  timeout_seconds: 10
+
+# Wikidata (free, no auth) — structured data: founded year, headcount
+wikidata:
+  enabled: true
+  timeout_seconds: 10
+
+# LLM Dossier Generation
+# Uses the configured LLM providers (see providers.yml) to generate a
+# comprehensive company dossier: funding, sentiment, fit, verdict flags.
+# Requires at least one provider to be configured.
+llm_dossier:
+  enabled: true
+  # Task name used for LLM routing (maps to tier in providers.yml)
+  task: "company_dossier_generation"
+  temperature: 0.3
+
+# Live Retrieval (Phase 3)
+# Pluggable web search adapter for funding signals and employee sentiment.
+# Provider choice and API key come from config/env — never hardcoded in .py.
+# When unconfigured or disabled, the research flow degrades cleanly to
+# Wikipedia + Wikidata + JD context only (pre-Phase-3 behavior).
+retrieval:
+  # Adapter type: 'tavily' (more can be registered in retrieval/registry.py)
+  type: ""              # e.g. "tavily" — empty string = no retrieval
+  # API key as env var reference (resolved by Settings at load time)
+  api_key: ${RETRIEVAL_API_KEY}
+  max_results: 5        # Max snippets per query
+  timeout_seconds: 15
+  # Query templates — {company} is replaced with the company name at runtime.
+  # If a template omits {company}, it is used as-is without crashing.
+  funding_query_template: "{company} funding round investors valuation"
+  sentiment_query_template: "{company} employee reviews sentiment glassdoor culture"
+  # Cache TTL for retrieval query results (in days). Tavily charges per
+  # search, so results are cached on disk keyed by query string. Set
+  # force_refresh=true on the API to bypass this cache.
+  retrieval_cache_ttl_days: 7
+
+# Thresholds (Phase 3)
+# confidence_floor: below this, the dashboard treats the dossier as a stub
+# staleness_months: sentiment signals older than this are flagged stale
+# source_trust_order: ordered list of preferred source domains (highest first)
+
+# HTTP User-Agent for Wikipedia/Wikidata requests (their robot policy requires one).
+# No personal handles — use a generic product identifier.
+user_agent: "SeekerOS/0.1 (product; contact: admin@example.com)"
+
+confidence_floor: 0.3
+staleness_months: 18
+
+# Phase 3 retrieval disambiguation: confidence floor for mismatch cases.
+# When Wikidata P856 doesn't match the company domain (wrong entity),
+# section confidence is clamped to this value via min(). Must be below
+# the research modifier confidence_threshold (typically 0.5) so
+# confidence-gated modifiers don't fire on wrong-entity research.
+mismatch_confidence: 0.2
+
+# Research TTL: reuse a cached dossier within this many days instead of
+# hitting Tavily again. Company funding/headcount/sentiment don't change daily.
+# Re-research only on explicit user "refresh" or when older than the TTL.
+research_ttl_days: 30
+
+source_trust_order:
+  - "crunchbase.com"
+  - "techcrunch.com"
+  - "sec.gov"
+  - "layoffs.fyi"
+  - "glassdoor.com"
+  - "levels.fyi"
+  - "reddit.com"
+
+# Fit preferences — personal company preferences injected into the LLM dossier
+# prompt so the "fit" section is tailored to the candidate. All fields optional;
+# empty strings = the LLM reports raw signals without judgment.
+fit_preferences:
+  preferred_size_bucket: ""    # e.g. "200-500" or "50-200"
+  preferred_stage: ""          # e.g. "Series A through E" or "bootstrapped"
+  remote_policy: ""            # e.g. "fully remote only" or "remote-first, hybrid ok"
+  ic_vs_mgmt: ""               # e.g. "IC-respected, hands-on" or "IC track preferred"
+  clearance_ok: true           # false = flag clearance/citizenship requirements as red
+  notes: ""                    # free-text, e.g. "No defense/government contractors"
+

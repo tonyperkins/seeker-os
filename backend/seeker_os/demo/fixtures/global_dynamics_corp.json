@@ -1,0 +1,137 @@
+{
+  "id": 7,
+  "title": "Senior SRE",
+  "core_title": "Senior SRE",
+  "company": "Global Dynamics Corp",
+  "company_homepage": "https://global-dynamics-corp.example.com",
+  "location": "New York, NY (HQ)",
+  "workplace_type": "Remote",
+  "workplace_countries": ["US"],
+  "seniority_level": "senior",
+  "commitment": ["Full Time"],
+  "comp_min": 180000,
+  "comp_max": 210000,
+  "comp_currency": "USD",
+  "comp_source": "structured",
+  "technical_tools": ["AWS", "Kubernetes", "Terraform", "Python", "Go"],
+  "date_posted": "2026-06-20",
+  "role_type": "Individual Contributor",
+  "status": "ready",
+  "tier_passed": 4,
+  "score": 5.0,
+  "score_reasons": [
+    "Base: Senior SRE (3.5)",
+    "+1.0 remote_us",
+    "+1.0 comp_target",
+    "+0.5 key_cloud",
+    "+0.5 sre_culture",
+    "-0.5 large_enterprise"
+  ],
+  "score_gaps": [
+    "Large enterprise: expect heavier process and matrixed management.",
+    "Large-company penalty applied once via research; no double-counting."
+  ],
+  "score_modifiers": {
+    "remote_us": 1.0,
+    "comp_target": 1.0,
+    "key_cloud": 0.5,
+    "sre_culture": 0.5,
+    "large_enterprise": -0.5
+  },
+  "jd_summary": "Senior SRE at Fortune 500 global enterprise, remote US.",
+  "apply_url": "https://global-dynamics-corp.example.com/jobs/senior-sre",
+  "detail_url": "https://hiring.cafe/jobs/global-dynamics-senior-sre",
+  "discovered_query": "senior sre remote",
+  "ai_policy": "allowed",
+  "research_adjusted_score": 4.0,
+  "research_delta": -1.0,
+  "net_score": 4.0,
+  "research_breakdown": [
+    {"factor": "large_company_confirmed", "delta": -1.5, "confidence": 0.75, "source_section": "funding"},
+    {"factor": "suppressed_large_enterprise", "delta": 0.5, "confidence": 0.75, "source_section": "funding"}
+  ],
+  "overall_confidence": 0.75,
+  "summary": "Fortune 500 public enterprise. Large-company penalty applied once via research; the JD-text stopgap is suppressed so the penalty is not double-counted.",
+  "verdict_flags": {
+    "green": ["public company", "stable compensation", "global remote policy"],
+    "red": ["large enterprise bureaucracy"],
+    "watch": []
+  },
+  "funding_data": {
+    "founded": 1995,
+    "hq": "New York, NY",
+    "public": true,
+    "stage": "Public",
+    "total_raised_usd": null,
+    "valuation_usd": null,
+    "last_round": null,
+    "headcount": "4500",
+    "headcount_trend": "stable",
+    "layoffs": [],
+    "financial_health": "Public; stable cash flow.",
+    "confidence": 0.75,
+    "sources": [
+      {"url": "https://example.com/global-dynamics-profile", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "sentiment_data": {
+    "overall_rating_estimate": 3.6,
+    "rating_scale": "out of 5",
+    "ceo_approval_pct": 65,
+    "recommend_pct": 58,
+    "positives": [
+      {
+        "theme": "compensation",
+        "frequency": "med",
+        "paraphrase": "Compensation and benefits are competitive and predictable.",
+        "source": "fictional reviews",
+        "age_months": 5
+      }
+    ],
+    "negatives": [
+      {
+        "theme": "bureaucracy",
+        "frequency": "high",
+        "paraphrase": "Heavy process and approval chains slow down infrastructure changes.",
+        "source": "fictional reviews",
+        "age_months": 4
+      }
+    ],
+    "staleness_warning": null,
+    "confidence": 0.7,
+    "sources": [
+      {"url": "https://example.com/global-dynamics-sentiment", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "fit_data": {
+    "remote_policy": "remote-first for eligible roles; some teams hybrid",
+    "remote_walkback": null,
+    "size_bucket": "large enterprise (3000+)",
+    "ic_vs_mgmt_culture": "matrixed; layers of management",
+    "comp_band": "180-210k USD",
+    "clearance_required": false,
+    "confidence": 0.75,
+    "sources": [
+      {"url": "https://global-dynamics-corp.example.com/careers", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "gaps": [],
+  "sources_used": ["llm_dossier", "retrieval"],
+  "retrieval_used": true,
+  "retrieval_sources": [
+    {"url": "https://example.com/global-dynamics-profile", "retrieved": "2026-06-28T12:00:00+00:00"}
+  ],
+  "retrieval_snippets": [
+    {
+      "url": "https://example.com/global-dynamics-profile",
+      "title": "Global Dynamics Corp fictional profile",
+      "snippet": "Global Dynamics Corp is a fictional Fortune 500 public company with 4,500 employees.",
+      "source_domain": "example.com",
+      "score": 0.83
+    }
+  ],
+  "verification_state": "verified"
+}

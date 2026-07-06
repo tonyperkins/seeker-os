@@ -1,0 +1,51 @@
+# Seeker OS — Filter Configuration (EXAMPLE TEMPLATE)
+# Copy to filters.yml and adjust. This file contains no personal data
+# and can be committed. Personal values are in profile.yml.
+
+filters:
+  remote_only: true
+  us_only: true
+
+  # See docs/HIRINGCAFE_FIELDS.md § Seniority Enum for why this is so coarse.
+  seniority_floor: ["Senior Level"]
+  seniority_reject: ["Mid Level", "Entry Level", "Junior", "Associate"]
+  seniority_unknown_passes: true
+
+  # Comp floor is NOT here — it lives in profile.comp.floor (canonical source).
+  # comp_floor_margin_pct applies a tolerance below profile.comp.floor.
+  # comp_unknown_passes controls whether jobs with no comp data pass or are rejected.
+  # comp_sanity_max: values above this are implausible regardless of source.
+  # Treated as comp-unknown in the filter (does not clear the floor).
+  # Prevents the $130,000 → 130000000 misparse from clearing the comp floor.
+  comp_sanity_max: 10000000
+
+  freshness_days: 30
+  commitment_required: "Full Time"
+  # Junior-level title patterns for fallback filtering when seniority_level
+  # is None and seniority_unknown_passes is False. Empty this list if you
+  # are targeting junior-level roles.
+  junior_title_patterns:
+    - junior
+    - entry
+    - associate
+    - intern
+    - new grad
+    - early career
+
+title_filters:
+  # Customize these for your target role(s) and seniority level
+  positive:
+    - senior engineer
+    - staff engineer
+    - principal engineer
+  negative:
+    - intern
+    - junior
+    - top secret
+    - ts/sci
+    - polygraph
+    - secret clearance
+    # Uncomment these if targeting IC roles only:
+    # - manager
+    # - vp
+    # - vice president

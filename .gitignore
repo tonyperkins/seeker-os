@@ -1,0 +1,103 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+/build/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Seeker OS — Data (runtime, not committed)
+data/pre-restore-snapshots/
+data/seeker.*
+!data/seeker.demo.db
+data/cache/
+data/retrieval_cache/
+data/checkpoint.json
+data/resumes/
+data/master_resume.*
+data/.anthropic_oauth.json
+**/data/seeker.db
+**/data/cache/
+**/data/retrieval_cache/
+**/data/checkpoint.json
+**/data/resumes/
+
+# Seeker OS — Real config files (contain personal data)
+# Templates (*.example.yml) ARE committed
+config/profile.yml
+config/scoring_rubric.yml
+config/accuracy_rules.yml
+config/identity_rules.yml
+config/channel_rules.yml
+config/queries.yml
+config/providers.yml
+config/filters.yml
+config/company_research.yml
+config/skip_reasons.yml
+config/blacklist.txt
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# AI audit working notes (local only)
+ai-audit/
+
+# Dev artifacts (not part of the product)
+AGENTS.md
+frontend/AGENTS.md
+frontend/CLAUDE.md
+.pre-commit-config.yaml
+.windsurf/
+dev.sh
+demo-dev.sh
+scripts/
+
+# Internal docs (moved to ai-audit/docs/)
+docs/CONTEXT.md
+docs/PLAN.md
+docs/PHASE1_SPEC.md
+docs/DOCKER_DECISIONS.md
+docs/DEMO_DEPLOY_SPEC.md
+docs/FRONTEND_ARCHITECTURE.md
+docs/DATABASE_SCHEMA.md
+
+# Logs
+*.log

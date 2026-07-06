@@ -1,0 +1,78 @@
+# Seeker OS — Resume Accuracy Rules (EXAMPLE TEMPLATE)
+# Copy to accuracy_rules.yml and adjust. accuracy_rules.yml is .gitignore'd.
+# These rules are validated programmatically after every resume generation.
+# Violations are flagged for manual review (high severity blocks, medium warns).
+#
+# Rule types:
+#   disallowed_phrases    — phrases that must NOT appear in the generated resume
+#   forbidden_technologies — technologies that must NEVER be claimed
+#   required_phrases      — phrases that MUST appear (e.g. contact URLs)
+#   experience_anchor     — regex patterns flagging a non-standard experience phrasing
+#                          (year counts are the common case, but the pattern is
+#                          whatever you configure)
+#   education_omission    — regex patterns for education mentions to flag
+#
+# Severity: "high" (blocks — resume flagged as failed) or "medium" (warning only)
+
+rules:
+  # --- Disallowed phrases: prevent overclaiming depth/expertise ---
+  - id: no_expert_claims
+    description: "Avoid claiming 'expert' or 'mastery' — show via impact, not adjectives"
+    type: disallowed_phrases
+    phrases:
+      - "expert in"
+      - "mastery of"
+      - "deep expertise"
+      - "world-class"
+      - "ninja"
+      - "rockstar"
+      - "guru"
+    severity: medium
+
+  # Matches exact literal strings (case-insensitive substring). Use for known
+  # inflated phrasings you want to block verbatim.
+  - id: no_year_inflation
+    description: "Don't inflate years of experience beyond what's in the master resume"
+    type: disallowed_phrases
+    phrases:
+      - "NN+ years"        # Replace NN with year counts that would be inflated for you
+      - "NN+ years in"      # Customize these phrases for your own experience level
+    severity: high
+
+  # --- Forbidden technologies: never claim these ---
+  # Add technologies you don't know or don't want associated with your profile.
+  # The validator uses word-boundary matching (case-insensitive).
+  - id: forbidden_technologies
+    description: "These technologies must NEVER appear in generated resumes"
+    type: forbidden_technologies
+    technologies: []
+    severity: high
+
+  # --- Required phrases: ensure contact info is present ---
+  # Add your portfolio, LinkedIn, GitHub URLs here so they always appear.
+  - id: contact_urls_visible
+    description: "Always render full literal https:// URLs as visible text"
+    type: required_phrases
+    phrases: []
+    severity: medium
+
+  # --- Experience anchor: flag non-standard experience phrasing ---
+  # The canonical anchor phrase + disallowed_variants live in identity_rules.yml.
+  # This rule merges its patterns with identity_rules.yml disallowed_variants at
+  # validation time. Set patterns: [] here to avoid duplication — let
+  # identity_rules.yml be the single source of truth for disallowed variants.
+  - id: experience_anchor
+    description: "Use the standard experience anchor from your profile, not arbitrary counts"
+    type: experience_anchor
+    patterns: []
+    severity: medium
+
+  # --- Education omission: flag education mentions if you choose to omit ---
+  # Uncomment and add patterns if you want to flag education mentions.
+  # - id: education_omission
+  #   description: "Omit education entirely from generated resumes"
+  #   type: education_omission
+  #   patterns:
+  #     - "(?i)\\b(b\\.?s\\.?|b\\.?a\\.?|m\\.?s\\.?|m\\.?a\\.?|ph\\.?d|mba|associate|diploma)\\b"
+  #     - "(?i)\\b(university|college|institute)\\b"
+  #   severity: medium

@@ -1,0 +1,136 @@
+{
+  "id": 6,
+  "title": "Senior Platform Engineer",
+  "core_title": "Senior Platform Engineer",
+  "company": "Prism Compute",
+  "company_homepage": "https://prism-compute.example.com",
+  "location": "Remote (US)",
+  "workplace_type": "Remote",
+  "workplace_countries": ["US"],
+  "seniority_level": "senior",
+  "commitment": ["Full Time"],
+  "comp_min": 180000,
+  "comp_max": 210000,
+  "comp_currency": "USD",
+  "comp_source": "structured",
+  "technical_tools": ["GCP", "Kubernetes", "Terraform", "Go", "Python"],
+  "date_posted": "2026-06-18",
+  "role_type": "Individual Contributor",
+  "status": "ready",
+  "tier_passed": 4,
+  "score": 6.5,
+  "score_reasons": [
+    "Base: Senior Platform/DevOps (3.5)",
+    "+1.0 remote_us",
+    "+1.0 comp_target",
+    "+0.5 key_cloud",
+    "+0.5 sre_culture"
+  ],
+  "score_gaps": [],
+  "score_modifiers": {
+    "remote_us": 1.0,
+    "comp_target": 1.0,
+    "key_cloud": 0.5,
+    "sre_culture": 0.5
+  },
+  "jd_summary": "Senior platform engineer, remote US, GCP/K8s.",
+  "apply_url": "https://prism-compute.example.com/jobs/senior-platform",
+  "detail_url": "https://hiring.cafe/jobs/prism-compute-senior-platform",
+  "discovered_query": "senior platform engineer remote",
+  "ai_policy": "allowed",
+  "research_adjusted_score": 7.0,
+  "research_delta": 0.5,
+  "net_score": 7.0,
+  "research_breakdown": [
+    {"factor": "right_size_company", "delta": 0.5, "confidence": 0.72, "source_section": "funding"}
+  ],
+  "overall_confidence": 0.72,
+  "summary": "Cloud compute platform startup. Series B, strong GCP/Kubernetes stack, remote-first.",
+  "verdict_flags": {
+    "green": ["remote-first", "modern stack", "healthy runway"],
+    "red": [],
+    "watch": []
+  },
+  "funding_data": {
+    "founded": 2019,
+    "hq": "Portland, OR",
+    "public": false,
+    "stage": "Series B",
+    "total_raised_usd": 51000000,
+    "valuation_usd": 240000000,
+    "last_round": {
+      "type": "Series B",
+      "amount_usd": 30000000,
+      "date": "2024-04",
+      "lead_investors": ["Cloud Demo Fund"]
+    },
+    "headcount": "360",
+    "headcount_trend": "growing",
+    "layoffs": [],
+    "financial_health": "Healthy runway.",
+    "confidence": 0.72,
+    "sources": [
+      {"url": "https://example.com/prism-compute-funding", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "sentiment_data": {
+    "overall_rating_estimate": 4.1,
+    "rating_scale": "out of 5",
+    "ceo_approval_pct": 80,
+    "recommend_pct": 75,
+    "positives": [
+      {
+        "theme": "modern stack",
+        "frequency": "high",
+        "paraphrase": "Engineers appreciate the GCP, Kubernetes, and Terraform stack.",
+        "source": "fictional reviews",
+        "age_months": 3
+      }
+    ],
+    "negatives": [
+      {
+        "theme": "hiring pace",
+        "frequency": "low",
+        "paraphrase": "Some teams are stretched while hiring catches up.",
+        "source": "fictional reviews",
+        "age_months": 9
+      }
+    ],
+    "staleness_warning": null,
+    "confidence": 0.7,
+    "sources": [
+      {"url": "https://example.com/prism-compute-sentiment", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "fit_data": {
+    "remote_policy": "remote-first; annual company retreat",
+    "remote_walkback": null,
+    "size_bucket": "growth-stage (200-800)",
+    "ic_vs_mgmt_culture": "IC-heavy",
+    "comp_band": "170-210k USD",
+    "clearance_required": false,
+    "confidence": 0.75,
+    "sources": [
+      {"url": "https://prism-compute.example.com/careers", "retrieved": "2026-06-28T12:00:00+00:00"}
+    ],
+    "stripped_count": 0
+  },
+  "gaps": [],
+  "sources_used": ["llm_dossier", "retrieval"],
+  "retrieval_used": true,
+  "retrieval_sources": [
+    {"url": "https://example.com/prism-compute-funding", "retrieved": "2026-06-28T12:00:00+00:00"}
+  ],
+  "retrieval_snippets": [
+    {
+      "url": "https://example.com/prism-compute-funding",
+      "title": "Prism Compute fictional Series B",
+      "snippet": "Prism Compute raised a fictional $30M Series B for cloud compute platform.",
+      "source_domain": "example.com",
+      "score": 0.81
+    }
+  ],
+  "verification_state": "verified"
+}

@@ -1,0 +1,65 @@
+# Seeker OS — Source Adapter Configuration
+# This file contains NO personal data and can be committed to the repo.
+
+sources:
+  - id: hiring_cafe
+    type: hiring_cafe
+    label: "hiring.cafe"
+    enabled: true
+    base_url: "https://hiring.cafe"
+    # Source-specific settings
+    request_delay_seconds: 3     # between requests (human-like)
+    jd_fetch_delay_seconds: 2    # between JD fetches
+    user_agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+    cache_ttl_hours: 6
+    max_retries: 3
+    timeout_seconds: 15
+    # Browser fallback for Vercel/Cloudflare JS challenges.
+    # When httpx gets 403/429, falls back to a headless browser (Playwright).
+    # Requires: pip install -e ".[browser]" && playwright install chromium
+    browser_fallback: true
+    # Source map: hiring.cafe source codes → canonical ATS names
+    # (used for dedup composite keys and JD fetch routing)
+    source_map:
+      grnhse: greenhouse
+      ashby: ashby
+      lever: lever
+      workday: workday
+      icims2: icims
+      bamboohr: bamboohr
+      brassring: brassring
+      paylocity: paylocity
+      rippling: rippling
+      adp: adp
+      smartrecruiters: smartrecruiters
+      taleo_careersection: taleo
+      taleo_rss: taleo
+      oraclecloud: oraclecloud
+      ultipro: ultipro
+      jazzhr: jazzhr
+      breezy: breezy
+      pinpoint: pinpoint
+      sparkhire: sparkhire
+      eightfold: eightfold
+      paycor: paycor
+      saashr: saashr
+      hrmdirect: hrmdirect
+      hiring_cafe_pin: SKIP       # sponsored — always skip
+
+  # --- Future sources (disabled by default) ---
+  # - id: linkedin
+  #   type: linkedin
+  #   label: "LinkedIn"
+  #   enabled: false
+  #   # LinkedIn-specific config...
+  #
+  # - id: ats_direct
+  #   type: ats_direct
+  #   label: "Direct ATS Scans"
+  #   enabled: false
+  #   # Direct ATS scanning config (Greenhouse/Ashby/Lever board lists)
+  #   boards:
+  #     - ats: greenhouse
+  #       board: trexsolutions
+  #     - ats: ashby
+  #       board: somecompany
