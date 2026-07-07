@@ -189,6 +189,10 @@ async def restore_backup(file: UploadFile = File(...)):
     from seeker_os.config import invalidate_settings_cache
     invalidate_settings_cache()
 
+    # Re-sync queries from restored queries.yml into DB
+    from seeker_os.api.app import _sync_queries_from_yaml
+    _sync_queries_from_yaml()
+
     return {
         "message": f"Restored {len(restored)} file(s)",
         "restored": restored,

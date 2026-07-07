@@ -175,9 +175,9 @@ def fetch_models(provider_id: str):
             )
             for m in models
         ]
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to fetch models from provider '%s'", provider_id)
-        raise HTTPException(status_code=502, detail="Failed to fetch models — see server logs for details")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch models from {provider_id}: {e}")
 
 
 @router.post("/test/{provider_id}", response_model=dict)

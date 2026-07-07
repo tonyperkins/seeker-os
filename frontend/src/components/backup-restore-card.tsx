@@ -71,6 +71,9 @@ export function BackupRestoreCard() {
     try {
       const result = await api.backup.restore(file);
       setRestoreResult(result);
+      // Config was already reloaded server-side during restore;
+      // refresh the page data so the UI reflects the new config.
+      setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to restore backup");
     } finally {
@@ -162,7 +165,7 @@ export function BackupRestoreCard() {
                 </p>
               )}
               <p className="text-muted-foreground">
-                Reload the page to see restored configuration.
+                Configuration reloaded. Page refreshing...
               </p>
             </div>
           </div>

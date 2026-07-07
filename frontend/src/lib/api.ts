@@ -594,6 +594,8 @@ export const api = {
   // Settings
   settings: {
     get: () => fetchAPI<SettingsResponse>("/api/settings"),
+    reload: () =>
+      fetchAPI<MessageResponse>("/api/settings/reload", { method: "POST" }),
   },
 
   // Analytics

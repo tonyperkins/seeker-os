@@ -490,6 +490,7 @@ def get_latest_analysis(job_id: int) -> dict | None:
         data["input_tokens"] = row["input_tokens"] or 0
         data["output_tokens"] = row["output_tokens"] or 0
         data["latency_ms"] = row["latency_ms"] or 0
+        data["analyzed_at"] = row["analyzed_at"] or ""
         return data
     finally:
         db.close()

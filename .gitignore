@@ -86,8 +86,6 @@ frontend/AGENTS.md
 frontend/CLAUDE.md
 .pre-commit-config.yaml
 .windsurf/
-dev.sh
-demo-dev.sh
 scripts/
 
 # Internal docs (moved to ai-audit/docs/)

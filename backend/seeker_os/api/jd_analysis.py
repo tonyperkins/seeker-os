@@ -131,6 +131,6 @@ def run_analysis(job_id: int):
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception:
+    except Exception as e:
         logger.exception("JD analysis failed for job_id=%s", job_id)
-        raise HTTPException(status_code=500, detail="Analysis failed — see server logs for details")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")

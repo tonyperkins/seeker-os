@@ -247,9 +247,9 @@ def parse_master_resume():
     except json.JSONDecodeError:
         logger.exception("LLM returned invalid JSON during resume parsing")
         raise HTTPException(status_code=500, detail="LLM returned invalid JSON — see server logs for details")
-    except Exception:
+    except Exception as e:
         logger.exception("Resume parsing failed")
-        raise HTTPException(status_code=500, detail="Resume parsing failed — see server logs for details")
+        raise HTTPException(status_code=500, detail=f"Resume parsing failed: {e}")
 
 
 def _save_parsed_to_config(settings, result: ResumeParseResult) -> None:
@@ -479,9 +479,9 @@ def generate_resume(body: ResumeGenerateRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
+    except Exception as e:
         logger.exception("Resume generation failed for job_id=%s", body.job_id)
-        raise HTTPException(status_code=500, detail="Generation failed — see server logs for details")
+        raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
 
 
 @router.post("/manual", response_model=dict)
@@ -496,9 +496,9 @@ def create_manual_resume_route(body: ResumeManualCreate):
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
+    except Exception as e:
         logger.exception("Manual resume save failed for job_id=%s", body.job_id)
-        raise HTTPException(status_code=500, detail="Save failed — see server logs for details")
+        raise HTTPException(status_code=500, detail=f"Save failed: {e}")
 
 
 @router.post("/generate/stream")

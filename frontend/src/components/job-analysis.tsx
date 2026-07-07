@@ -161,7 +161,9 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
       icon={Brain}
       description={
         data
-          ? `Analyzed ${new Date(data.analyzed_at).toLocaleDateString()}`
+          ? data.analyzed_at
+            ? `Analyzed ${new Date(data.analyzed_at).toLocaleDateString()}`
+            : "Analyzed"
           : "JD fit analysis against your profile"
       }
       action={

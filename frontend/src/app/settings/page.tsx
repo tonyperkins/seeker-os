@@ -20,6 +20,7 @@ import { AccuracyRulesCard } from "@/components/accuracy-rules-card";
 import { CompanyResearchSettingsCard } from "@/components/company-research-settings-card";
 import { BackupRestoreCard } from "@/components/backup-restore-card";
 import { BookmarkletCard } from "@/components/bookmarklet-card";
+import { ReloadConfigButton } from "@/components/reload-config-button";
 import { api, type SettingsResponse, type ProfileData, type FiltersData, type AccuracyRule } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -61,8 +62,9 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <ReloadConfigButton />
       </div>
 
       {/* Status summary */}

@@ -238,9 +238,9 @@ Output the JSON now:"""
             user_prompt=user_prompt,
             temperature=0.3,
         )
-    except Exception:
+    except Exception as e:
         logger.exception("LLM call failed for AI rule generation")
-        raise HTTPException(status_code=500, detail="LLM call failed — see server logs for details")
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {e}")
 
     # Parse the JSON response
     import json

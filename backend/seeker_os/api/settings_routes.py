@@ -89,3 +89,21 @@ def update_setting(key: str, body: SettingUpdate):
     db.commit()
     db.close()
     return MessageResponse(message=f"Setting '{key}' updated")
+
+
+@router.post("/reload", response_model=MessageResponse)
+def reload_config():
+    """Reload all configuration from YAML files without restart.
+
+    Invalidates the settings cache so the next Settings() call re-reads all
+    YAML files from disk. Also syncs queries from queries.yml into the
+    search_queries table (inserts new, updates existing, deletes stale).
+    """
+    from seeker_os.config import invalidate_settings_cache
+    invalidate_settings_cache()
+
+    # Re-sync queries from YAML to DB
+    from seeker_os.api.app import _sync_queries_from_yaml
+    _sync_queries_from_yaml()
+
+    return MessageResponse(message="Configuration reloaded from disk")

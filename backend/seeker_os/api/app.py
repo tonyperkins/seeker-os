@@ -78,8 +78,50 @@ async def lifespan(app: FastAPI):
             logger.info("Demo seed complete")
     else:
         run_migrations()
+        _sync_queries_from_yaml()
 
     yield
+
+
+def _sync_queries_from_yaml() -> None:
+    """Sync queries from config/queries.yml into the search_queries table.
+
+    Inserts new queries, updates existing ones (by query_slug), and deletes
+    queries that no longer exist in the YAML file.
+    """
+    from seeker_os.config import get_settings
+    from seeker_os.database import get_connection
+
+    settings = get_settings()
+    if not settings.queries or not settings.queries.queries:
+        return
+
+    yaml_slugs = {q.slug for q in settings.queries.queries}
+    db = get_connection()
+    try:
+        # Delete queries that no longer exist in YAML
+        if yaml_slugs:
+            db.execute(
+                "DELETE FROM search_queries WHERE query_slug NOT IN (%s)" % ",".join("?" * len(yaml_slugs)),
+                tuple(yaml_slugs),
+            )
+        # Upsert each query by slug (delete + insert to avoid duplicate rows)
+        for q in settings.queries.queries:
+            db.execute("DELETE FROM search_queries WHERE query_slug = ?", (q.slug,))
+            db.execute(
+                """
+                INSERT INTO search_queries
+                (source_id, query_slug, label, commitment_filter, max_pages, enabled, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (q.source_id, q.slug, q.label, q.commitment, q.max_pages, q.enabled, "synced from queries.yml"),
+            )
+        db.commit()
+        logger.info("Synced %d queries from queries.yml", len(yaml_slugs))
+    except Exception:
+        logger.exception("Failed to sync queries from YAML")
+    finally:
+        db.close()
 
 
 app = FastAPI(
