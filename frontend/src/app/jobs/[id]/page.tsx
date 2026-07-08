@@ -14,6 +14,10 @@ import {
   XCircle,
   Pin,
   FileText,
+  User,
+  Mail,
+  Phone,
+  Link2,
 } from "lucide-react";
 import {
   Card,
@@ -230,6 +234,45 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
               />
             </CardContent>
           </Card>
+
+          {job.recruiter_contacts && job.recruiter_contacts.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Recruiter Contact{job.recruiter_contacts.length > 1 ? "s" : ""}</CardTitle>
+                <CardDescription>Who reached out and how</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                {job.recruiter_contacts.map((rc) => (
+                  <div key={rc.id} className="flex flex-col gap-3 border-b border-border/40 pb-3 last:border-0 last:pb-0">
+                    {rc.name && (
+                      <InfoRow icon={User} label="Name" value={rc.name} />
+                    )}
+                    {rc.agency && (
+                      <InfoRow icon={Briefcase} label="Agency" value={rc.agency} />
+                    )}
+                    {rc.source && (
+                      <InfoRow icon={Briefcase} label="Source" value={rc.source} />
+                    )}
+                    {rc.contacted_at && (
+                      <InfoRow icon={Calendar} label="Contacted" value={new Date(rc.contacted_at).toLocaleDateString()} />
+                    )}
+                    {rc.email && (
+                      <InfoRow icon={Mail} label="Email" value={rc.email} />
+                    )}
+                    {rc.phone && (
+                      <InfoRow icon={Phone} label="Phone" value={rc.phone} />
+                    )}
+                    {rc.linkedin && (
+                      <InfoRow icon={Link2} label="LinkedIn" value={rc.linkedin} />
+                    )}
+                    {rc.notes && (
+                      <InfoRow icon={FileText} label="Notes" value={rc.notes} />
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {job.filter_warnings && job.filter_warnings.length > 0 && (
             <Card>

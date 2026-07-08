@@ -82,6 +82,7 @@ Closed vocabulary — use `EventType` constants, not raw strings.
 | Event | When |
 |---|---|
 | `company_rejected` | Company rejected (post-apply) |
+| `recruiter_contact` | Recruiter contact added to a job (manual add or job creation with recruiter info) |
 
 ### Engaged Sub-lifecycle Events
 
@@ -190,6 +191,9 @@ New event types default to NOT resetting staleness unless explicitly added to th
 | `POST` | `/api/jobs/{job_id}/transition` | Post-apply transition (company_rejected, withdrawn, engaged, offer_accepted, offer_declined) |
 | `POST` | `/api/jobs/{job_id}/engaged-events` | Log engaged sub-lifecycle event (no status change) |
 | `POST` | `/api/jobs/{job_id}/clean-start` | Enter at post-apply status with backdated event |
+| `POST` | `/api/jobs/{job_id}/recruiters` | Add a recruiter contact (recruiter_contact event) |
+| `PATCH` | `/api/jobs/recruiters/{recruiter_id}` | Update a recruiter contact |
+| `DELETE` | `/api/jobs/recruiters/{recruiter_id}` | Delete a recruiter contact |
 | `GET` | `/api/jobs/{job_id}/events` | Get event timeline |
 | `POST` | `/api/jobs/{job_id}/events` | Add custom event |
 

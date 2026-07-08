@@ -22,11 +22,11 @@ return `text/event-stream`.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/jobs` | List jobs — filter by status, min_score, min_tier, company, source, limit |
-| `POST` | `/api/jobs` | Manually add a job (manual_created event) |
-| `GET` | `/api/jobs/{job_id}` | Full job detail — all fields, score, research, analysis |
+| `GET` | `/api/jobs` | List jobs — filter by status, min_score, min_tier, company, source, search, recruiter_source, has_recruiter, limit |
+| `POST` | `/api/jobs` | Manually add a job (manual_created event; optional recruiter_contact event + recruiter_contacts row) |
+| `GET` | `/api/jobs/{job_id}` | Full job detail — all fields, score, research, analysis, recruiter_contacts |
 | `PATCH` | `/api/jobs/{job_id}` | Update job status, notes, or pinned state (status_changed event) |
-| `DELETE` | `/api/jobs/{job_id}` | Delete job + all dependent records (resumes, events, research, analyses) |
+| `DELETE` | `/api/jobs/{job_id}` | Delete job + all dependent records (resumes, events, research, analyses, recruiter_contacts) |
 | `POST` | `/api/jobs/{job_id}/reject` | Reject with reason (rejected event, body: `{reason, details}`) |
 | `POST` | `/api/jobs/{job_id}/skip` | Skip — removes from active queue (skipped event, optional body: `{reason, details}`) |
 | `POST` | `/api/jobs/{job_id}/annotate-skip` | Add a reason to an existing skip/rejected event (body: `{reason, details}`) |
@@ -36,6 +36,9 @@ return `text/event-stream`.
 | `POST` | `/api/jobs/{job_id}/transition` | Post-apply status transition (company_rejected, withdrawn, engaged, offer_accepted, offer_declined) |
 | `POST` | `/api/jobs/{job_id}/engaged-events` | Log engaged sub-lifecycle event without changing status (interview, challenge_*, offer_*, followup_sent, contact_received) |
 | `POST` | `/api/jobs/{job_id}/clean-start` | Enter a job directly at a post-apply status with a backdated event |
+| `POST` | `/api/jobs/{job_id}/recruiters` | Add a recruiter contact to a job (recruiter_contact event) |
+| `PATCH` | `/api/jobs/recruiters/{recruiter_id}` | Update a recruiter contact |
+| `DELETE` | `/api/jobs/recruiters/{recruiter_id}` | Delete a recruiter contact |
 | `GET` | `/api/jobs/{job_id}/events` | Get job's event timeline ordered by occurred_at |
 | `POST` | `/api/jobs/{job_id}/events` | Add an event to a job's timeline |
 | `GET` | `/api/jobs/{job_id}/cross-ref` | Check job against cross-reference repo |

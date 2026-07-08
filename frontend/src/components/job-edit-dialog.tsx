@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Loader2, Save } from "lucide-react";
+import { Pencil, Loader2, Save, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,7 +23,7 @@ import {
   TabsTrigger,
   TabsContent,
 } from "@/components/ui/tabs";
-import { api, type JobDetail } from "@/lib/api";
+import { api, type JobDetail, type RecruiterContact } from "@/lib/api";
 import { useDemoMode } from "@/lib/demo";
 
 export function JobEditDialog({ job }: { job: JobDetail }) {
@@ -45,6 +45,11 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
   const [companyHomepage, setCompanyHomepage] = useState(job.company_homepage || "");
   const [applyUrl, setApplyUrl] = useState(job.apply_url || "");
   const [jdFull, setJdFull] = useState(job.jd_full || "");
+  const [recruiters, setRecruiters] = useState<RecruiterContact[]>(job.recruiter_contacts || []);
+  const [newRecruiter, setNewRecruiter] = useState({
+    name: "", email: "", phone: "", linkedin: "", agency: "", source: "", contacted_at: "", notes: "",
+  });
+  const [showAddRecruiter, setShowAddRecruiter] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -60,6 +65,9 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
       setCompanyHomepage(job.company_homepage || "");
       setApplyUrl(job.apply_url || "");
       setJdFull(job.jd_full || "");
+      setRecruiters(job.recruiter_contacts || []);
+      setNewRecruiter({ name: "", email: "", phone: "", linkedin: "", agency: "", source: "", contacted_at: "", notes: "" });
+      setShowAddRecruiter(false);
       setError(null);
     }
   }, [open, job]);
@@ -86,6 +94,22 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
       if (!isNaN(cmax)) data.comp_max = cmax;
 
       await api.jobs.update(job.id, data);
+
+      // Save recruiter changes
+      // Add new recruiter if form has data
+      if (showAddRecruiter && (newRecruiter.name || newRecruiter.email || newRecruiter.phone || newRecruiter.linkedin || newRecruiter.agency || newRecruiter.source)) {
+        await api.jobs.addRecruiter(job.id, {
+          name: newRecruiter.name.trim() || undefined,
+          email: newRecruiter.email.trim() || undefined,
+          phone: newRecruiter.phone.trim() || undefined,
+          linkedin: newRecruiter.linkedin.trim() || undefined,
+          agency: newRecruiter.agency.trim() || undefined,
+          source: newRecruiter.source.trim() || undefined,
+          contacted_at: newRecruiter.contacted_at || undefined,
+          notes: newRecruiter.notes.trim() || undefined,
+        });
+      }
+
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -117,6 +141,7 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
           <TabsList>
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="jd">Job Description</TabsTrigger>
+            <TabsTrigger value="recruiter">Recruiter</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details">
@@ -191,6 +216,100 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
                 className="min-h-[40vh] font-mono text-xs"
                 placeholder="Paste or edit the full job description…"
               />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="recruiter">
+            <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto p-1">
+              {recruiters.map((rc) => (
+                <div key={rc.id} className="flex flex-col gap-2 rounded-md border border-border/40 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{rc.name || "Unnamed recruiter"}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={demoMode}
+                      onClick={async () => {
+                        try {
+                          await api.jobs.deleteRecruiter(rc.id);
+                          setRecruiters(recruiters.filter((r) => r.id !== rc.id));
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Failed to delete recruiter");
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-4 text-destructive" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    {rc.agency && <div><span className="font-medium">Agency:</span> {rc.agency}</div>}
+                    {rc.source && <div><span className="font-medium">Source:</span> {rc.source}</div>}
+                    {rc.email && <div><span className="font-medium">Email:</span> {rc.email}</div>}
+                    {rc.phone && <div><span className="font-medium">Phone:</span> {rc.phone}</div>}
+                    {rc.linkedin && <div><span className="font-medium">LinkedIn:</span> {rc.linkedin}</div>}
+                    {rc.contacted_at && <div><span className="font-medium">Contacted:</span> {new Date(rc.contacted_at).toLocaleDateString()}</div>}
+                  </div>
+                </div>
+              ))}
+
+              {showAddRecruiter ? (
+                <div className="flex flex-col gap-3 rounded-md border border-border/40 p-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="edit-new-recruiter-name">Name</Label>
+                      <Input id="edit-new-recruiter-name" value={newRecruiter.name} onChange={(e) => setNewRecruiter({ ...newRecruiter, name: e.target.value })} placeholder="Jane Smith" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="edit-new-recruiter-source">Source</Label>
+                      <Input id="edit-new-recruiter-source" value={newRecruiter.source} onChange={(e) => setNewRecruiter({ ...newRecruiter, source: e.target.value })} placeholder="LinkedIn, email, referral…" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="edit-new-recruiter-agency">Agency / Firm</Label>
+                      <Input id="edit-new-recruiter-agency" value={newRecruiter.agency} onChange={(e) => setNewRecruiter({ ...newRecruiter, agency: e.target.value })} placeholder="CyberCoders, Robert Half…" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="edit-new-recruiter-contacted-at">Contacted At</Label>
+                      <Input id="edit-new-recruiter-contacted-at" type="date" value={newRecruiter.contacted_at} onChange={(e) => setNewRecruiter({ ...newRecruiter, contacted_at: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="edit-new-recruiter-email">Email</Label>
+                      <Input id="edit-new-recruiter-email" type="email" value={newRecruiter.email} onChange={(e) => setNewRecruiter({ ...newRecruiter, email: e.target.value })} placeholder="jane@company.com" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="edit-new-recruiter-phone">Phone</Label>
+                      <Input id="edit-new-recruiter-phone" value={newRecruiter.phone} onChange={(e) => setNewRecruiter({ ...newRecruiter, phone: e.target.value })} placeholder="+1 555-123-4567" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="edit-new-recruiter-linkedin">LinkedIn</Label>
+                      <Input id="edit-new-recruiter-linkedin" value={newRecruiter.linkedin} onChange={(e) => setNewRecruiter({ ...newRecruiter, linkedin: e.target.value })} placeholder="linkedin.com/in/janesmith" />
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowAddRecruiter(false);
+                      setNewRecruiter({ name: "", email: "", phone: "", linkedin: "", agency: "", source: "", contacted_at: "", notes: "" });
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={demoMode}
+                  onClick={() => setShowAddRecruiter(true)}
+                >
+                  <Plus className="size-4" />
+                  Add recruiter
+                </Button>
+              )}
             </div>
           </TabsContent>
         </Tabs>

@@ -476,11 +476,8 @@ class TestTaskMaxTokensConfig:
         import inspect
         from seeker_os.analysis.jd_analyzer import analyze_job
         from seeker_os.resume.generator import generate_resume
-        from seeker_os.cover_letter.generator import generate_cover_letter
-        from seeker_os.application_answers.generator import generate_application_answer, critique_application_answer
 
-        for func in [analyze_job, generate_resume, generate_cover_letter,
-                     generate_application_answer, critique_application_answer]:
+        for func in [analyze_job, generate_resume]:
             sig = inspect.signature(func)
             param = sig.parameters.get("max_tokens")
             assert param is not None, f"{func.__name__} has no max_tokens parameter"

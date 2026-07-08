@@ -252,7 +252,7 @@ def _insert_dossier(conn: sqlite3.Connection, data: dict[str, Any]) -> None:
 
     now = "2026-06-28T12:00:00+00:00"
     row = {
-        "job_id": data["id"],
+        "triggered_by_job_id": data["id"],
         "company_name": data["company"],
         "company_homepage": data["company_homepage"],
         "wikipedia_data": None,

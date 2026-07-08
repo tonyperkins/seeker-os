@@ -628,7 +628,7 @@ class TestCompanyKeyedCaching:
         now = datetime.now(timezone.utc).isoformat()
         db.execute(
             """INSERT INTO company_research (
-                job_id, company_name, company_homepage, overall_confidence,
+                triggered_by_job_id, company_name, company_homepage, overall_confidence,
                 summary, sources_used, errors, researched_at, created_at,
                 company_norm
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -671,7 +671,7 @@ class TestCompanyKeyedCaching:
         company_norm = normalize_company("OldCo")
         db.execute(
             """INSERT INTO company_research (
-                job_id, company_name, company_homepage, overall_confidence,
+                triggered_by_job_id, company_name, company_homepage, overall_confidence,
                 summary, sources_used, errors, researched_at, created_at,
                 company_norm
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -709,7 +709,7 @@ class TestCompanyKeyedCaching:
         db.commit()
         db.execute(
             """INSERT INTO company_research (
-                job_id, company_name, overall_confidence, summary,
+                triggered_by_job_id, company_name, overall_confidence, summary,
                 sources_used, errors, researched_at, created_at, company_norm
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (1, "Stripe", 0.8, "Test", "[]", "[]", now, now, company_norm),
@@ -1021,7 +1021,7 @@ class TestEndpointAdjustmentWiring:
         company_norm = normalize_company("TestCo")
         db.execute(
             """INSERT INTO company_research (
-                job_id, company_name, overall_confidence, summary,
+                triggered_by_job_id, company_name, overall_confidence, summary,
                 funding_data, sources_used, errors, researched_at, created_at,
                 company_norm, retrieval_sources
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",

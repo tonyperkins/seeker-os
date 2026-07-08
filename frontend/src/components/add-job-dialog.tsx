@@ -54,6 +54,13 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
   const [compMin, setCompMin] = useState("");
   const [compMax, setCompMax] = useState("");
   const [jdText, setJdText] = useState("");
+  const [recruiterName, setRecruiterName] = useState("");
+  const [recruiterEmail, setRecruiterEmail] = useState("");
+  const [recruiterPhone, setRecruiterPhone] = useState("");
+  const [recruiterLinkedin, setRecruiterLinkedin] = useState("");
+  const [recruiterSource, setRecruiterSource] = useState("");
+  const [recruiterAgency, setRecruiterAgency] = useState("");
+  const [recruiterContactedAt, setRecruiterContactedAt] = useState("");
 
   // Clean-start state (for "I already applied" handoff from success phase)
   const [showCleanStart, setShowCleanStart] = useState(false);
@@ -73,6 +80,13 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
     setCompMin("");
     setCompMax("");
     setJdText("");
+    setRecruiterName("");
+    setRecruiterEmail("");
+    setRecruiterPhone("");
+    setRecruiterLinkedin("");
+    setRecruiterSource("");
+    setRecruiterAgency("");
+    setRecruiterContactedAt("");
     setPhase("form");
     setError(null);
     setResult(null);
@@ -91,8 +105,8 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
   }
 
   async function handleSubmit(force: boolean = false) {
-    if (!url.trim()) {
-      setError("URL is required");
+    if (!url.trim() && !jdText.trim()) {
+      setError("Either a Job URL or JD Text is required");
       return;
     }
 
@@ -100,9 +114,8 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
     setPhase("fetching");
 
     try {
-      const data: Parameters<typeof api.jobs.create>[0] = {
-        url: url.trim(),
-      };
+      const data: Parameters<typeof api.jobs.create>[0] = {};
+      if (url.trim()) data.url = url.trim();
       if (title.trim()) data.title = title.trim();
       if (company.trim()) data.company = company.trim();
       if (location.trim()) data.location = location.trim();
@@ -113,6 +126,13 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
       const cmax = parseInt(compMax, 10);
       if (!isNaN(cmax)) data.comp_max = cmax;
       if (jdText.trim()) data.jd_text = jdText.trim();
+      if (recruiterName.trim()) data.recruiter_name = recruiterName.trim();
+      if (recruiterEmail.trim()) data.recruiter_email = recruiterEmail.trim();
+      if (recruiterPhone.trim()) data.recruiter_phone = recruiterPhone.trim();
+      if (recruiterLinkedin.trim()) data.recruiter_linkedin = recruiterLinkedin.trim();
+      if (recruiterSource.trim()) data.recruiter_source = recruiterSource.trim();
+      if (recruiterAgency.trim()) data.recruiter_agency = recruiterAgency.trim();
+      if (recruiterContactedAt) data.recruiter_contacted_at = recruiterContactedAt;
       if (force) data.force = true;
 
       const response = await api.jobs.create(data);
@@ -172,7 +192,7 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
             <DialogHeader>
               <DialogTitle>Add Job Manually</DialogTitle>
               <DialogDescription>
-                Paste a job URL. We&apos;ll try to fetch the JD from the page. If that fails, you can paste the JD text directly.
+                Paste a job URL and we&apos;ll fetch the JD, or paste the JD text directly if you don&apos;t have a link.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3">
@@ -183,7 +203,7 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
                 </div>
               )}
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="add-job-url">Job URL *</Label>
+                <Label htmlFor="add-job-url">Job URL <span className="text-xs font-normal text-muted-foreground">(optional if JD text is provided)</span></Label>
                 <Input
                   id="add-job-url"
                   type="url"
@@ -260,19 +280,92 @@ export function AddJobDialog({ onCreated }: { onCreated?: () => void }) {
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="add-job-jd">JD Text (optional — skip URL fetch)</Label>
+                <Label htmlFor="add-job-jd">JD Text <span className="text-xs font-normal text-muted-foreground">(paste the JD — no URL needed)</span></Label>
                 <Textarea
                   id="add-job-jd"
-                  placeholder="Paste the full job description here to skip the URL fetch…"
+                  placeholder="Paste the full job description here. If no URL is provided, the job will be created from this text directly…"
                   value={jdText}
                   onChange={(e) => setJdText(e.target.value)}
                   className="max-h-[200px] min-h-[80px] font-mono text-xs"
                 />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-sm font-medium">Recruiter Contact <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="add-job-recruiter-name" className="text-xs text-muted-foreground">Name</Label>
+                    <Input
+                      id="add-job-recruiter-name"
+                      placeholder="Jane Smith"
+                      value={recruiterName}
+                      onChange={(e) => setRecruiterName(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="add-job-recruiter-source" className="text-xs text-muted-foreground">Source</Label>
+                    <Input
+                      id="add-job-recruiter-source"
+                      placeholder="LinkedIn, email, referral…"
+                      value={recruiterSource}
+                      onChange={(e) => setRecruiterSource(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="add-job-recruiter-agency" className="text-xs text-muted-foreground">Agency / Firm</Label>
+                    <Input
+                      id="add-job-recruiter-agency"
+                      placeholder="CyberCoders, Robert Half…"
+                      value={recruiterAgency}
+                      onChange={(e) => setRecruiterAgency(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="add-job-recruiter-contacted-at" className="text-xs text-muted-foreground">Contacted At</Label>
+                    <Input
+                      id="add-job-recruiter-contacted-at"
+                      type="date"
+                      value={recruiterContactedAt}
+                      onChange={(e) => setRecruiterContactedAt(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="add-job-recruiter-email" className="text-xs text-muted-foreground">Email</Label>
+                    <Input
+                      id="add-job-recruiter-email"
+                      type="email"
+                      placeholder="jane@company.com"
+                      value={recruiterEmail}
+                      onChange={(e) => setRecruiterEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="add-job-recruiter-phone" className="text-xs text-muted-foreground">Phone</Label>
+                    <Input
+                      id="add-job-recruiter-phone"
+                      placeholder="+1 555-123-4567"
+                      value={recruiterPhone}
+                      onChange={(e) => setRecruiterPhone(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="add-job-recruiter-linkedin" className="text-xs text-muted-foreground">LinkedIn</Label>
+                    <Input
+                      id="add-job-recruiter-linkedin"
+                      placeholder="linkedin.com/in/janesmith"
+                      value={recruiterLinkedin}
+                      onChange={(e) => setRecruiterLinkedin(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-              <Button onClick={() => handleSubmit(false)} disabled={!url.trim()}>
+              <Button onClick={() => handleSubmit(false)} disabled={(!url.trim() && !jdText.trim())}>
                 {jdText.trim() ? "Add Job" : "Fetch & Add"}
               </Button>
             </DialogFooter>

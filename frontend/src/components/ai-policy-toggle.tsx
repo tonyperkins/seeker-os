@@ -69,7 +69,7 @@ export function AIPolicyToggle({
         </SelectContent>
       </Select>
       <p className="text-xs text-muted-foreground">
-        Controls whether AI can generate application answers for this job.
+        Controls whether AI can generate content for this job.
         When set to forbidden, AI authoring is refused for this posting.
       </p>
     </div>

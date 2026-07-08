@@ -45,9 +45,13 @@ def cleanup_after():
         if rows:
             id_csv = ",".join(str(r["id"]) for r in rows)
             for table in ["application_events", "dedup_registry", "resumes",
-                          "company_research", "job_analyses", "cover_letters",
-                          "application_answers"]:
+                          "job_analyses"]:
                 db.execute(f"DELETE FROM {table} WHERE job_id IN ({id_csv})")
+            # company_research is company-scoped (no job_id column). Clean up
+            # by company_norm for the test companies.
+            db.execute(
+                "DELETE FROM company_research WHERE company_norm LIKE 'phase1%'"
+            )
             db.execute(f"DELETE FROM jobs WHERE id IN ({id_csv})")
         db.commit()
     finally:
@@ -163,7 +167,7 @@ class TestSharedDossierOnDelete:
         db = get_connection()
         try:
             db.execute(
-                "INSERT INTO company_research (job_id, company_name, company_norm, "
+                "INSERT INTO company_research (triggered_by_job_id, company_name, company_norm, "
                 "researched_at, created_at) VALUES (?, ?, ?, ?, ?)",
                 (job_id, "Phase1DossierCo", company_norm, "2026-07-02", "2026-07-02"),
             )
@@ -175,13 +179,15 @@ class TestSharedDossierOnDelete:
         db = get_connection()
         try:
             return db.execute(
-                "SELECT job_id FROM company_research WHERE company_norm = ?",
+                "SELECT triggered_by_job_id FROM company_research WHERE company_norm = ?",
                 (company_norm,),
             ).fetchone()
         finally:
             db.close()
 
-    def test_dossier_survives_sibling_delete_then_purged_with_last_job(self, client):
+    def test_dossier_survives_all_job_deletes(self, client):
+        """company_research is company-scoped (no job_id FK). Deleting jobs
+        must never delete the dossier — other jobs at the same company share it."""
         job_a = _create_job(client, "Phase1DossierCo", "dossier-a")
         job_b = _create_job(client, "Phase1DossierCo", "dossier-b")
 
@@ -194,13 +200,14 @@ class TestSharedDossierOnDelete:
 
         self._insert_dossier(job_a, norm)
 
-        # Deleting job_a (which owns the dossier row) must preserve it for job_b,
-        # re-pointing the FK to the surviving sibling.
+        # Deleting job_a must preserve the dossier (company-scoped, not job-scoped).
         assert client.delete(f"/api/jobs/{job_a}").status_code == 200
         surviving = self._dossier_for_company(norm)
-        assert surviving is not None, "dossier must survive while a sibling job exists"
-        assert surviving["job_id"] == job_b
+        assert surviving is not None, "dossier must survive job delete (company-scoped)"
 
-        # Deleting the last job at the company purges the dossier.
+        # Deleting the last job at the company must STILL preserve the dossier.
+        # company_research has no FK to jobs — delete_job does not touch it.
         assert client.delete(f"/api/jobs/{job_b}").status_code == 200
-        assert self._dossier_for_company(norm) is None
+        assert self._dossier_for_company(norm) is not None, (
+            "dossier must survive even when no jobs remain — it is company-scoped"
+        )

@@ -30,7 +30,7 @@ graph TB
     subgraph LLMRouter["LLM Router (3-tier)"]
         direction TB
         L1["Anthropic (direct) · OpenAI-compat (Kilo, Ollama) · OAuth"]
-        L2["Resume Gen · Cover Letter · App Answers"]
+        L2["Resume Gen"]
         L3["Retrieval (Tavily/Wiki)"]
         L1 --> L2 --> L3
     end
@@ -52,7 +52,7 @@ graph TB
 backend/seeker_os/
 ├── api/                    FastAPI routers (12 routers, 1 schema file)
 │   ├── app.py              Main app — CORS, logging, router registration, /health, /logs
-│   ├── jobs.py             Job CRUD, status transitions, analysis, research, resume gen, bulk actions
+│   ├── jobs.py             Job CRUD, status transitions, analysis, research, resume gen, bulk actions, recruiter contact CRUD
 │   ├── pipeline.py         Pipeline run (sync + SSE streaming), run history
 │   ├── queries.py          Search query CRUD + run
 │   ├── analytics.py        Funnel stats, response rate stats
@@ -68,15 +68,11 @@ backend/seeker_os/
 ├── analysis/
 │   ├── jd_analyzer.py      LLM-powered JD analysis (verdict, gaps, rubric breakdown)
 │   └── metadata_extractor.py  LLM-powered metadata extraction from JD text
-├── application_answers/
-│   └── generator.py        Application answer generation + critique (AI policy aware)
 ├── config.py               YAML config loading, env var resolution, Pydantic validation
 ├── config_writer.py        Write config updates back to YAML files
-├── cover_letter/
-│   └── generator.py        Cover letter generation (AI policy aware)
 ├── crossref/
 │   └── jobsearch_repo.py   Cross-reference repo scanner (git pull, read-only)
-├── database.py             SQLite connection, schema migrations (versioned via PRAGMA user_version)
+├── database.py             SQLite connection, schema migrations (versioned via PRAGMA user_version), recruiter_contacts table
 ├── dedup/
 │   ├── layers.py           4-layer dedup: URL hash → composite key → content hash → fuzzy
 │   └── normalize.py        Canonical company normalizer (single source of truth)
@@ -142,7 +138,7 @@ graph TB
     T3["Tier 3: JD Fetch<br/>ATS APIs (Greenhouse, Lever, Ashby)"]
     T35["Tier 3.5: Dedup<br/>4-layer: URL → composite → content → fuzzy"]
     T4["Tier 4: Scoring<br/>Config-driven rubric"]
-    T5["Tier 5: On-demand<br/>Analysis · Research · Resume Gen · Cover Letter · App Answers"]
+    T5["Tier 5: On-demand<br/>Analysis · Research · Resume Gen"]
 
     T1 --> T2
     T2 -->|"pass"| T3
@@ -270,7 +266,25 @@ The Settings UI writes config updates through `config_writer.py`, which:
 ## Database
 
 SQLite at `data/seeker.db`. Single-user, zero-config. No Alembic — simple versioned
-migrations via `PRAGMA user_version`.
+migrations via `PRAGMA user_version`. Current schema version: 29 (see `database.py` `MIGRATIONS` list).
+
+**Notable migrations:**
+- v25: `recruiters` + `recruiter_job_contacts` tables (replaces flat columns on jobs)
+- v26: `ON DELETE CASCADE` added to all child tables referencing `jobs(id)`
+- v27: `company_research` refactored — dropped `job_id` FK, added `triggered_by_job_id` (metadata only), non-unique index on `company_norm`, dedup stale rows
+- v28: Dropped unused `cover_letters` + `application_answers` tables (see #85 for future unified `generated_documents` table)
+
+### Key Tables
+
+| Table | Purpose |
+|---|---|
+| `jobs` | Core job records (title, company, score, status, etc.) |
+| `application_events` | Append-only event log (status changes, lifecycle events) |
+| `recruiter_contacts` | Recruiter contacts per job (name, email, phone, linkedin, agency, source, contacted_at, notes) — supports multiple recruiters per job |
+| `job_analyses` | LLM JD analysis results (verdict, gaps, rubric breakdown) |
+| `company_research` | Company research dossiers + retrieval snippets |
+| `resumes` | Generated resumes (text, validation, metadata) |
+| `pipeline_runs` | Pipeline run history |
 
 ---
 

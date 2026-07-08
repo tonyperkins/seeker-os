@@ -71,6 +71,440 @@ class TestManualJobCreate:
         assert data["job"]["score"] is not None
         assert data["job"]["jd_full"] == unique_jd.strip()
 
+    def test_create_jd_only_no_url(self, client):
+        """JD-only path: provide jd_text with no url, job is created with synthetic URL."""
+        unique_jd = "JD only test QQQ111\n\n" + _LONG_JD
+        r = client.post("/api/jobs", json={
+            "title": "Staff Engineer",
+            "company": "JDOnlyCo",
+            "location": "Remote, US",
+            "workplace_type": "Remote",
+            "jd_text": unique_jd,
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "created"
+        assert data["job"] is not None
+        assert data["job"]["source_id"] == "manual"
+        assert data["job"]["status"] == "ready"
+        assert data["job"]["score"] is not None
+        assert data["job"]["jd_full"] == unique_jd.strip()
+        # Synthetic URL should be a manual:// scheme
+        assert data["job"]["apply_url"].startswith("manual://jd-paste/")
+
+    def test_create_jd_only_dedup(self, client):
+        """Same JD text pasted twice with no URL → second request returns already_exists."""
+        unique_jd = "Dedup JD only RRR222\n\n" + _LONG_JD
+        r1 = client.post("/api/jobs", json={
+            "title": "Backend Engineer",
+            "company": "DedupJDOnlyCo",
+            "jd_text": unique_jd,
+        })
+        assert r1.status_code == 200
+        assert r1.json()["status"] == "created"
+        job_id = r1.json()["job"]["id"]
+
+        # Same JD, no URL again → should hit url_hash dedup
+        r2 = client.post("/api/jobs", json={
+            "title": "Different Title",
+            "company": "DifferentCo",
+            "jd_text": unique_jd,
+        })
+        assert r2.status_code == 200
+        data = r2.json()
+        assert data["status"] == "already_exists"
+        assert data["existing_job_id"] == job_id
+
+    def test_create_neither_url_nor_jd(self, client):
+        """Neither url nor jd_text → validation error (422)."""
+        r = client.post("/api/jobs", json={
+            "title": "No URL or JD",
+            "company": "FailCo",
+        })
+        assert r.status_code == 422
+
+    def test_create_with_recruiter_info(self, client):
+        """Recruiter contact info is stored in recruiters + recruiter_job_contacts and returned on the job detail."""
+        unique_jd = "Recruiter test FOO333\n\n" + _LONG_JD
+        r = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/recruiter-test-1",
+            "title": "Platform Engineer",
+            "company": "RecruiterCo",
+            "jd_text": unique_jd,
+            "recruiter_name": "Jane Smith",
+            "recruiter_email": "jane@recruiterco.com",
+            "recruiter_phone": "+1 555-123-4567",
+            "recruiter_linkedin": "linkedin.com/in/janesmith",
+            "recruiter_agency": "CyberCoders",
+            "recruiter_source": "LinkedIn",
+            "recruiter_contacted_at": "2025-01-15T10:00:00Z",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "created"
+        job = data["job"]
+        assert len(job["recruiter_contacts"]) == 1
+        rc = job["recruiter_contacts"][0]
+        assert rc["recruiter_id"] is not None
+        assert rc["name"] == "Jane Smith"
+        assert rc["email"] == "jane@recruiterco.com"
+        assert rc["phone"] == "+1 555-123-4567"
+        assert rc["linkedin"] == "linkedin.com/in/janesmith"
+        assert rc["agency"] == "CyberCoders"
+        assert rc["source"] == "LinkedIn"
+        assert rc["contacted_at"] == "2025-01-15T10:00:00Z"
+
+        # Verify recruiter_contact event was logged in timeline
+        events = job["events"]
+        rc_events = [e for e in events if e["event_type"] == "recruiter_contact"]
+        assert len(rc_events) == 1
+        assert rc_events[0]["metadata"]["name"] == "Jane Smith"
+        assert rc_events[0]["metadata"]["source"] == "LinkedIn"
+
+    def test_recruiter_crud_endpoints(self, client):
+        """Recruiter contacts can be added, updated, and deleted via CRUD endpoints."""
+        unique_jd = "Recruiter CRUD test BAZ555\n\n" + _LONG_JD
+        r = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/recruiter-crud-1",
+            "title": "DevOps Engineer",
+            "company": "CrudCo",
+            "jd_text": unique_jd,
+        })
+        assert r.status_code == 200
+        job_id = r.json()["job"]["id"]
+
+        # Add a recruiter via POST endpoint (inline fields → creates new recruiter)
+        r2 = client.post(f"/api/jobs/{job_id}/recruiters", json={
+            "name": "John Doe",
+            "email": "john@crudco.com",
+            "source": "email",
+            "agency": "Robert Half",
+            "contacted_at": "2025-06-01T09:00:00Z",
+        })
+        assert r2.status_code == 200
+        rc = r2.json()
+        assert rc["name"] == "John Doe"
+        assert rc["email"] == "john@crudco.com"
+        assert rc["source"] == "email"
+        assert rc["agency"] == "Robert Half"
+        assert rc["contacted_at"] == "2025-06-01T09:00:00Z"
+        association_id = rc["id"]
+        recruiter_entity_id = rc["recruiter_id"]
+
+        # Verify it appears in job detail
+        r3 = client.get(f"/api/jobs/{job_id}")
+        assert r3.status_code == 200
+        job = r3.json()
+        assert len(job["recruiter_contacts"]) == 1
+        assert job["recruiter_contacts"][0]["id"] == association_id
+
+        # Update the recruiter ENTITY via PATCH /recruiters/{id}
+        r4 = client.patch(f"/api/jobs/recruiters/{recruiter_entity_id}", json={
+            "phone": "+1 555-999-8888",
+        })
+        assert r4.status_code == 200
+        assert r4.json()["phone"] == "+1 555-999-8888"
+        assert r4.json()["name"] == "John Doe"  # unchanged
+
+        # Update the ASSOCIATION via PATCH /recruiters/association/{id}
+        r5 = client.patch(f"/api/jobs/recruiters/association/{association_id}", json={
+            "source": "LinkedIn",
+            "notes": "Followed up on Monday",
+        })
+        assert r5.status_code == 200
+        assert r5.json()["source"] == "LinkedIn"
+        assert r5.json()["notes"] == "Followed up on Monday"
+        # contacted_at must NOT change on association update
+        assert r5.json()["contacted_at"] == "2025-06-01T09:00:00Z"
+
+        # Delete the association via DELETE /recruiters/association/{id}
+        r6 = client.delete(f"/api/jobs/recruiters/association/{association_id}")
+        assert r6.status_code == 200
+
+        # Verify it's gone from job detail
+        r7 = client.get(f"/api/jobs/{job_id}")
+        assert r7.status_code == 200
+        assert len(r7.json()["recruiter_contacts"]) == 0
+
+    def test_list_jobs_recruiter_filter(self, client):
+        """list_jobs has_recruiter and recruiter_source filters work."""
+        unique_jd = "Recruiter filter test QQQ777\n\n" + _LONG_JD
+        # Create a job WITH recruiter
+        client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/recruiter-filter-1",
+            "title": "Filter Engineer",
+            "company": "FilterCo",
+            "jd_text": unique_jd,
+            "recruiter_name": "Jane Smith",
+            "recruiter_source": "LinkedIn",
+        })
+        # Create a job WITHOUT recruiter
+        unique_jd2 = "No recruiter filter test RRR888\n\n" + _LONG_JD
+        client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/recruiter-filter-2",
+            "title": "No Recruiter Engineer",
+            "company": "NoRecruitCo",
+            "jd_text": unique_jd2,
+        })
+
+        # Filter has_recruiter=true
+        r = client.get("/api/jobs?has_recruiter=true&limit=100")
+        assert r.status_code == 200
+        jobs = r.json()["jobs"]
+        recruiter_jobs = [j for j in jobs if j["has_recruiter"]]
+        assert len(recruiter_jobs) >= 1
+        assert all(j["has_recruiter"] for j in jobs if j["company"] == "FilterCo")
+
+        # Filter has_recruiter=false
+        r2 = client.get("/api/jobs?has_recruiter=false&limit=100")
+        assert r2.status_code == 200
+        jobs2 = r2.json()["jobs"]
+        assert all(not j["has_recruiter"] for j in jobs2)
+
+        # Filter by recruiter_source=LinkedIn
+        r3 = client.get("/api/jobs?recruiter_source=LinkedIn&limit=100")
+        assert r3.status_code == 200
+        jobs3 = r3.json()["jobs"]
+        assert all(j["has_recruiter"] for j in jobs3)
+        assert all(j["recruiter_source"] == "LinkedIn" for j in jobs3)
+
+    def test_recruiter_upsert_same_pair(self, client):
+        """POST same (recruiter_id, job_id) twice → one row, source/notes updated, contacted_at unchanged."""
+        unique_jd = "Upsert test UUU111\n\n" + _LONG_JD
+        # Create a job
+        r = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/upsert-test-1",
+            "title": "Upsert Engineer",
+            "company": "UpsertCo",
+            "jd_text": unique_jd,
+        })
+        assert r.status_code == 200
+        job_id = r.json()["job"]["id"]
+
+        # First add — creates new recruiter + association
+        r1 = client.post(f"/api/jobs/{job_id}/recruiters", json={
+            "name": "Alice Lee",
+            "email": "alice@upsertco.com",
+            "source": "email",
+            "contacted_at": "2025-03-01T10:00:00Z",
+            "notes": "Initial contact",
+        })
+        assert r1.status_code == 200
+        rc1 = r1.json()
+        association_id = rc1["id"]
+        recruiter_id = rc1["recruiter_id"]
+        assert rc1["contacted_at"] == "2025-03-01T10:00:00Z"
+        assert rc1["source"] == "email"
+        assert rc1["notes"] == "Initial contact"
+
+        # Second add — same recruiter_id, same job_id → upsert, NOT a new row
+        r2 = client.post(f"/api/jobs/{job_id}/recruiters", json={
+            "recruiter_id": recruiter_id,
+            "source": "LinkedIn",
+            "notes": "Updated notes",
+        })
+        assert r2.status_code == 200
+        rc2 = r2.json()
+        # Same association_id (no new row)
+        assert rc2["id"] == association_id
+        # source and notes updated
+        assert rc2["source"] == "LinkedIn"
+        assert rc2["notes"] == "Updated notes"
+        # contacted_at must NOT be overwritten
+        assert rc2["contacted_at"] == "2025-03-01T10:00:00Z"
+
+        # Verify only one association in job detail
+        r3 = client.get(f"/api/jobs/{job_id}")
+        assert len(r3.json()["recruiter_contacts"]) == 1
+
+        # Verify recruiter_contact event count did NOT increase on upsert
+        events = r3.json()["events"]
+        rc_events = [e for e in events if e["event_type"] == "recruiter_contact"]
+        assert len(rc_events) == 1, "Second POST (upsert) must not create a duplicate event"
+
+    def test_recruiter_contacted_at_write_once(self, client):
+        """PATCH association does NOT change contacted_at."""
+        unique_jd = "Write-once test WWW222\n\n" + _LONG_JD
+        r = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/write-once-1",
+            "title": "Write Once Engineer",
+            "company": "WriteOnceCo",
+            "jd_text": unique_jd,
+        })
+        assert r.status_code == 200
+        job_id = r.json()["job"]["id"]
+
+        # Add recruiter with contacted_at
+        r1 = client.post(f"/api/jobs/{job_id}/recruiters", json={
+            "name": "Bob Chen",
+            "email": "bob@writeonceco.com",
+            "source": "email",
+            "contacted_at": "2025-04-01T08:00:00Z",
+        })
+        assert r1.status_code == 200
+        association_id = r1.json()["id"]
+        original_contacted_at = r1.json()["contacted_at"]
+        assert original_contacted_at == "2025-04-01T08:00:00Z"
+
+        # Patch association — source and notes only
+        r2 = client.patch(f"/api/jobs/recruiters/association/{association_id}", json={
+            "source": "LinkedIn",
+            "notes": "Changed source",
+        })
+        assert r2.status_code == 200
+        assert r2.json()["contacted_at"] == original_contacted_at
+
+    def test_recruiter_link_existing_vs_create_new(self, client):
+        """POST with recruiter_id links existing; POST with inline fields creates new."""
+        unique_jd1 = "Link test LLL333\n\n" + _LONG_JD
+        unique_jd2 = "Link test LLL444\n\n" + _LONG_JD
+
+        # Job 1 — create with inline recruiter
+        r1 = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/link-test-1",
+            "title": "Link Engineer 1",
+            "company": "LinkCo",
+            "jd_text": unique_jd1,
+        })
+        job1_id = r1.json()["job"]["id"]
+
+        r1a = client.post(f"/api/jobs/{job1_id}/recruiters", json={
+            "name": "Carol King",
+            "email": "carol@linkco.com",
+            "agency": "Hired.com",
+            "source": "email",
+            "contacted_at": "2025-05-01T10:00:00Z",
+        })
+        assert r1a.status_code == 200
+        recruiter_id = r1a.json()["recruiter_id"]
+
+        # Job 2 — link the SAME recruiter by recruiter_id
+        r2 = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/link-test-2",
+            "title": "Link Engineer 2",
+            "company": "LinkCo",
+            "jd_text": unique_jd2,
+        })
+        job2_id = r2.json()["job"]["id"]
+
+        r2a = client.post(f"/api/jobs/{job2_id}/recruiters", json={
+            "recruiter_id": recruiter_id,
+            "source": "LinkedIn",
+            "contacted_at": "2025-05-15T14:00:00Z",
+        })
+        assert r2a.status_code == 200
+        rc2 = r2a.json()
+        assert rc2["recruiter_id"] == recruiter_id
+        assert rc2["name"] == "Carol King"  # entity fields from existing recruiter
+        assert rc2["email"] == "carol@linkco.com"
+        assert rc2["agency"] == "Hired.com"
+        assert rc2["source"] == "LinkedIn"  # association-specific
+        assert rc2["contacted_at"] == "2025-05-15T14:00:00Z"  # association-specific
+
+        # Verify both jobs show the recruiter
+        r3 = client.get(f"/api/jobs/{job1_id}")
+        r4 = client.get(f"/api/jobs/{job2_id}")
+        assert len(r3.json()["recruiter_contacts"]) == 1
+        assert len(r4.json()["recruiter_contacts"]) == 1
+        assert r3.json()["recruiter_contacts"][0]["recruiter_id"] == recruiter_id
+        assert r4.json()["recruiter_contacts"][0]["recruiter_id"] == recruiter_id
+
+    def test_recruiter_search(self, client):
+        """GET /api/recruiters/search returns matches by email and by name."""
+        unique_jd = "Search test SSS555\n\n" + _LONG_JD
+        r = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/search-test-1",
+            "title": "Search Engineer",
+            "company": "SearchCo",
+            "jd_text": unique_jd,
+        })
+        job_id = r.json()["job"]["id"]
+
+        client.post(f"/api/jobs/{job_id}/recruiters", json={
+            "name": "Dave Wilson",
+            "email": "dave@searchco.com",
+            "agency": "CyberCoders",
+        })
+
+        # Search by name
+        r1 = client.get("/api/jobs/recruiters/search?q=Dave")
+        assert r1.status_code == 200
+        results = r1.json()
+        assert len(results) >= 1
+        assert any(r["name"] == "Dave Wilson" for r in results)
+
+        # Search by email
+        r2 = client.get("/api/jobs/recruiters/search?q=dave@searchco")
+        assert r2.status_code == 200
+        results2 = r2.json()
+        assert len(results2) >= 1
+        assert any(r["email"] == "dave@searchco.com" for r in results2)
+
+        # Empty query returns empty
+        r3 = client.get("/api/jobs/recruiters/search?q=")
+        assert r3.status_code == 200
+        assert r3.json() == []
+
+    def test_recruiter_search_route_not_captured_as_job_id(self, client):
+        """Route ordering: GET /api/jobs/recruiters/search must return 200,
+        not 422 from being captured by GET /{job_id} with 'recruiters' failing int parse."""
+        r = client.get("/api/jobs/recruiters/search?q=foo")
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_recruiter_cascade_delete(self, client):
+        """Deleting a job cascades its recruiter associations; deleting a recruiter entity cascades its associations."""
+        unique_jd = "Cascade test CCC666\n\n" + _LONG_JD
+        r = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/cascade-test-1",
+            "title": "Cascade Engineer",
+            "company": "CascadeCo",
+            "jd_text": unique_jd,
+        })
+        job_id = r.json()["job"]["id"]
+
+        # Add a recruiter
+        r1 = client.post(f"/api/jobs/{job_id}/recruiters", json={
+            "name": "Eve Adams",
+            "email": "eve@cascadeco.com",
+            "source": "email",
+        })
+        assert r1.status_code == 200
+        recruiter_id = r1.json()["recruiter_id"]
+        association_id = r1.json()["id"]
+
+        # Delete the job — association should cascade
+        r2 = client.delete(f"/api/jobs/{job_id}")
+        assert r2.status_code == 200
+
+        # Verify association is gone (query DB directly)
+        import sqlite3
+        conn = sqlite3.connect(str(dbmod._db_path()))
+        conn.row_factory = sqlite3.Row
+        assoc = conn.execute(
+            "SELECT id FROM recruiter_job_contacts WHERE id = ?", (association_id,)
+        ).fetchone()
+        assert assoc is None, "Association should be cascade-deleted with job"
+        # Recruiter entity should still exist
+        recruiter = conn.execute(
+            "SELECT id FROM recruiters WHERE id = ?", (recruiter_id,)
+        ).fetchone()
+        assert recruiter is not None, "Recruiter entity should survive job deletion"
+        conn.close()
+
+        # Now delete the recruiter entity directly — should cascade any remaining associations
+        conn = sqlite3.connect(str(dbmod._db_path()))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("DELETE FROM recruiters WHERE id = ?", (recruiter_id,))
+        conn.commit()
+        # Verify recruiter is gone
+        recruiter = conn.execute(
+            "SELECT id FROM recruiters WHERE id = ?", (recruiter_id,)
+        ).fetchone()
+        assert recruiter is None, "Recruiter entity should be deleted"
+        conn.close()
+
     def test_create_dedup_url_hash(self, client):
         """Same URL twice → second request returns already_exists."""
         url = "https://example.com/jobs/dedup-test-1"
@@ -336,7 +770,7 @@ class TestManualJobCreate:
         try:
             db.execute(
                 """INSERT INTO company_research (
-                    job_id, company_name, company_norm, funding_data, sentiment_data,
+                    triggered_by_job_id, company_name, company_norm, funding_data, sentiment_data,
                     overall_confidence, researched_at, created_at,
                     retrieval_sources
                 ) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -514,3 +948,98 @@ class TestJobOverride:
         """Delete on nonexistent job returns 404."""
         r = client.delete("/api/jobs/99999")
         assert r.status_code == 404
+
+    def test_cascade_delete_removes_child_rows(self, client):
+        """Deleting a job cascades to child tables (application_events, resumes, etc).
+
+        This test proves ON DELETE CASCADE fires by using a raw sqlite3 connection
+        with PRAGMA foreign_keys = ON to delete the job directly — bypassing the
+        manual cleanup in delete_job endpoint. If CASCADE is not configured, child
+        rows would survive and the test would fail.
+        """
+        import sqlite3
+
+        # Create a job
+        unique_jd = "Cascade child test CASC777\n\n" + _LONG_JD
+        r = client.post("/api/jobs", json={
+            "url": "https://example.com/jobs/cascade-child-test",
+            "title": "Cascade Child Engineer",
+            "company": "CascadeChildCo",
+            "jd_text": unique_jd,
+        })
+        assert r.status_code == 200
+        job_id = r.json()["job"]["id"]
+
+        # The manual_created event is already there. Add an application_event
+        # and a resume row directly so we have child rows to verify cascade.
+        db = get_connection()
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            db.execute(
+                """INSERT INTO application_events
+                   (job_id, event_type, actor, occurred_at, created_at, metadata)
+                   VALUES (?, 'applied', 'candidate', ?, ?, '{}')""",
+                (job_id, now, now),
+            )
+            db.execute(
+                """INSERT INTO resumes
+                   (job_id, task, provider, model, resume_text, generated_at, updated_at)
+                   VALUES (?, 'resume_generation_standard', 'test', 'test', 'test resume', ?, ?)""",
+                (job_id, now, now),
+            )
+            db.execute(
+                """INSERT INTO dedup_registry
+                   (job_id, key_type, key_value, created_at)
+                   VALUES (?, 'content_hash', 'cascade_test_hash_777', ?)""",
+                (job_id, now),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        # Verify child rows exist
+        db = get_connection()
+        try:
+            event_count = db.execute(
+                "SELECT COUNT(*) FROM application_events WHERE job_id = ?", (job_id,)
+            ).fetchone()[0]
+            assert event_count >= 2, f"Expected >=2 events, got {event_count}"
+
+            resume_count = db.execute(
+                "SELECT COUNT(*) FROM resumes WHERE job_id = ?", (job_id,)
+            ).fetchone()[0]
+            assert resume_count == 1, f"Expected 1 resume, got {resume_count}"
+
+            dedup_count = db.execute(
+                "SELECT COUNT(*) FROM dedup_registry WHERE job_id = ?", (job_id,)
+            ).fetchone()[0]
+            assert dedup_count >= 1, f"Expected >=1 dedup row, got {dedup_count}"
+        finally:
+            db.close()
+
+        # Delete the job using a RAW connection with PRAGMA foreign_keys = ON.
+        # This bypasses the manual cleanup in delete_job endpoint, proving
+        # that CASCADE alone removes the child rows.
+        conn = sqlite3.connect(str(dbmod._db_path()))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        conn.commit()
+
+        # Verify child rows are gone (CASCADE fired)
+        event_count = conn.execute(
+            "SELECT COUNT(*) FROM application_events WHERE job_id = ?", (job_id,)
+        ).fetchone()[0]
+        assert event_count == 0, f"CASCADE failed: {event_count} events survived job delete"
+
+        resume_count = conn.execute(
+            "SELECT COUNT(*) FROM resumes WHERE job_id = ?", (job_id,)
+        ).fetchone()[0]
+        assert resume_count == 0, f"CASCADE failed: {resume_count} resumes survived job delete"
+
+        dedup_count = conn.execute(
+            "SELECT COUNT(*) FROM dedup_registry WHERE job_id = ?", (job_id,)
+        ).fetchone()[0]
+        assert dedup_count == 0, f"CASCADE failed: {dedup_count} dedup rows survived job delete"
+
+        conn.close()
