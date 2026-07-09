@@ -33,6 +33,31 @@ const REJECTION_LABELS: Record<string, string> = {
   company_rejected: "company rejections",
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  discovered: "Discovered",
+  filtered: "Filtered",
+  jd_fetched: "JD Fetched",
+  duplicate_flagged: "Duplicate",
+  ready: "Ready",
+  reviewing: "Reviewing",
+  interested: "Interested",
+  applied: "Applied",
+  engaged: "Engaged",
+  company_rejected: "Company Rejected",
+  withdrawn: "Withdrawn",
+  offer_accepted: "Offer Accepted",
+  offer_declined: "Offer Declined",
+  rejected: "Rejected",
+  skipped: "Skipped",
+  capped: "Capped",
+  overridden: "Overridden",
+};
+
+function statusLabel(s: string | null | undefined): string {
+  if (!s) return "—";
+  return STATUS_LABELS[s] ?? s.replace(/_/g, " ");
+}
+
 export function MovementFeed({ events, rejectionCount, rejectionBreakdown }: {
   events: MovementEvent[];
   rejectionCount?: number;
@@ -90,7 +115,15 @@ export function MovementFeed({ events, rejectionCount, rejectionBreakdown }: {
                   <span className="block truncate text-muted-foreground">{evt.company}</span>
                 </div>
                 <div className="flex flex-col items-end gap-0.5">
-                  <span className="text-xs font-medium">{meta.label}</span>
+                  <span className="flex items-center gap-1 text-xs font-medium">
+                    {evt.from_status && (
+                      <>
+                        <span className="text-muted-foreground/60">{statusLabel(evt.from_status)}</span>
+                        <ArrowRight className="size-3 text-muted-foreground/40" />
+                      </>
+                    )}
+                    <span className={meta.color}>{statusLabel(evt.to_status)}</span>
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {formatDateTime(evt.occurred_at)}
                   </span>
