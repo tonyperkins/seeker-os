@@ -19,22 +19,47 @@ function formatCost(n: number): string {
 
 function formatPrice(n: number | null): string {
   if (n === null) return "—";
-  if (n === 0) return "$0.00";
+  if (n === 0) return "$0";
   return `$${n.toFixed(2)}`;
 }
 
 const TASK_LABELS: Record<string, string> = {
   jd_analysis: "JD Analysis",
   resume_generation: "Resume Gen",
-  company_dossier_generation: "Company Dossier",
+  resume_generation_high_value: "Resume Gen (High Value)",
+  resume_generation_standard: "Resume Gen (Standard)",
+  resume_parsing: "Resume Parsing",
   resume_validation: "Resume Validation",
+  company_dossier_generation: "Company Dossier",
+  cover_letter_generation: "Cover Letter",
+  application_answer_generation: "Application Answers",
+  application_answer_critique: "Answer Critique",
+  accuracy_validation: "Accuracy Validation",
+  onboarding_interview: "Onboarding Interview",
+  metadata_extraction: "Metadata Extraction",
+  manual: "Manual",
 };
 
-const SOURCE_LABELS: Record<string, string> = {
+const SOURCE_BADGE: Record<string, string> = {
   yaml: "YAML",
   auto: "API",
   "yaml+auto": "YAML+API",
 };
+
+function shortenModel(provider: string, model: string): string {
+  // Strip the provider namespace prefix from the model id if present
+  // e.g. "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6"
+  const slashIdx = model.indexOf("/");
+  if (slashIdx >= 0) {
+    const prefix = model.slice(0, slashIdx);
+    const rest = model.slice(slashIdx + 1);
+    // Only strip if the prefix looks like a provider namespace (not a version path segment)
+    if (prefix !== provider && !prefix.match(/^\d/)) {
+      return rest;
+    }
+  }
+  return model;
+}
 
 export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
   if (!report || report.total_calls === 0) {
@@ -50,6 +75,8 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
       </CollapsibleCard>
     );
   }
+
+  const hasPricing = report.pricing_configured;
 
   return (
     <CollapsibleCard
@@ -74,7 +101,7 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
           <div className="flex flex-col">
             <span className="text-xs text-muted-foreground">Est. cost</span>
             <span className="font-mono text-sm font-semibold">
-              {report.pricing_configured ? formatCost(report.total_estimated_cost) : "—"}
+              {hasPricing ? formatCost(report.total_estimated_cost) : "—"}
             </span>
           </div>
         </div>
@@ -90,7 +117,7 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
       </div>
 
       {/* Pricing freshness line */}
-      {report.pricing_configured && report.pricing_fetched_at && (
+      {hasPricing && report.pricing_fetched_at && (
         <div className={`text-xs ${report.pricing_stale ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"}`}>
           Pricing as of {formatDate(report.pricing_fetched_at)}
           {report.pricing_stale && ` · stale (>${report.pricing_stale_after_days}d)`}
@@ -114,18 +141,18 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
 
       {/* By task breakdown */}
       {report.by_task.length > 0 && (
-        <div className="flex flex-col gap-2 border-t border-border pt-3">
+        <div className="flex flex-col gap-1.5 border-t border-border pt-3">
           <h4 className="text-xs font-semibold text-muted-foreground">By Task</h4>
           {report.by_task.map((t) => (
-            <div key={t.task} className="flex items-baseline justify-between text-sm">
-              <span className="text-muted-foreground">
-                {TASK_LABELS[t.task] ?? t.task}
+            <div key={t.task} className="grid grid-cols-[1fr_auto_auto] items-baseline gap-3 text-sm">
+              <span className="truncate text-muted-foreground">
+                {TASK_LABELS[t.task] ?? t.task.replace(/_/g, " ")}
               </span>
-              <span className="font-mono text-xs">
-                <span className="text-muted-foreground">{t.calls} calls · {formatTokens(t.input_tokens + t.output_tokens)}</span>
-                {report.pricing_configured && (
-                  <span className="ml-2 font-semibold text-foreground">{formatCost(t.estimated_cost)}</span>
-                )}
+              <span className="text-right font-mono text-xs text-muted-foreground/70">
+                {t.calls} · {formatTokens(t.input_tokens + t.output_tokens)}
+              </span>
+              <span className="w-16 text-right font-mono text-xs font-semibold text-foreground">
+                {hasPricing ? formatCost(t.estimated_cost) : ""}
               </span>
             </div>
           ))}
@@ -133,34 +160,44 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
       )}
 
       {/* By model breakdown */}
-      {report.pricing_configured && report.by_model.length > 0 && (
-        <div className="flex flex-col gap-2 border-t border-border pt-3">
+      {report.by_model.length > 0 && (
+        <div className="flex flex-col gap-1.5 border-t border-border pt-3">
           <h4 className="text-xs font-semibold text-muted-foreground">By Model</h4>
-          {report.by_model.map((m) => (
-            <div key={`${m.provider}/${m.model}`} className="flex items-baseline justify-between text-sm">
-              <div className="min-w-0 flex-1">
-                <span className="block truncate text-muted-foreground">
-                  {m.provider}/{m.model}
-                </span>
-                {m.pricing_source && (
-                  <span className="text-xs text-muted-foreground/60">
-                    {SOURCE_LABELS[m.pricing_source] ?? m.pricing_source}
+          {report.by_model.map((m) => {
+            const noPricing = m.input_price_per_mtok == null && m.output_price_per_mtok == null;
+            return (
+              <div key={`${m.provider}/${m.model}`} className="grid grid-cols-[1fr_auto] items-baseline gap-3 text-sm">
+                <div className="min-w-0 flex flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-muted-foreground">
+                      {shortenModel(m.provider, m.model)}
+                    </span>
+                    {m.pricing_source && (
+                      <span className="shrink-0 rounded bg-muted/50 px-1 py-0 text-[10px] font-medium text-muted-foreground/60">
+                        {SOURCE_BADGE[m.pricing_source] ?? m.pricing_source}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs text-muted-foreground/50">
+                    {m.provider}
                     {m.pricing_fetched_at && ` · ${formatDate(m.pricing_fetched_at)}`}
                   </span>
-                )}
+                </div>
+                <div className="flex flex-col items-end gap-0.5">
+                  <span className={`font-mono text-xs font-semibold ${noPricing ? "text-muted-foreground/40" : "text-foreground"}`}>
+                    {noPricing ? "no pricing" : formatCost(m.estimated_cost)}
+                  </span>
+                  <span className="font-mono text-xs text-muted-foreground/60">
+                    {formatPrice(m.input_price_per_mtok)} / {formatPrice(m.output_price_per_mtok)}
+                  </span>
+                </div>
               </div>
-              <span className="font-mono text-xs">
-                <span className="text-muted-foreground">
-                  {formatPrice(m.input_price_per_mtok)}/{formatPrice(m.output_price_per_mtok)}
-                </span>
-                <span className="ml-2 font-semibold text-foreground">{formatCost(m.estimated_cost)}</span>
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {!report.pricing_configured && (
+      {!hasPricing && (
         <div className="border-t border-border pt-2 text-xs text-muted-foreground">
           Add <code className="font-mono">input_price_per_mtok</code> / <code className="font-mono">output_price_per_mtok</code> to models in providers.yml for cost estimates
         </div>
