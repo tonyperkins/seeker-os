@@ -467,6 +467,40 @@ def get_spend():
             """,
         ).fetchall()
 
+        # Aggregate from cover_letters (if table exists — dropped in v28)
+        cover_letter_rows = []
+        try:
+            cover_letter_rows = db.execute(
+                """
+                SELECT provider, model, task,
+                       COUNT(*) as calls,
+                       SUM(input_tokens) as in_tok,
+                       SUM(output_tokens) as out_tok
+                FROM cover_letters
+                WHERE provider IS NOT NULL AND provider != ''
+                GROUP BY provider, model, task
+                """,
+            ).fetchall()
+        except Exception:
+            pass
+
+        # Aggregate from application_answers (if table exists — dropped in v28)
+        answer_rows = []
+        try:
+            answer_rows = db.execute(
+                """
+                SELECT provider, model, task,
+                       COUNT(*) as calls,
+                       SUM(input_tokens) as in_tok,
+                       SUM(output_tokens) as out_tok
+                FROM application_answers
+                WHERE provider IS NOT NULL AND provider != ''
+                GROUP BY provider, model, task
+                """,
+            ).fetchall()
+        except Exception:
+            pass
+
         # Combine
         by_task: dict[str, dict] = {}
         by_model: dict[tuple[str, str], dict] = {}
@@ -475,7 +509,7 @@ def get_spend():
         total_out = 0
         total_cost = 0.0
 
-        for r in [*analysis_rows, *resume_rows]:
+        for r in [*analysis_rows, *resume_rows, *cover_letter_rows, *answer_rows]:
             provider = r["provider"] or "unknown"
             model = r["model"] or "unknown"
             task = r["task"] or "unknown"

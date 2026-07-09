@@ -46,6 +46,18 @@ const SOURCE_BADGE: Record<string, string> = {
   "yaml+auto": "YAML+API",
 };
 
+const TASK_PRIORITY: string[] = [
+  "jd_analysis",
+  "resume_generation_high_value",
+  "resume_generation_standard",
+  "manual",
+];
+
+function taskSortKey(task: string): number {
+  const idx = TASK_PRIORITY.indexOf(task);
+  return idx >= 0 ? idx : 99;
+}
+
 function shortenModel(provider: string, model: string): string {
   // Strip the provider namespace prefix from the model id if present
   // e.g. "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6"
@@ -141,7 +153,12 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
           {report.by_task.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <h4 className="text-xs font-semibold text-muted-foreground">By Task</h4>
-              {report.by_task.map((t) => (
+              {report.by_task.slice().sort((a, b) => {
+            const pa = taskSortKey(a.task);
+            const pb = taskSortKey(b.task);
+            if (pa !== pb) return pa - pb;
+            return b.estimated_cost - a.estimated_cost;
+          }).map((t) => (
                 <div key={t.task} className="grid grid-cols-[1fr_auto_auto] items-baseline gap-2 text-sm">
                   <span className="truncate text-muted-foreground">
                     {TASK_LABELS[t.task] ?? t.task.replace(/_/g, " ")}
