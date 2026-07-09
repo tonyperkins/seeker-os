@@ -315,7 +315,10 @@ def _make_connection_patcher(db_path):
     def _patched_get_connection(_db_path=None):
         if not db_path.exists():
             run_migrations(db_path)
-        return sqlite3.connect(str(db_path))
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
 
     return _patched_get_connection
 

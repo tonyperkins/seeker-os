@@ -11,6 +11,8 @@ from seeker_os.api.schemas import (
     PostApplyTransition, EngagedEventCreate, CleanStartCreate,
     RefilterRescoreRequest, RefilterRescoreResult,
     SkipReasonAnnotate, NoReasonSkip,
+    RecruiterContact, RecruiterContactCreate,
+    RecruiterEntityUpdate, RecruiterAssociationUpdate, RecruiterSearchResult,
 )
 from seeker_os.database import get_connection, json_decode, json_encode
 from seeker_os.events import (
@@ -197,10 +199,29 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
     )
 
 
+def _row_to_recruiter(row) -> RecruiterContact:
+    return RecruiterContact(
+        id=row["id"],
+        recruiter_id=row["recruiter_id"],
+        job_id=row["job_id"],
+        name=row["name"],
+        email=row["email"],
+        phone=row["phone"],
+        linkedin=row["linkedin"],
+        agency=row["agency"],
+        source=row["source"],
+        contacted_at=row["contacted_at"],
+        notes=row["notes"],
+        created_at=row["created_at"] or "",
+        updated_at=row["updated_at"] or "",
+    )
+
+
 def _row_to_summary(
     row, db=None, *, stale_after_days: int | None = None,
     stale_result: tuple[bool, int | None] | None = None,
     indicator_flags: tuple[bool, bool, bool] | None = None,
+    recruiter_flag: tuple[bool, str | None] | None = None,
 ) -> JobSummary:
     is_stale = False
     days_since = None
@@ -209,6 +230,7 @@ def _row_to_summary(
     elif db is not None:
         is_stale, days_since = _compute_stale(db, row, stale_after_days=stale_after_days)
     has_analysis, has_research, has_resume = indicator_flags or (False, False, False)
+    has_recruiter, recruiter_source = recruiter_flag or (False, None)
     return JobSummary(
         id=row["id"],
         title=row["title"] or "",
@@ -240,6 +262,8 @@ def _row_to_summary(
         has_resume=has_resume,
         analysis_verdict=row["analysis_verdict"] if "analysis_verdict" in row.keys() else None,
         net_score=row["net_score"] if "net_score" in row.keys() else None,
+        has_recruiter=has_recruiter,
+        recruiter_source=recruiter_source,
     )
 
 
@@ -258,6 +282,7 @@ def _row_to_event(row) -> ApplicationEvent:
 
 def _row_to_detail(row, db=None) -> JobDetail:
     events: list[ApplicationEvent] = []
+    recruiters: list[RecruiterContact] = []
     is_stale = False
     days_since = None
     if db is not None:
@@ -266,6 +291,18 @@ def _row_to_detail(row, db=None) -> JobDetail:
             (row["id"],),
         ).fetchall()
         events = [_row_to_event(r) for r in event_rows]
+        recruiter_rows = db.execute(
+            """
+            SELECT rjc.id, rjc.recruiter_id, rjc.job_id, rjc.source,
+                   rjc.contacted_at, rjc.notes, rjc.created_at, rjc.updated_at,
+                   r.name, r.email, r.phone, r.linkedin, r.agency
+            FROM recruiter_job_contacts rjc
+            JOIN recruiters r ON rjc.recruiter_id = r.id
+            WHERE rjc.job_id = ? ORDER BY rjc.id ASC
+            """,
+            (row["id"],),
+        ).fetchall()
+        recruiters = [_row_to_recruiter(r) for r in recruiter_rows]
         is_stale, days_since = _compute_stale(db, row)
     return JobDetail(
         id=row["id"],
@@ -319,6 +356,7 @@ def _row_to_detail(row, db=None) -> JobDetail:
         override_note=row["override_note"] if "override_note" in row.keys() else None,
         original_reject_reason=row["original_reject_reason"] if "original_reject_reason" in row.keys() else None,
         events=events,
+        recruiter_contacts=recruiters,
         is_stale=is_stale,
         days_since_last_activity=days_since,
     )
@@ -330,11 +368,13 @@ def list_jobs(
     min_score: float | None = Query(None, description="Minimum score"),
     min_tier: int | None = Query(None, description="Minimum tier_passed (e.g. 4 for scored)"),
     company: str | None = Query(None, description="Filter by company (substring)"),
-    search: str | None = Query(None, description="Free-text search across title, company, location, reject_reason, discovered_query"),
+    search: str | None = Query(None, description="Free-text search across title, company, location, reject_reason, discovered_query, recruiter name"),
     source: str | None = Query(None, description="Filter by source_id (e.g. 'manual', 'hiring_cafe')"),
     run_id: str | None = Query(None, description="Filter by pipeline run_id"),
     verdict: str | None = Query(None, description="Filter by AI analysis verdict (APPLY, CONDITIONAL, MONITOR, SKIP)"),
     exclude_status: str | None = Query(None, description="Comma-separated statuses to exclude (e.g. 'rejected,skipped')"),
+    recruiter_source: str | None = Query(None, description="Filter by recruiter contact source (e.g. 'LinkedIn', 'email')"),
+    has_recruiter: bool | None = Query(None, description="Filter to jobs with (true) or without (false) recruiter contacts"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -363,9 +403,9 @@ def list_jobs(
             query += " AND company LIKE ?"
             params.append(f"%{company}%")
         if search:
-            query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR reject_reason LIKE ? OR discovered_query LIKE ? OR run_id LIKE ?)"
+            query += " AND (title LIKE ? OR company LIKE ? OR location LIKE ? OR reject_reason LIKE ? OR discovered_query LIKE ? OR run_id LIKE ? OR id IN (SELECT rjc.job_id FROM recruiter_job_contacts rjc JOIN recruiters r ON rjc.recruiter_id = r.id WHERE r.name LIKE ?))"
             pat = f"%{search}%"
-            params.extend([pat, pat, pat, pat, pat, pat])
+            params.extend([pat, pat, pat, pat, pat, pat, pat])
         if source:
             query += " AND source_id = ?"
             params.append(source)
@@ -375,6 +415,14 @@ def list_jobs(
         if verdict:
             query += " AND analysis_verdict = ?"
             params.append(verdict)
+        if recruiter_source:
+            query += " AND id IN (SELECT job_id FROM recruiter_job_contacts WHERE source = ?)"
+            params.append(recruiter_source)
+        if has_recruiter is not None:
+            if has_recruiter:
+                query += " AND id IN (SELECT job_id FROM recruiter_job_contacts)"
+            else:
+                query += " AND id NOT IN (SELECT job_id FROM recruiter_job_contacts)"
 
         # Count total matching rows (without LIMIT/OFFSET) for pagination
         count_query = query.replace("SELECT *", "SELECT COUNT(*) as total", 1)
@@ -404,8 +452,15 @@ def list_jobs(
                 job_ids,
             ).fetchall()
             analysis_ids = {r["job_id"] for r in analysis_rows}
+            # company_research is company-scoped (no job_id column). Join through
+            # jobs.company_norm to find which jobs have a research dossier.
             research_rows = db.execute(
-                f"SELECT DISTINCT job_id FROM company_research WHERE job_id IN ({placeholders})",
+                f"""
+                SELECT DISTINCT j.id AS job_id
+                FROM jobs j
+                INNER JOIN company_research cr ON cr.company_norm = j.company_norm
+                WHERE j.id IN ({placeholders})
+                """,
                 job_ids,
             ).fetchall()
             research_ids = {r["job_id"] for r in research_rows}
@@ -415,6 +470,16 @@ def list_jobs(
             ).fetchall()
             resume_ids = {r["job_id"] for r in resume_rows}
 
+            recruiter_rows = db.execute(
+                f"SELECT job_id, source FROM recruiter_job_contacts WHERE job_id IN ({placeholders})",
+                job_ids,
+            ).fetchall()
+            recruiter_map: dict[int, str | None] = {}
+            for r in recruiter_rows:
+                # First recruiter's source wins for the summary badge
+                if r["job_id"] not in recruiter_map:
+                    recruiter_map[r["job_id"]] = r["source"]
+
         jobs = [
             _row_to_summary(
                 r, db=db, stale_after_days=stale_after_days,
@@ -423,6 +488,10 @@ def list_jobs(
                     r["id"] in analysis_ids,
                     r["id"] in research_ids,
                     r["id"] in resume_ids,
+                ),
+                recruiter_flag=(
+                    r["id"] in recruiter_map,
+                    recruiter_map.get(r["id"]),
                 ),
             )
             for r in rows
@@ -457,7 +526,16 @@ def create_job(body: JobCreate):
     from seeker_os.models import JobCard
     from seeker_os.config import Settings
 
-    uh = url_hash(body.url)
+    # When no URL is provided (JD-only path), generate a synthetic URL for
+    # dedup and storage purposes. Uses a hash of the JD text so the same JD
+    # pasted twice produces the same url_hash (dedup layer 1 catches it).
+    import hashlib as _hashlib
+    if body.url.strip():
+        effective_url = body.url.strip()
+    else:
+        jd_hash = _hashlib.sha256(body.jd_text.strip().encode()).hexdigest()[:16]
+        effective_url = f"manual://jd-paste/{jd_hash}"
+    uh = url_hash(effective_url)
 
     db = get_connection()
     try:
@@ -491,7 +569,7 @@ def create_job(body: JobCreate):
                         break
 
             # Try Greenhouse API first for structured metadata
-            gh_parsed = parse_greenhouse_url(body.url)
+            gh_parsed = parse_greenhouse_url(effective_url)
             gh_data = None
             if gh_parsed:
                 gh_board, gh_job_id = gh_parsed
@@ -555,7 +633,7 @@ def create_job(body: JobCreate):
                     ats_source=ats_source,
                     ats_board_token=ats_board_token,
                     ats_job_id=ats_job_id,
-                    apply_url=body.url,
+                    apply_url=effective_url,
                     user_agent=user_agent,
                     delay=0,  # no delay for manual single fetch
                 )
@@ -662,7 +740,7 @@ def create_job(body: JobCreate):
         card = JobCard(
             source_id="manual",
             source_job_id=source_job_id,
-            apply_url=body.url,
+            apply_url=effective_url,
             title=eff_title,
             core_title=eff_title,
             company=eff_company,
@@ -728,7 +806,7 @@ def create_job(body: JobCreate):
             (
                 "manual", source_job_id,
                 ats_source, ats_board_token, ats_job_id,
-                body.url, uh,
+                effective_url, uh,
                 eff_title, eff_title, eff_company, body.company_homepage,
                 eff_location, eff_workplace, json_encode(eff_countries), eff_seniority,
                 json_encode([eff_commitment] if eff_commitment else []), eff_comp_min, eff_comp_max, body.comp_currency, eff_comp_source,
@@ -759,6 +837,42 @@ def create_job(body: JobCreate):
             db, job_id, EventType.MANUAL_CREATED, Actor.CANDIDATE,
             metadata={"score": score_result.score},
         )
+
+        # If recruiter contact info was provided, create recruiter entity +
+        # association and log a recruiter_contact event in the timeline.
+        if any([body.recruiter_name, body.recruiter_email, body.recruiter_phone,
+                body.recruiter_linkedin, body.recruiter_agency, body.recruiter_source]):
+            now_rc = datetime.now(timezone.utc).isoformat()
+            # Create recruiter entity
+            cursor_rc = db.execute(
+                """
+                INSERT INTO recruiters (name, email, phone, linkedin, agency, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (body.recruiter_name, body.recruiter_email, body.recruiter_phone,
+                 body.recruiter_linkedin, body.recruiter_agency, now_rc, now_rc),
+            )
+            recruiter_entity_id = cursor_rc.lastrowid
+            # Create association
+            db.execute(
+                """
+                INSERT INTO recruiter_job_contacts
+                    (recruiter_id, job_id, source, contacted_at, notes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, NULL, ?, ?)
+                """,
+                (recruiter_entity_id, job_id, body.recruiter_source,
+                 body.recruiter_contacted_at, now_rc, now_rc),
+            )
+            record_event(
+                db, job_id, EventType.RECRUITER_CONTACT, Actor.COMPANY,
+                metadata={
+                    "name": body.recruiter_name,
+                    "source": body.recruiter_source,
+                    "agency": body.recruiter_agency,
+                },
+                occurred_at=body.recruiter_contacted_at,
+                allow_before_discovery=True,
+            )
 
         db.commit()
 
@@ -877,6 +991,257 @@ def update_job(job_id: int, update: JobUpdate):
 
         db.commit()
         return MessageResponse(message=f"Job {job_id} updated")
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Recruiter contact CRUD (normalized: recruiters + recruiter_job_contacts)
+# ---------------------------------------------------------------------------
+
+_RECRUITER_JOIN_SQL = """
+    SELECT rjc.id, rjc.recruiter_id, rjc.job_id, rjc.source,
+           rjc.contacted_at, rjc.notes, rjc.created_at, rjc.updated_at,
+           r.name, r.email, r.phone, r.linkedin, r.agency
+    FROM recruiter_job_contacts rjc
+    JOIN recruiters r ON rjc.recruiter_id = r.id
+"""
+
+
+@router.post("/{job_id}/recruiters", response_model=RecruiterContact)
+def add_recruiter(job_id: int, body: RecruiterContactCreate):
+    """Add a recruiter contact to a job.
+
+    If recruiter_id is provided, links an existing recruiter entity.
+    Otherwise creates a new recruiter from inline fields.
+    Upserts on UNIQUE(recruiter_id, job_id): if the pair already exists,
+    updates source/notes; does NOT overwrite contacted_at.
+    """
+    db = get_connection()
+    try:
+        row = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Resolve recruiter_id: link existing or create new
+        if body.recruiter_id is not None:
+            recruiter_id = body.recruiter_id
+            exists = db.execute(
+                "SELECT id FROM recruiters WHERE id = ?", (recruiter_id,)
+            ).fetchone()
+            if not exists:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Recruiter {recruiter_id} not found",
+                )
+        else:
+            cursor = db.execute(
+                """
+                INSERT INTO recruiters (name, email, phone, linkedin, agency, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (body.name, body.email, body.phone, body.linkedin,
+                 body.agency, now, now),
+            )
+            recruiter_id = cursor.lastrowid
+
+        # Check if association already exists (for event semantics + upsert detection)
+        existing = db.execute(
+            "SELECT id FROM recruiter_job_contacts WHERE recruiter_id = ? AND job_id = ?",
+            (recruiter_id, job_id),
+        ).fetchone()
+        is_new_association = existing is None
+
+        # Upsert association: try insert, on UNIQUE(recruiter_id, job_id) conflict → update
+        cursor = db.execute(
+            """
+            INSERT INTO recruiter_job_contacts
+                (recruiter_id, job_id, source, contacted_at, notes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(recruiter_id, job_id) DO UPDATE SET
+                source = COALESCE(excluded.source, recruiter_job_contacts.source),
+                notes = COALESCE(excluded.notes, recruiter_job_contacts.notes),
+                updated_at = excluded.updated_at
+            """,
+            (recruiter_id, job_id, body.source, body.contacted_at,
+             body.notes, now, now),
+        )
+        # cursor.lastrowid is unreliable after ON CONFLICT DO UPDATE.
+        # Query for the actual association ID.
+        assoc_row = db.execute(
+            "SELECT id FROM recruiter_job_contacts WHERE recruiter_id = ? AND job_id = ?",
+            (recruiter_id, job_id),
+        ).fetchone()
+        association_id = assoc_row["id"]
+
+        # Record event only on FIRST association, not on upsert update
+        if is_new_association:
+            # Get recruiter name for event metadata
+            recruiter_row = db.execute(
+                "SELECT name, agency FROM recruiters WHERE id = ?", (recruiter_id,)
+            ).fetchone()
+            record_event(
+                db, job_id, EventType.RECRUITER_CONTACT, Actor.COMPANY,
+                metadata={
+                    "name": recruiter_row["name"] if recruiter_row else None,
+                    "source": body.source,
+                    "agency": recruiter_row["agency"] if recruiter_row else None,
+                },
+                occurred_at=body.contacted_at,
+                allow_before_discovery=True,
+            )
+
+        db.commit()
+        rc_row = db.execute(
+            f"{_RECRUITER_JOIN_SQL} WHERE rjc.id = ?",
+            (association_id,),
+        ).fetchone()
+        return _row_to_recruiter(rc_row)
+    finally:
+        db.close()
+
+
+@router.patch("/recruiters/{recruiter_id}", response_model=RecruiterContact)
+def update_recruiter_entity(recruiter_id: int, body: RecruiterEntityUpdate):
+    """Update a recruiter entity (affects all associations)."""
+    db = get_connection()
+    try:
+        row = db.execute(
+            "SELECT id FROM recruiters WHERE id = ?", (recruiter_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Recruiter {recruiter_id} not found")
+
+        now = datetime.now(timezone.utc).isoformat()
+        fields = {
+            "name": body.name,
+            "email": body.email,
+            "phone": body.phone,
+            "linkedin": body.linkedin,
+            "agency": body.agency,
+        }
+        updates = {k: v for k, v in fields.items() if v is not None}
+        if updates:
+            set_clauses = ", ".join(f"{k}=?" for k in updates)
+            params = list(updates.values()) + [now, recruiter_id]
+            db.execute(
+                f"UPDATE recruiters SET {set_clauses}, updated_at=? WHERE id=?",
+                params,
+            )
+
+        db.commit()
+        # Return first association for this recruiter (or just the entity if none)
+        rc_row = db.execute(
+            f"{_RECRUITER_JOIN_SQL} WHERE rjc.recruiter_id = ? ORDER BY rjc.id ASC LIMIT 1",
+            (recruiter_id,),
+        ).fetchone()
+        if not rc_row:
+            # No associations — return a synthetic row from the entity
+            r = db.execute("SELECT * FROM recruiters WHERE id = ?", (recruiter_id,)).fetchone()
+            return RecruiterContact(
+                id=0, recruiter_id=r["id"], job_id=0,
+                name=r["name"], email=r["email"], phone=r["phone"],
+                linkedin=r["linkedin"], agency=r["agency"],
+                source=None, contacted_at=None, notes=None,
+                created_at=r["created_at"] or "", updated_at=r["updated_at"] or "",
+            )
+        return _row_to_recruiter(rc_row)
+    finally:
+        db.close()
+
+
+@router.patch("/recruiters/association/{association_id}", response_model=RecruiterContact)
+def update_recruiter_association(association_id: int, body: RecruiterAssociationUpdate):
+    """Update association fields (source, notes only).
+
+    contacted_at is write-once — set on create, never overwritten.
+    This endpoint does NOT accept contacted_at.
+    """
+    db = get_connection()
+    try:
+        row = db.execute(
+            "SELECT id FROM recruiter_job_contacts WHERE id = ?", (association_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Recruiter association {association_id} not found")
+
+        now = datetime.now(timezone.utc).isoformat()
+        fields = {
+            "source": body.source,
+            "notes": body.notes,
+        }
+        updates = {k: v for k, v in fields.items() if v is not None}
+        if updates:
+            set_clauses = ", ".join(f"{k}=?" for k in updates)
+            params = list(updates.values()) + [now, association_id]
+            db.execute(
+                f"UPDATE recruiter_job_contacts SET {set_clauses}, updated_at=? WHERE id=?",
+                params,
+            )
+
+        db.commit()
+        rc_row = db.execute(
+            f"{_RECRUITER_JOIN_SQL} WHERE rjc.id = ?",
+            (association_id,),
+        ).fetchone()
+        return _row_to_recruiter(rc_row)
+    finally:
+        db.close()
+
+
+@router.delete("/recruiters/association/{association_id}", response_model=MessageResponse)
+def delete_recruiter_association(association_id: int):
+    """Delete a recruiter-job association (does NOT delete the recruiter entity)."""
+    db = get_connection()
+    try:
+        row = db.execute(
+            "SELECT id FROM recruiter_job_contacts WHERE id = ?", (association_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Recruiter association {association_id} not found")
+
+        db.execute("DELETE FROM recruiter_job_contacts WHERE id = ?", (association_id,))
+        db.commit()
+        return MessageResponse(message=f"Recruiter association {association_id} deleted")
+    finally:
+        db.close()
+
+
+@router.get("/recruiters/search", response_model=list[RecruiterSearchResult])
+def search_recruiters(q: str = Query("", description="Search by name or email")):
+    """Search recruiters by name or email for autocomplete picker."""
+    db = get_connection()
+    try:
+        if not q.strip():
+            return []
+        pat = f"%{q.strip()}%"
+        rows = db.execute(
+            """
+            SELECT r.id, r.name, r.email, r.phone, r.linkedin, r.agency,
+                   COUNT(rjc.id) AS job_count
+            FROM recruiters r
+            LEFT JOIN recruiter_job_contacts rjc ON rjc.recruiter_id = r.id
+            WHERE r.name LIKE ? OR r.email LIKE ?
+            GROUP BY r.id
+            ORDER BY r.name ASC
+            LIMIT 20
+            """,
+            (pat, pat),
+        ).fetchall()
+        return [
+            RecruiterSearchResult(
+                id=r["id"],
+                name=r["name"],
+                email=r["email"],
+                phone=r["phone"],
+                linkedin=r["linkedin"],
+                agency=r["agency"],
+                job_count=r["job_count"],
+            )
+            for r in rows
+        ]
     finally:
         db.close()
 
@@ -1106,35 +1471,24 @@ def delete_job(job_id: int):
     """Delete a job and all dependent records."""
     db = get_connection()
     try:
-        row = db.execute("SELECT id, company_norm FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        row = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
+        # Belt-and-suspenders: these child tables now have ON DELETE CASCADE
+        # (migration 26), so the DELETE FROM jobs below handles them automatically.
+        # These explicit deletes are kept as a safety net — if FK enforcement is
+        # ever off (e.g. a raw connection without PRAGMA foreign_keys = ON),
+        # orphaned child rows would otherwise accumulate.
         for table in ("dedup_registry", "resumes",
-                       "job_analyses", "cover_letters", "application_answers",
+                       "job_analyses",
                        "application_events"):
             db.execute(f"DELETE FROM {table} WHERE job_id = ?", (job_id,))
 
-        # company_research dossiers are company-keyed (looked up by company_norm)
-        # and shared across sibling jobs at the same company. Only delete this
-        # job's research rows when no other job references the same company —
-        # otherwise siblings suffer silent cache misses and paid re-fetches.
-        company_norm = row["company_norm"]
-        sibling = None
-        if company_norm:
-            sibling = db.execute(
-                "SELECT id FROM jobs WHERE company_norm = ? AND id != ? LIMIT 1",
-                (company_norm, job_id),
-            ).fetchone()
-        if sibling is None:
-            db.execute("DELETE FROM company_research WHERE job_id = ?", (job_id,))
-        else:
-            # Preserve the dossier for the sibling but re-point its job_id FK so
-            # the jobs-row delete below doesn't violate the foreign key.
-            db.execute(
-                "UPDATE company_research SET job_id = ? WHERE job_id = ?",
-                (sibling["id"], job_id),
-            )
+        # company_research is company-scoped (keyed by company_norm, not job_id).
+        # Deleting a job must NOT delete company research — other jobs at the
+        # same company share the dossier. There is no FK from company_research
+        # to jobs, so no CASCADE reaches it either.
 
         db.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         db.commit()

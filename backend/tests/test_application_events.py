@@ -45,8 +45,7 @@ def cleanup_after():
             id_list = [str(r["id"]) for r in rows]
             id_csv = ",".join(id_list)
             for table in ["application_events", "dedup_registry", "resumes",
-                          "company_research", "job_analyses", "cover_letters",
-                          "application_answers"]:
+                          "job_analyses"]:
                 db.execute(f"DELETE FROM {table} WHERE job_id IN ({id_csv})")
             db.execute(f"DELETE FROM jobs WHERE id IN ({id_csv})")
         # Also clean up any test jobs from the atomicity test

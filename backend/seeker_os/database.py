@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,136 @@ def _backfill_company_norm(conn):
             "UPDATE company_research SET company_norm = ? WHERE id = ?",
             (norm, row[0]),
         )
+
+
+def _migrate_company_research_drop_job_id(conn):
+    """Decouple company_research from jobs.
+
+    1. Collapse stale duplicate rows sharing a company_norm (keep most recent
+       researched_at). No UNIQUE constraint to satisfy, but stale dups waste
+       space and the read path picks most-recent anyway.
+    2. Recreate table without job_id FK, with triggered_by_job_id as
+       metadata-only provenance (no FK, no CASCADE).
+    3. Non-unique index on company_norm for fast lookups.
+    """
+    # Step 1: Delete stale duplicate rows (keep most recent researched_at per company_norm)
+    conn.execute(
+        """
+        DELETE FROM company_research
+        WHERE id NOT IN (
+            SELECT id FROM company_research cr_keep
+            WHERE cr_keep.id = (
+                SELECT id FROM company_research cr_latest
+                WHERE cr_latest.company_norm = cr_keep.company_norm
+                  AND cr_latest.company_norm IS NOT NULL
+                  AND cr_latest.company_norm != ''
+                ORDER BY cr_latest.researched_at DESC
+                LIMIT 1
+            )
+        )
+        """,
+    )
+
+    # Step 2: Create new table without job_id FK, with triggered_by_job_id metadata
+    conn.execute(
+        """
+        CREATE TABLE company_research_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            triggered_by_job_id INTEGER,
+            company_name TEXT,
+            company_homepage TEXT,
+            wikipedia_data TEXT,
+            funding_data TEXT,
+            sentiment_data TEXT,
+            sources_used TEXT,
+            errors TEXT,
+            researched_at TEXT,
+            created_at TEXT,
+            fit_data TEXT,
+            overall_confidence REAL DEFAULT 0.0,
+            summary TEXT DEFAULT '',
+            verdict_flags TEXT,
+            gaps TEXT,
+            company_norm TEXT,
+            retrieval_sources TEXT,
+            retrieval_snippets_data TEXT,
+            verification_state TEXT DEFAULT 'unverified'
+        )
+        """,
+    )
+
+    # Copy data: job_id -> triggered_by_job_id (preserve provenance)
+    conn.execute(
+        """
+        INSERT INTO company_research_new (
+            id, triggered_by_job_id, company_name, company_homepage,
+            wikipedia_data, funding_data, sentiment_data, sources_used, errors,
+            researched_at, created_at, fit_data, overall_confidence, summary,
+            verdict_flags, gaps, company_norm, retrieval_sources,
+            retrieval_snippets_data, verification_state
+        )
+        SELECT
+            id, job_id, company_name, company_homepage,
+            wikipedia_data, funding_data, sentiment_data, sources_used, errors,
+            researched_at, created_at, fit_data, overall_confidence, summary,
+            verdict_flags, gaps, company_norm, retrieval_sources,
+            retrieval_snippets_data, verification_state
+        FROM company_research
+        """,
+    )
+
+    # Drop old, rename new
+    conn.execute("DROP TABLE company_research")
+    conn.execute("ALTER TABLE company_research_new RENAME TO company_research")
+
+    # Step 3: Non-unique index on company_norm (lookup key, NOT a unique constraint)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_company_research_company_norm ON company_research(company_norm)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_company_research_company_name ON company_research(company_name)"
+    )
+
+
+def _migrate_flat_recruiter_columns(conn):
+    """If jobs table has flat recruiter_* columns, migrate data and drop them."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(jobs)").fetchall()]
+    recruiter_cols = [c for c in cols if c in (
+        "recruiter_name", "recruiter_email", "recruiter_phone",
+        "recruiter_linkedin", "recruiter_source",
+    )]
+    if not recruiter_cols:
+        return  # Fresh DB — nothing to migrate
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Migrate existing data into recruiter_contacts
+    rows = conn.execute(
+        """
+        SELECT id, recruiter_name, recruiter_email, recruiter_phone,
+               recruiter_linkedin, recruiter_source
+        FROM jobs
+        WHERE recruiter_name IS NOT NULL
+           OR recruiter_email IS NOT NULL
+           OR recruiter_phone IS NOT NULL
+           OR recruiter_linkedin IS NOT NULL
+           OR recruiter_source IS NOT NULL
+        """
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            """
+            INSERT INTO recruiter_contacts
+                (job_id, name, email, phone, linkedin, agency, source,
+                 contacted_at, notes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, ?)
+            """,
+            (row[0], row[1], row[2], row[3], row[4], row[5], now, now),
+        )
+
+    # Drop old columns (SQLite 3.35+ supports ALTER TABLE DROP COLUMN)
+    for col in recruiter_cols:
+        conn.execute(f"ALTER TABLE jobs DROP COLUMN {col}")
 
 
 # ---------------------------------------------------------------------------
@@ -385,8 +516,277 @@ MIGRATIONS: list[str | callable] = [
     """
     ALTER TABLE company_research ADD COLUMN verification_state TEXT DEFAULT 'unverified';
     """,
-]
+    # Migration 22: Recruiter contact tracking — separate table supports
+    # multiple recruiters per job, agency/firm tracking, and future CRM features.
+    # source: 'linkedin', 'email', 'referral', 'agency', 'other' (free-text,
+    # constrained by frontend dropdown).
+    """
+    CREATE TABLE recruiter_contacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        name TEXT,
+        email TEXT,
+        phone TEXT,
+        linkedin TEXT,
+        agency TEXT,
+        source TEXT,
+        contacted_at TEXT,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_recruiter_contacts_job_id ON recruiter_contacts(job_id);
+    """,
+    # Migration 23: Transition flat recruiter columns → recruiter_contacts table.
+    # For DBs where migration 22 was applied with the old flat-columns SQL, this
+    # creates the table, migrates existing data, and drops the old columns.
+    # For fresh DBs (migration 22 already created the table), this is a no-op.
+    """
+    CREATE TABLE IF NOT EXISTS recruiter_contacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        name TEXT,
+        email TEXT,
+        phone TEXT,
+        linkedin TEXT,
+        agency TEXT,
+        source TEXT,
+        contacted_at TEXT,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_recruiter_contacts_job_id ON recruiter_contacts(job_id);
+    """,
+    # Migration 24: Migrate data from flat recruiter columns → recruiter_contacts,
+    # then drop the old columns. No-op on fresh DBs (columns never existed).
+    _migrate_flat_recruiter_columns,
+    # Migration 25: Normalize recruiter contacts — split into recruiters (entity)
+    # and recruiter_job_contacts (association). Drops the old recruiter_contacts
+    # table (0 rows in prod, no data migration needed).
+    # UNIQUE(recruiter_id, job_id): the association is a FACT (this recruiter is
+    # a contact for this job), not an event. Repeated outreach belongs in
+    # application_events, NOT as duplicate association rows.
+    # contacted_at = FIRST contact, set once on create, never overwritten.
+    """
+    CREATE TABLE recruiters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT,
+        phone TEXT,
+        linkedin TEXT,
+        agency TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
 
+    CREATE INDEX idx_recruiters_email ON recruiters(email);
+    CREATE INDEX idx_recruiters_name ON recruiters(name);
+
+    CREATE TABLE recruiter_job_contacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recruiter_id INTEGER NOT NULL REFERENCES recruiters(id) ON DELETE CASCADE,
+        job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        source TEXT,
+        contacted_at TEXT,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(recruiter_id, job_id)
+    );
+
+    CREATE INDEX idx_recruiter_job_contacts_job_id ON recruiter_job_contacts(job_id);
+    CREATE INDEX idx_recruiter_job_contacts_recruiter_id ON recruiter_job_contacts(recruiter_id);
+
+    DROP TABLE IF EXISTS recruiter_contacts;
+    """,
+    # Migration 26: Add ON DELETE CASCADE to child tables that reference jobs(id).
+    # SQLite can't ALTER TABLE to change FK constraints, so we use the
+    # create-new / copy / drop-old / rename pattern for each table.
+    # Tables: application_events, resumes, job_analyses, cover_letters,
+    #         application_answers, dedup_registry
+    # (company_research is handled separately in P1 — skip here.)
+    """
+    -- application_events
+    CREATE TABLE application_events_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+        event_type TEXT,
+        actor TEXT,
+        occurred_at TEXT,
+        created_at TEXT,
+        metadata TEXT,
+        note TEXT
+    );
+    INSERT INTO application_events_new (id, job_id, event_type, actor, occurred_at, created_at, metadata, note)
+        SELECT id, job_id, event_type, actor, occurred_at, created_at, metadata, note FROM application_events;
+    DROP TABLE application_events;
+    ALTER TABLE application_events_new RENAME TO application_events;
+    CREATE INDEX idx_application_events_job_id ON application_events(job_id);
+    CREATE INDEX idx_application_events_job_occurred ON application_events(job_id, occurred_at);
+    CREATE INDEX idx_application_events_event_type ON application_events(event_type);
+
+    -- resumes
+    CREATE TABLE resumes_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+        task TEXT,
+        provider TEXT,
+        model TEXT,
+        resume_text TEXT,
+        master_resume_path TEXT,
+        validation_passed BOOLEAN DEFAULT FALSE,
+        validation_violations TEXT,
+        validation_checked_at TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER DEFAULT 0,
+        generated_at TEXT,
+        updated_at TEXT,
+        markdown_path TEXT,
+        pdf_path TEXT,
+        docx_path TEXT
+    );
+    INSERT INTO resumes_new (id, job_id, task, provider, model, resume_text, master_resume_path,
+        validation_passed, validation_violations, validation_checked_at,
+        input_tokens, output_tokens, latency_ms, generated_at, updated_at, markdown_path, pdf_path, docx_path)
+        SELECT id, job_id, task, provider, model, resume_text, master_resume_path,
+        validation_passed, validation_violations, validation_checked_at,
+        input_tokens, output_tokens, latency_ms, generated_at, updated_at, markdown_path, pdf_path, docx_path
+        FROM resumes;
+    DROP TABLE resumes;
+    ALTER TABLE resumes_new RENAME TO resumes;
+    CREATE INDEX idx_resumes_job_id ON resumes(job_id);
+    CREATE INDEX idx_resumes_generated_at ON resumes(generated_at);
+
+    -- job_analyses
+    CREATE TABLE job_analyses_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+        provider TEXT,
+        model TEXT,
+        task TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER DEFAULT 0,
+        analysis_json TEXT,
+        verdict TEXT,
+        weighted_score REAL,
+        one_line TEXT,
+        confidence REAL,
+        analyzed_at TEXT,
+        created_at TEXT
+    );
+    INSERT INTO job_analyses_new (id, job_id, provider, model, task, input_tokens, output_tokens,
+        latency_ms, analysis_json, verdict, weighted_score, one_line, confidence, analyzed_at, created_at)
+        SELECT id, job_id, provider, model, task, input_tokens, output_tokens,
+        latency_ms, analysis_json, verdict, weighted_score, one_line, confidence, analyzed_at, created_at
+        FROM job_analyses;
+    DROP TABLE job_analyses;
+    ALTER TABLE job_analyses_new RENAME TO job_analyses;
+    CREATE INDEX idx_job_analyses_job_id ON job_analyses(job_id);
+    CREATE INDEX idx_job_analyses_verdict ON job_analyses(verdict);
+
+    -- cover_letters
+    CREATE TABLE cover_letters_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+        task TEXT,
+        provider TEXT,
+        model TEXT,
+        cover_letter_text TEXT,
+        master_resume_path TEXT,
+        validation_passed BOOLEAN DEFAULT FALSE,
+        validation_violations TEXT,
+        validation_checked_at TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER DEFAULT 0,
+        generated_at TEXT,
+        updated_at TEXT,
+        markdown_path TEXT
+    );
+    INSERT INTO cover_letters_new (id, job_id, task, provider, model, cover_letter_text, master_resume_path,
+        validation_passed, validation_violations, validation_checked_at,
+        input_tokens, output_tokens, latency_ms, generated_at, updated_at, markdown_path)
+        SELECT id, job_id, task, provider, model, cover_letter_text, master_resume_path,
+        validation_passed, validation_violations, validation_checked_at,
+        input_tokens, output_tokens, latency_ms, generated_at, updated_at, markdown_path
+        FROM cover_letters;
+    DROP TABLE cover_letters;
+    ALTER TABLE cover_letters_new RENAME TO cover_letters;
+    CREATE INDEX idx_cover_letters_job_id ON cover_letters(job_id);
+
+    -- application_answers
+    CREATE TABLE application_answers_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+        question TEXT,
+        task TEXT,
+        provider TEXT,
+        model TEXT,
+        answer_text TEXT,
+        master_resume_path TEXT,
+        validation_passed BOOLEAN DEFAULT FALSE,
+        validation_violations TEXT,
+        validation_checked_at TEXT,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        latency_ms INTEGER DEFAULT 0,
+        generated_at TEXT,
+        updated_at TEXT,
+        markdown_path TEXT
+    );
+    INSERT INTO application_answers_new (id, job_id, question, task, provider, model, answer_text,
+        master_resume_path, validation_passed, validation_violations, validation_checked_at,
+        input_tokens, output_tokens, latency_ms, generated_at, updated_at, markdown_path)
+        SELECT id, job_id, question, task, provider, model, answer_text,
+        master_resume_path, validation_passed, validation_violations, validation_checked_at,
+        input_tokens, output_tokens, latency_ms, generated_at, updated_at, markdown_path
+        FROM application_answers;
+    DROP TABLE application_answers;
+    ALTER TABLE application_answers_new RENAME TO application_answers;
+    CREATE INDEX idx_application_answers_job_id ON application_answers(job_id);
+
+    -- dedup_registry
+    CREATE TABLE dedup_registry_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+        key_type TEXT,
+        key_value TEXT,
+        created_at TEXT
+    );
+    INSERT INTO dedup_registry_new (id, job_id, key_type, key_value, created_at)
+        SELECT id, job_id, key_type, key_value, created_at FROM dedup_registry;
+    DROP TABLE dedup_registry;
+    ALTER TABLE dedup_registry_new RENAME TO dedup_registry;
+    CREATE INDEX idx_dedup_key_value ON dedup_registry(key_value);
+    CREATE INDEX idx_dedup_key_type ON dedup_registry(key_type);
+    """,
+    # Migration 27: Decouple company_research from jobs — drop job_id FK,
+    # add triggered_by_job_id as metadata-only provenance, collapse stale dup
+    # rows by company_norm, and add a non-unique index on company_norm.
+    #
+    # company_norm is NOT a UNIQUE key: normalize_company is tuned for dedup
+    # (aggressive suffix stripping), and using it as a unique identity key
+    # would hard-fail on legitimate collisions like "SAP" vs "SAP America".
+    # The read path selects most-recent-by-researched_at when multiple rows
+    # share a company_norm (option b), and the write path upserts by
+    # company_norm lookup to avoid accumulating duplicates.
+    _migrate_company_research_drop_job_id,
+    # Migration 28: Drop unused cover_letters and application_answers tables.
+    # These were created in v9, recreated with CASCADE in v26, and are now
+    # dropped — neither feature was shipped to production. Future generated
+    # documents (cover letters, application answers, etc.) will use a unified
+    # generated_documents table. See ai-audit/DATA_MODEL_AUDIT_2026-07-08.md
+    # §P4 for the roadmap note.
+    """
+    DROP TABLE IF EXISTS cover_letters;
+    DROP TABLE IF EXISTS application_answers;
+    """,
+]
 
 def _split_sql_statements(script: str) -> list[str]:
     """Split a migration script into individual statements on ';'.

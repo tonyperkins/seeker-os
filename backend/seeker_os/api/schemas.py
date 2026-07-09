@@ -8,7 +8,7 @@ These are separate from the internal models in models.py because:
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +40,10 @@ class JobSummary(BaseModel):
     source_id: str = ""
     discovered_query: str = ""
     run_id: str | None = None
+
+    # Derived recruiter indicator (computed from recruiter_contacts table)
+    has_recruiter: bool = False
+    recruiter_source: str | None = None
 
     # Derived stale flag (computed, never stored)
     is_stale: bool = False
@@ -142,6 +146,9 @@ class JobDetail(BaseModel):
     # Application lifecycle events timeline
     events: list[ApplicationEvent] = []
 
+    # Recruiter contacts (one-to-many — supports multiple recruiters per job)
+    recruiter_contacts: list[RecruiterContact] = []
+
     # Derived stale flag (computed, never stored)
     is_stale: bool = False
     days_since_last_activity: int | None = None
@@ -150,11 +157,14 @@ class JobDetail(BaseModel):
 class JobCreate(BaseModel):
     """POST /api/jobs — manually add a job.
 
-    URL is required. All other fields are optional (user may provide known
-    details; the backend fills gaps from JD fetch when possible).
-    If jd_text is provided (paste-JD fallback path), JD fetch is skipped.
+    Either a URL or jd_text (or both) must be provided. When only jd_text is
+    given (e.g. a recruiter emailed a JD with no link), the job is created
+    directly from the pasted text with a synthetic URL for dedup purposes.
+    All other fields are optional (user may provide known details; the
+    backend fills gaps from JD fetch when possible).
+    If jd_text is provided, JD fetch is skipped.
     """
-    url: str
+    url: str = ""
     title: str = ""
     company: str = ""
     location: str = ""
@@ -164,8 +174,22 @@ class JobCreate(BaseModel):
     comp_max: int | None = None
     comp_currency: str | None = None
     company_homepage: str | None = None
-    jd_text: str | None = None  # paste-JD fallback — skip fetch when provided
+    jd_text: str | None = None  # paste-JD path — skip fetch when provided
     force: bool = False  # bypass soft-duplicate check (content hash match)
+    # Recruiter contact info (creates a recruiter_contacts record on job creation)
+    recruiter_name: str | None = None
+    recruiter_email: str | None = None
+    recruiter_phone: str | None = None
+    recruiter_linkedin: str | None = None
+    recruiter_agency: str | None = None
+    recruiter_source: str | None = None
+    recruiter_contacted_at: str | None = None  # ISO datetime when recruiter reached out
+
+    @model_validator(mode="after")
+    def _require_url_or_jd(self):
+        if not self.url.strip() and not (self.jd_text and self.jd_text.strip()):
+            raise ValueError("Either url or jd_text must be provided")
+        return self
 
     @field_validator("comp_min", "comp_max", mode="before")
     @classmethod
@@ -229,6 +253,76 @@ class JobUpdate(BaseModel):
         if v is None:
             return None
         return int(round(float(v)))
+
+
+class RecruiterContact(BaseModel):
+    """Recruiter contact read model — joins recruiter entity + association fields."""
+    id: int                   # recruiter_job_contacts.id (association PK)
+    recruiter_id: int         # recruiters.id (entity PK)
+    job_id: int
+    # Entity fields (from recruiters table)
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    linkedin: str | None = None
+    agency: str | None = None
+    # Association fields (from recruiter_job_contacts table)
+    source: str | None = None
+    contacted_at: str | None = None
+    notes: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class RecruiterContactCreate(BaseModel):
+    """POST /api/jobs/{id}/recruiters — link or create a recruiter for a job.
+
+    If recruiter_id is provided, links an existing recruiter (ignores inline
+    entity fields). Otherwise creates a new recruiter from inline fields.
+    Upserts on UNIQUE(recruiter_id, job_id): if the pair already exists,
+    updates source/notes; does NOT overwrite contacted_at.
+    """
+    recruiter_id: int | None = None
+    # Inline entity fields (used when recruiter_id is None)
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    linkedin: str | None = None
+    agency: str | None = None
+    # Association fields
+    source: str | None = None
+    contacted_at: str | None = None
+    notes: str | None = None
+
+
+class RecruiterEntityUpdate(BaseModel):
+    """PATCH /api/recruiters/{id} — update recruiter entity (affects all associations)."""
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    linkedin: str | None = None
+    agency: str | None = None
+
+
+class RecruiterAssociationUpdate(BaseModel):
+    """PATCH /api/jobs/recruiters/{id} — update association fields only.
+
+    source and notes are editable. contacted_at is write-once (set on create,
+    never overwritten) and is NOT accepted here.
+    """
+    source: str | None = None
+    notes: str | None = None
+
+
+class RecruiterSearchResult(BaseModel):
+    """GET /api/recruiters/search — autocomplete result."""
+    id: int
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    linkedin: str | None = None
+    agency: str | None = None
+    job_count: int = 0
 
 
 class JobReject(BaseModel):
@@ -789,7 +883,7 @@ class VerdictFlagsSchema(BaseModel):
 class CompanyResearchResponse(BaseModel):
     """Company research result."""
     id: int | None = None
-    job_id: int
+    triggered_by_job_id: int | None = None
     company_name: str
     company_homepage: str | None = None
     wikipedia: WikipediaInfoSchema | None = None

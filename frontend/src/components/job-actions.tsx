@@ -429,7 +429,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
               <DialogTitle>Delete job</DialogTitle>
               <DialogDescription>
                 This permanently deletes the job and all associated data (resumes,
-                cover letters, analyses, research). This cannot be undone.
+                analyses, research). This cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX, RefreshCw } from "lucide-react";
+import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX, RefreshCw, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -768,6 +768,9 @@ function JobsPageInner() {
                           </span>
                           <span title={job.has_resume ? "Resume generated" : "No resume"}>
                             <FileText className={`size-3.5 ${job.has_resume ? "text-primary" : "text-muted-foreground/30"}`} />
+                          </span>
+                          <span title={job.has_recruiter ? `Recruiter: ${job.recruiter_source ?? "contact"}` : "No recruiter"}>
+                            <Users className={`size-3.5 ${job.has_recruiter ? "text-primary" : "text-muted-foreground/30"}`} />
                           </span>
                         </div>
                       </TableCell>

@@ -85,6 +85,23 @@ export interface JobSummary {
   has_resume: boolean;
   analysis_verdict: string | null;
   net_score: number | null;
+  has_recruiter: boolean;
+  recruiter_source: string | null;
+}
+
+export interface RecruiterContact {
+  id: number;
+  job_id: number;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  linkedin: string | null;
+  agency: string | null;
+  source: string | null;
+  contacted_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface JobDetail extends JobSummary {
@@ -122,10 +139,11 @@ export interface JobDetail extends JobSummary {
   is_stale: boolean;
   days_since_last_activity: number | null;
   events: ApplicationEvent[];
+  recruiter_contacts: RecruiterContact[];
 }
 
 export interface JobCreateRequest {
-  url: string;
+  url?: string;
   title?: string;
   company?: string;
   location?: string;
@@ -137,6 +155,13 @@ export interface JobCreateRequest {
   company_homepage?: string;
   jd_text?: string;
   force?: boolean;
+  recruiter_name?: string;
+  recruiter_email?: string;
+  recruiter_phone?: string;
+  recruiter_linkedin?: string;
+  recruiter_agency?: string;
+  recruiter_source?: string;
+  recruiter_contacted_at?: string;
 }
 
 export interface JobCreateResponse {
@@ -522,6 +547,24 @@ export const api = {
       fetchAPI<{ message: string }>(`/api/jobs/${id}/apply`, { method: "POST" }),
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "DELETE" }),
+    addRecruiter: (jobId: number, data: {
+      name?: string; email?: string; phone?: string; linkedin?: string;
+      agency?: string; source?: string; contacted_at?: string; notes?: string;
+    }) =>
+      fetchAPI<RecruiterContact>(`/api/jobs/${jobId}/recruiters`, {
+        method: "POST", body: JSON.stringify(data),
+      }),
+    updateRecruiter: (recruiterId: number, data: {
+      name?: string; email?: string; phone?: string; linkedin?: string;
+      agency?: string; source?: string; contacted_at?: string; notes?: string;
+    }) =>
+      fetchAPI<RecruiterContact>(`/api/jobs/recruiters/${recruiterId}`, {
+        method: "PATCH", body: JSON.stringify(data),
+      }),
+    deleteRecruiter: (recruiterId: number) =>
+      fetchAPI<{ message: string }>(`/api/jobs/recruiters/${recruiterId}`, {
+        method: "DELETE",
+      }),
     transition: (id: number, targetStatus: string, opts?: { occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/transition`, {
         method: "POST",

@@ -70,7 +70,7 @@ def _row_to_response(
     )
     return CompanyResearchResponse(
         id=row["id"],
-        job_id=row["job_id"],
+        triggered_by_job_id=row["triggered_by_job_id"] if "triggered_by_job_id" in row.keys() else None,
         company_name=row["company_name"] or "",
         company_homepage=row["company_homepage"],
         wikipedia=wiki,
@@ -231,7 +231,13 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
 
 
 def _find_fresh_dossier(db, company_norm: str, ttl_days: int):
-    """Find a fresh (within TTL) dossier for a company. Returns row or None."""
+    """Find a fresh (within TTL) dossier for a company. Returns row or None.
+
+    Read-path strategy (option b): since company_norm is NOT a UNIQUE key
+    (normalize_company is tuned for dedup, not identity), multiple rows can
+    share the same company_norm. We always select the most recent by
+    researched_at to ensure the freshest dossier is returned.
+    """
     row = db.execute(
         "SELECT * FROM company_research WHERE company_norm = ? ORDER BY researched_at DESC LIMIT 1",
         (company_norm,),
@@ -254,41 +260,38 @@ def _find_fresh_dossier(db, company_norm: str, ttl_days: int):
 
 @router.get("/{job_id}/company-research", response_model=CompanyResearchResponse)
 def get_company_research(job_id: int):
-    """Get cached company research for a job."""
+    """Get cached company research for a job.
+
+    Research is company-scoped, not job-scoped. We look up the job to get its
+    company name, normalize it, and fetch the most recent dossier by company_norm.
+    """
     db = get_connection()
     try:
         job = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        # Try by job_id first (backward compat)
+        company_norm = normalize_company(job["company"] or "")
+        if not company_norm:
+            raise HTTPException(status_code=404, detail="Job has no company name to look up research by")
+
         row = db.execute(
-            "SELECT * FROM company_research WHERE job_id = ? ORDER BY researched_at DESC LIMIT 1",
-            (job_id,),
+            "SELECT * FROM company_research WHERE company_norm = ? ORDER BY researched_at DESC LIMIT 1",
+            (company_norm,),
         ).fetchone()
 
-        # If not found by job_id, try by company_norm
-        reused = False
-        age_days = None
         if not row:
-            company_norm = normalize_company(job["company"] or "")
-            if company_norm:
-                row = db.execute(
-                    "SELECT * FROM company_research WHERE company_norm = ? ORDER BY researched_at DESC LIMIT 1",
-                    (company_norm,),
-                ).fetchone()
-                if row:
-                    reused = True
-                    researched_at = row["researched_at"] or ""
-                    if researched_at:
-                        try:
-                            parsed = datetime.fromisoformat(researched_at.replace("Z", "+00:00"))
-                            age_days = (datetime.now(timezone.utc) - parsed).days
-                        except (ValueError, TypeError):
-                            pass
+            raise HTTPException(status_code=404, detail="No company research found for this company")
 
-        if not row:
-            raise HTTPException(status_code=404, detail="No company research found for this job")
+        # Compute dossier age for cache info
+        age_days = None
+        researched_at = row["researched_at"] or ""
+        if researched_at:
+            try:
+                parsed = datetime.fromisoformat(researched_at.replace("Z", "+00:00"))
+                age_days = (datetime.now(timezone.utc) - parsed).days
+            except (ValueError, TypeError):
+                pass
 
         # Read existing adjusted score from jobs table (persisted by POST endpoint)
         adjustment = None
@@ -304,7 +307,7 @@ def get_company_research(job_id: int):
                 "research_adjustment_applied": True,
             }
 
-        return _row_to_response(row, reused_from_cache=reused, dossier_age_days=age_days, adjustment=adjustment)
+        return _row_to_response(row, dossier_age_days=age_days, adjustment=adjustment)
     finally:
         db.close()
 
@@ -369,7 +372,7 @@ def run_company_research(job_id: int, force_refresh: bool = False):
 
         # Guard: don't persist a completely empty dossier (LLM failure with
         # no fallback data). This would shadow any previous good research row
-        # since GET returns the most recent by job_id.
+        # since GET returns the most recent by researched_at.
         if (result.overall_confidence == 0.0
                 and result.funding is None
                 and result.sentiment is None
@@ -395,32 +398,70 @@ def run_company_research(job_id: int, force_refresh: bool = False):
         ) if result.retrieval_sources else None
         retrieval_snippets_json = json_encode(result.retrieval_snippets) if result.retrieval_snippets else None
 
-        cursor = db.execute(
-            """
-            INSERT INTO company_research (
-                job_id, company_name, company_homepage,
-                wikipedia_data, funding_data, sentiment_data, fit_data,
-                overall_confidence, summary, verdict_flags, gaps,
-                sources_used, errors, researched_at, created_at,
-                retrieval_sources, retrieval_snippets_data, company_norm,
-                verification_state
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                job_id, company, company_homepage,
-                wiki_json, funding_json, sentiment_json, fit_json,
-                result.overall_confidence, result.summary, verdict_json, gaps_json,
-                json_encode(result.sources_used),
-                json_encode(result.errors),
-                result.researched_at, now,
-                retrieval_sources_json, retrieval_snippets_json,
-                company_norm,
-                result.verification_state.value,
-            ),
-        )
+        # Write-path strategy: upsert by company_norm lookup (SELECT then
+        # UPDATE-or-INSERT) to avoid accumulating duplicate rows for the same
+        # company. company_norm is NOT a UNIQUE constraint, so this application-
+        # level dedup is what keeps the table clean.
+        existing_row = db.execute(
+            "SELECT id FROM company_research WHERE company_norm = ? ORDER BY researched_at DESC LIMIT 1",
+            (company_norm,),
+        ).fetchone()
+
+        if existing_row:
+            db.execute(
+                """
+                UPDATE company_research SET
+                    triggered_by_job_id = ?,
+                    company_name = ?,
+                    company_homepage = ?,
+                    wikipedia_data = ?, funding_data = ?, sentiment_data = ?, fit_data = ?,
+                    overall_confidence = ?, summary = ?, verdict_flags = ?, gaps = ?,
+                    sources_used = ?, errors = ?, researched_at = ?,
+                    retrieval_sources = ?, retrieval_snippets_data = ?,
+                    company_norm = ?, verification_state = ?
+                WHERE id = ?
+                """,
+                (
+                    job_id, company, company_homepage,
+                    wiki_json, funding_json, sentiment_json, fit_json,
+                    result.overall_confidence, result.summary, verdict_json, gaps_json,
+                    json_encode(result.sources_used),
+                    json_encode(result.errors),
+                    result.researched_at,
+                    retrieval_sources_json, retrieval_snippets_json,
+                    company_norm, result.verification_state.value,
+                    existing_row["id"],
+                ),
+            )
+            research_id = existing_row["id"]
+        else:
+            cursor = db.execute(
+                """
+                INSERT INTO company_research (
+                    triggered_by_job_id, company_name, company_homepage,
+                    wikipedia_data, funding_data, sentiment_data, fit_data,
+                    overall_confidence, summary, verdict_flags, gaps,
+                    sources_used, errors, researched_at, created_at,
+                    retrieval_sources, retrieval_snippets_data, company_norm,
+                    verification_state
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id, company, company_homepage,
+                    wiki_json, funding_json, sentiment_json, fit_json,
+                    result.overall_confidence, result.summary, verdict_json, gaps_json,
+                    json_encode(result.sources_used),
+                    json_encode(result.errors),
+                    result.researched_at, now,
+                    retrieval_sources_json, retrieval_snippets_json,
+                    company_norm,
+                    result.verification_state.value,
+                ),
+            )
+            research_id = cursor.lastrowid
+
         db.commit()
 
-        research_id = cursor.lastrowid
         row = db.execute(
             "SELECT * FROM company_research WHERE id = ?", (research_id,)
         ).fetchone()

@@ -39,6 +39,7 @@ Event types (closed vocabulary — use EventType constants, not raw strings):
     offer_countered      — offer countered (engaged sub-event)
     followup_sent        — follow-up sent (engaged sub-event, resets staleness)
     contact_received     — company contact received (engaged sub-event, resets staleness)
+    recruiter_contact    — recruiter reached out with a job opportunity
 """
 
 from __future__ import annotations
@@ -99,6 +100,7 @@ class EventType:
     OFFER_COUNTERED = "offer_countered"
     FOLLOWUP_SENT = "followup_sent"
     CONTACT_RECEIVED = "contact_received"
+    RECRUITER_CONTACT = "recruiter_contact"
     REFILTER_RESCORED = "refilter_rescored"
 
     _ALL = frozenset({
@@ -110,6 +112,7 @@ class EventType:
         OFFER_ACCEPTED, OFFER_DECLINED,
         INTERVIEW, CHALLENGE_ASSIGNED, CHALLENGE_SUBMITTED,
         OFFER_RECEIVED, OFFER_COUNTERED, FOLLOWUP_SENT, CONTACT_RECEIVED,
+        RECRUITER_CONTACT,
         REFILTER_RESCORED,
     })
 
