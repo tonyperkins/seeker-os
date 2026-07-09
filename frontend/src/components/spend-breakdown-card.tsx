@@ -78,52 +78,47 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
 
   const hasPricing = report.pricing_configured;
 
+  // Always-visible summary stats in the header action slot
+  const headerStats = (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+      <div className="flex items-center gap-1.5">
+        <Cpu className="size-3.5 text-muted-foreground" />
+        <span className="text-muted-foreground">Tokens</span>
+        <span className="font-mono font-semibold text-foreground">
+          {formatTokens(report.total_input_tokens + report.total_output_tokens)}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <DollarSign className="size-3.5 text-violet-500" />
+        <span className="text-muted-foreground">Est. cost</span>
+        <span className="font-mono font-semibold text-foreground">
+          {hasPricing ? formatCost(report.total_estimated_cost) : "—"}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <TrendingDown className="size-3.5 text-sky-500" />
+        <span className="text-muted-foreground">Per applied</span>
+        <span className="font-mono font-semibold text-foreground">
+          {report.cost_per_applied != null ? `$${report.cost_per_applied.toFixed(2)}` : "—"}
+        </span>
+      </div>
+      {hasPricing && report.pricing_fetched_at && (
+        <span className={`font-mono ${report.pricing_stale ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"}`}>
+          Pricing as of {formatDate(report.pricing_fetched_at)}
+          {report.pricing_stale && ` · stale`}
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <CollapsibleCard
       title="LLM Spend"
       description="Token usage and estimated cost"
       storageKey="dash-spend"
+      action={headerStats}
       contentClassName="flex flex-col gap-4"
     >
-      {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="flex items-center gap-2">
-          <Cpu className="size-4 text-muted-foreground" />
-          <div className="flex flex-col">
-            <span className="text-xs text-muted-foreground">Tokens</span>
-            <span className="font-mono text-sm font-semibold">
-              {formatTokens(report.total_input_tokens + report.total_output_tokens)}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <DollarSign className="size-4 text-violet-500" />
-          <div className="flex flex-col">
-            <span className="text-xs text-muted-foreground">Est. cost</span>
-            <span className="font-mono text-sm font-semibold">
-              {hasPricing ? formatCost(report.total_estimated_cost) : "—"}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <TrendingDown className="size-4 text-sky-500" />
-          <div className="flex flex-col">
-            <span className="text-xs text-muted-foreground">Per applied</span>
-            <span className="font-mono text-sm font-semibold">
-              {report.cost_per_applied != null ? `$${report.cost_per_applied.toFixed(2)}` : "—"}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Pricing freshness line */}
-      {hasPricing && report.pricing_fetched_at && (
-        <div className={`text-xs ${report.pricing_stale ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"}`}>
-          Pricing as of {formatDate(report.pricing_fetched_at)}
-          {report.pricing_stale && ` · stale (>${report.pricing_stale_after_days}d)`}
-        </div>
-      )}
-
       {/* Route price warnings */}
       {report.route_pricing.length > 0 && (
         <div className="flex flex-col gap-1.5 border-t border-border pt-3">
