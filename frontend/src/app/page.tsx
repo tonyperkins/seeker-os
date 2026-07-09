@@ -1,70 +1,19 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  ArrowRight,
-  Trophy,
-  XCircle,
-  FileSearch,
-} from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
-import { CollapsibleCard } from "@/components/collapsible-card";
 import { RunStrip } from "@/components/run-strip";
-import { VerdictBadge } from "@/components/verdict-badge";
-import { RecentRunsCard } from "@/components/recent-runs-card";
-import { ActiveApplications, Considering, StaleAlerts, PostReadyFunnel } from "@/components/dashboard-post-ready";
-import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
+import { ActionQueue } from "@/components/action-queue";
+import { MetricCards } from "@/components/metric-cards";
+import { ActiveApplications, Considering, StaleAlerts } from "@/components/dashboard-post-ready";
+import { MovementFeed } from "@/components/movement-feed";
+import { SignalQualityCard } from "@/components/signal-quality-card";
+import { SpendBreakdownCard } from "@/components/spend-breakdown-card";
+import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
-
-const STAGE_COLORS: Record<number, string> = {
-  1: "bg-sky-500 dark:bg-sky-600",
-  2: "bg-indigo-500 dark:bg-indigo-600",
-  4: "bg-purple-500 dark:bg-purple-600",
-};
-
-function FunnelChart({ stages }: { stages: FunnelStage[] }) {
-  const ordered = [...stages].sort((a, b) => a.tier - b.tier);
-  const max = ordered[0]?.count || 1;
-
-  return (
-    <div className="flex flex-col gap-3">
-      {ordered.map((stage) => {
-        const pct = max > 0 ? (stage.count / max) * 100 : 0;
-        const color = STAGE_COLORS[stage.tier] || "bg-primary";
-        return (
-          <div key={stage.label} className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between text-sm">
-              <Link
-                href={`/jobs?min_tier=${stage.tier}`}
-                className="text-muted-foreground transition-opacity hover:opacity-70"
-              >
-                {stage.label}
-              </Link>
-              <span className="font-mono text-xs">
-                <span className="font-semibold text-foreground">{stage.count}</span>
-                <span className="ml-1.5 text-muted-foreground">
-                  {pct > 0 ? `${Math.round(pct)}%` : "0%"}
-                </span>
-              </span>
-            </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full rounded-full transition-all ${color}`}
-                style={{ width: `${Math.max(pct, 2)}%` }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export default async function DashboardPage() {
   let funnel: FunnelStats | null = null;
   let runs: PipelineRunRecord[] = [];
-  let topMatches: JobSummary[] = [];
-  let topMatchesResp: { jobs: JobSummary[]; total: number } = { jobs: [], total: 0 };
+  let actionQueueJobs: JobSummary[] = [];
   let activeJobs: JobSummary[] = [];
   let consideringJobs: JobSummary[] = [];
   let allPostReadyJobs: JobSummary[] = [];
@@ -72,27 +21,33 @@ export default async function DashboardPage() {
   let resumeInfo: MasterResumeInfo | null = null;
   let providers: ProvidersConfigResponse | null = null;
   let isDemoMode = false;
+  let docsToReview = 0;
+  let movement: MovementReport | null = null;
+  let signalQuality: SignalQualityReport | null = null;
+  let spend: SpendReport | null = null;
   let error: string | null = null;
 
   try {
-    const [activeResp, consideringResp, allPostReadyResp] = await Promise.all([
+    const [activeResp, consideringResp, allPostReadyResp, actionQueueResp] = await Promise.all([
       api.jobs.list({ status: "applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 50 }),
       api.jobs.list({ status: "reviewing,interested", limit: 50 }),
       api.jobs.list({ status: "reviewing,interested,applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 100 }),
+      api.jobs.list({ status: "ready", sort_by: "net_score", limit: 5 }),
     ]);
 
-    [funnel, runs, topMatchesResp, settings, resumeInfo, providers, { demo_mode: isDemoMode }] = await Promise.all([
+    [funnel, runs, settings, resumeInfo, providers, { demo_mode: isDemoMode }, { count: docsToReview }, movement, signalQuality, spend] = await Promise.all([
       api.analytics.funnel(),
       api.pipeline.runs(),
-      api.jobs.list({ status: "ready", limit: 5 }),
       api.settings.get(),
       api.resumes.getMaster().catch(() => null),
       api.models.getConfig().catch(() => null),
       api.demoMode.get().catch(() => ({ demo_mode: false })),
+      api.resumes.pendingCount().catch(() => ({ count: 0 })),
+      api.analytics.movement({ days: 7, limit: 30 }).catch(() => null),
+      api.analytics.signalQuality().catch(() => null),
+      api.analytics.spend().catch(() => null),
     ]);
-    topMatches = topMatchesResp.jobs;
-    // Sort top matches by score desc (defensive — API may already sort)
-    topMatches = [...topMatches].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
+    actionQueueJobs = actionQueueResp.jobs ?? [];
     activeJobs = activeResp.jobs ?? [];
     consideringJobs = consideringResp.jobs ?? [];
     allPostReadyJobs = allPostReadyResp.jobs ?? [];
@@ -140,6 +95,9 @@ export default async function DashboardPage() {
 
   const lastRun = runs.length > 0 ? runs[0] : null;
 
+  const needsDecision = funnel?.ready ?? 0;
+  const awaitingReply = (funnel?.by_status?.applied ?? 0) + (funnel?.by_status?.engaged ?? 0);
+
   return (
     <div className="flex flex-col gap-6">
       {/* Page header */}
@@ -147,110 +105,56 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
       </div>
 
-      {/* ZONE 1 — Run strip (self-contained, removable) */}
+      {/* ZONE 1 — Ops strip (with expandable run history + funnel) */}
       <RunStrip
         lastRun={lastRun ? {
           started_at: lastRun.started_at,
           cards_new: lastRun.cards_new,
           jobs_ready: lastRun.jobs_ready,
         } : null}
+        jdFetchPct={jdFetchPct}
+        jdFetchTotal={jdFetchTotal}
+        jdFetchSuccess={jdFetchSuccess}
+        runs={runs}
+        funnelStages={funnelStages}
+        rejectedCount={funnel?.rejected ?? 0}
       />
 
-      {/* ZONE 2 — Recent runs + cumulative funnel (two columns) */}
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-        {/* Left — Recent runs */}
-        <RecentRunsCard runs={runs} />
+      {/* ZONE 2 — Metric cards */}
+      <MetricCards data={{
+        needsDecision,
+        docsToReview,
+        awaitingReply,
+        costPerReady: spend?.cost_per_ready ?? null,
+        pricingConfigured: spend?.pricing_configured ?? false,
+      }} />
 
-        {/* Right — Pipeline funnel (fixed) */}
-        {funnelStages.length > 0 && (
-          <CollapsibleCard
-            title="Pipeline Funnel"
-            description="Cumulative jobs surviving each stage"
-            storageKey="dash-pipeline-funnel"
-            className="h-full"
-            contentClassName="flex flex-col gap-4"
-          >
-            <FunnelChart stages={funnelStages} />
-              <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <XCircle className="size-4 text-destructive" />
-                  <span className="text-muted-foreground">Rejected</span>
-                  <span className="font-mono font-semibold">{funnel?.rejected ?? 0}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FileSearch className="size-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">JD Fetch</span>
-                  <span className="font-mono font-semibold">
-                    {jdFetchTotal > 0 ? `${jdFetchSuccess}/${jdFetchTotal}` : "—"}
-                  </span>
-                  {jdFetchTotal > 0 && (
-                    <span className="font-mono text-xs text-muted-foreground">({jdFetchPct}%)</span>
-                  )}
-                </div>
-              </div>
-          </CollapsibleCard>
-        )}
-      </div>
+      {/* ZONE 3 — Action queue (hero) */}
+      <ActionQueue jobs={actionQueueJobs} />
 
-      {/* ZONE 3 — Top matches with verdict */}
-      <CollapsibleCard
-        title="Top Matches"
-        description="Highest-scoring ready jobs with AI verdict"
-        storageKey="dash-top-matches"
-        action={
-          <Link href="/jobs?status=ready" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-            View all
-            <ArrowRight />
-          </Link>
-        }
-      >
-        {topMatches.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No ready jobs yet. Run the pipeline to discover matches.
-          </p>
-        ) : (
-          <div className="flex flex-col divide-y divide-border">
-            {topMatches.map((job, i) => (
-              <Link
-                key={job.id}
-                href={`/jobs/${job.id}`}
-                className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
-              >
-                {i === 0 ? (
-                  <Trophy className="size-4 shrink-0 text-amber-500" />
-                ) : (
-                  <span className="w-4 shrink-0 text-center font-mono text-xs text-muted-foreground">
-                    {i + 1}
-                  </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{job.title}</span>
-                  <span className="block truncate text-muted-foreground">{job.company}</span>
-                </div>
-                <VerdictBadge verdict={job.analysis_verdict} hasAnalysis={job.has_analysis} />
-                {job.score != null && (
-                  <span className="w-10 shrink-0 text-right font-mono font-semibold">
-                    {job.score}
-                  </span>
-                )}
-                <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-              </Link>
-            ))}
-          </div>
-        )}
-      </CollapsibleCard>
-
-      {/* ZONE 4 — Post-ready pipeline: Active Applications + Funnel */}
-      <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-        <ActiveApplications jobs={activeJobs} />
-        <PostReadyFunnel byStatus={funnel?.by_status ?? {}} />
-      </div>
+      {/* ZONE 4 — Active Applications (with post-ready funnel) */}
+      <ActiveApplications jobs={activeJobs} byStatus={funnel?.by_status ?? {}} />
 
       {/* ZONE 5 — Considering + Stale Alerts */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Considering jobs={consideringJobs} />
         <StaleAlerts jobs={allPostReadyJobs} />
       </div>
+
+      {/* ZONE 6 — Movement + Signal Quality */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {movement && (movement.events.length > 0 || movement.rejection_count > 0) && (
+          <MovementFeed
+            events={movement.events}
+            rejectionCount={movement.rejection_count}
+            rejectionBreakdown={movement.rejection_breakdown}
+          />
+        )}
+        <SignalQualityCard report={signalQuality} />
+      </div>
+
+      {/* ZONE 7 — LLM Spend */}
+      <SpendBreakdownCard report={spend} />
     </div>
   );
 }

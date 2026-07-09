@@ -39,19 +39,36 @@ function StaleBadge({ days, threshold = 14 }: { days: number; threshold?: number
   );
 }
 
-export function ActiveApplications({ jobs }: { jobs: JobSummary[] }) {
-  if (jobs.length === 0) return null;
+export function ActiveApplications({ jobs, byStatus }: { jobs: JobSummary[]; byStatus: Record<string, number> }) {
+  const activeStatuses = new Set(["applied", "engaged", "offer_accepted", "offer_declined"]);
+  const active = jobs.filter((j) => activeStatuses.has(j.status));
+  const rejectedCount = jobs.filter((j) => j.status === "company_rejected" || j.status === "withdrawn").length;
 
-  const sorted = [...jobs].sort((a, b) => {
+  const sorted = [...active].sort((a, b) => {
     const aDays = a.days_since_last_activity ?? 999;
     const bDays = b.days_since_last_activity ?? 999;
     return bDays - aDays;
   });
 
+  const funnelStages = [
+    { status: "ready", label: "Ready", color: "bg-emerald-500" },
+    { status: "reviewing", label: "Reviewing", color: "bg-sky-500" },
+    { status: "interested", label: "Interested", color: "bg-sky-500" },
+    { status: "applied", label: "Applied", color: "bg-violet-500" },
+    { status: "engaged", label: "Engaged", color: "bg-violet-500" },
+    { status: "offer_accepted", label: "Offer", color: "bg-amber-500" },
+  ];
+
+  const funnelCounts = funnelStages.map((s) => ({ ...s, count: byStatus[s.status] ?? 0 }));
+  const funnelMax = Math.max(...funnelCounts.map((c) => c.count), 1);
+  const funnelTotal = funnelCounts.reduce((sum, c) => sum + c.count, 0);
+
+  if (sorted.length === 0 && funnelTotal === 0) return null;
+
   return (
     <CollapsibleCard
       title="Active Applications"
-      description="Jobs in applied, engaged, or offer stages"
+      description="Applied jobs and post-ready pipeline"
       storageKey="dash-active-applications"
       action={
         <Link href="/jobs?status=applied,engaged,offer_accepted,offer_declined" className={buttonVariants({ variant: "ghost", size: "sm" })}>
@@ -60,32 +77,82 @@ export function ActiveApplications({ jobs }: { jobs: JobSummary[] }) {
         </Link>
       }
     >
-      <div className="flex flex-col divide-y divide-border">
-          {sorted.map((job) => {
-            const days = job.days_since_last_activity ?? 0;
-            return (
-              <Link
-                key={job.id}
-                href={`/jobs/${job.id}`}
-                className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
-              >
-                <div className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{job.title}</span>
-                  <span className="block truncate text-muted-foreground">{job.company}</span>
+      <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+        {/* Left — scrollable active applications list */}
+        <div className="flex flex-col min-h-0">
+          {rejectedCount > 0 && (
+            <div className="mb-2 shrink-0 rounded-md bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+              <span className="font-mono font-medium text-foreground">{rejectedCount}</span> rejected · auto-archived
+            </div>
+          )}
+          {sorted.length > 0 ? (
+            <div className="flex flex-col divide-y divide-border overflow-y-auto overflow-x-hidden max-h-72 min-h-0">
+              {sorted.map((job) => {
+                const days = job.days_since_last_activity ?? 0;
+                return (
+                  <Link
+                    key={job.id}
+                    href={`/jobs/${job.id}`}
+                    className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{job.title}</span>
+                      <span className="block truncate text-muted-foreground">{job.company}</span>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant="secondary" className="text-xs">
+                        {STATUS_LABELS[job.status] ?? job.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {days === 0 ? "today" : `${days}d ago`}
+                      </span>
+                    </div>
+                    <StaleBadge days={days} />
+                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No active applications yet.
+            </p>
+          )}
+        </div>
+
+        {/* Right — post-ready funnel */}
+        {funnelTotal > 0 && (
+          <div className="flex flex-col gap-3 border-l border-border pl-4">
+            <h4 className="text-sm font-semibold text-muted-foreground">Post-Ready Pipeline</h4>
+            {funnelCounts.map((stage) => {
+              const pct = funnelMax > 0 ? (stage.count / funnelMax) * 100 : 0;
+              return (
+                <div key={stage.status} className="flex flex-col gap-1">
+                  <div className="flex items-baseline justify-between text-sm">
+                    <Link
+                      href={`/jobs?status=${stage.status}`}
+                      className="text-muted-foreground transition-opacity hover:opacity-70"
+                    >
+                      {stage.label}
+                    </Link>
+                    <span className="font-mono text-xs">
+                      <span className="font-semibold text-foreground">{stage.count}</span>
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full transition-all ${stage.color}`}
+                      style={{ width: `${Math.max(pct, 2)}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <Badge variant="secondary" className="text-xs">
-                    {STATUS_LABELS[job.status] ?? job.status}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {days === 0 ? "today" : `${days}d ago`}
-                  </span>
-                </div>
-                <StaleBadge days={days} />
-                <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-              </Link>
-            );
-          })}
+              );
+            })}
+            <div className="border-t border-border pt-2 text-xs text-muted-foreground">
+              Total in pipeline: <span className="font-mono font-semibold text-foreground">{funnelTotal}</span>
+            </div>
+          </div>
+        )}
       </div>
     </CollapsibleCard>
   );
@@ -193,60 +260,6 @@ export function StaleAlerts({ jobs, threshold = 14 }: { jobs: JobSummary[]; thre
             );
           })}
       </div>
-    </CollapsibleCard>
-  );
-}
-
-export function PostReadyFunnel({ byStatus }: { byStatus: Record<string, number> }) {
-  const stages = [
-    { status: "ready", label: "Ready", color: "bg-emerald-500" },
-    { status: "reviewing", label: "Reviewing", color: "bg-sky-500" },
-    { status: "interested", label: "Interested", color: "bg-sky-500" },
-    { status: "applied", label: "Applied", color: "bg-violet-500" },
-    { status: "engaged", label: "Engaged", color: "bg-violet-500" },
-    { status: "offer_accepted", label: "Offer", color: "bg-amber-500" },
-  ];
-
-  const counts = stages.map((s) => ({ ...s, count: byStatus[s.status] ?? 0 }));
-  const max = Math.max(...counts.map((c) => c.count), 1);
-  const total = counts.reduce((sum, c) => sum + c.count, 0);
-
-  if (total === 0) return null;
-
-  return (
-    <CollapsibleCard
-      title="Post-Ready Pipeline"
-      description="Jobs past the ready stage"
-      storageKey="dash-post-ready-funnel"
-      contentClassName="flex flex-col gap-3"
-    >
-        {counts.map((stage) => {
-          const pct = max > 0 ? (stage.count / max) * 100 : 0;
-          return (
-            <div key={stage.status} className="flex flex-col gap-1">
-              <div className="flex items-baseline justify-between text-sm">
-                <Link
-                  href={`/jobs?status=${stage.status}`}
-                  className="text-muted-foreground transition-opacity hover:opacity-70"
-                >
-                  {stage.label}
-                </Link>
-                <span className="font-mono text-xs">
-                  <span className="font-semibold text-foreground">{stage.count}</span>
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full rounded-full transition-all ${stage.color}`}
-                  style={{ width: `${Math.max(pct, 2)}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-        <div className="border-t border-border pt-2 text-xs text-muted-foreground">
-          Total in pipeline: <span className="font-mono font-semibold text-foreground">{total}</span>
-        </div>
     </CollapsibleCard>
   );
 }

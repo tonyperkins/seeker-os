@@ -5,12 +5,16 @@ Supports: OpenAI, Kilo, Ollama, vLLM, LiteLLN, and any OpenAI-compatible gateway
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timezone
 
+import httpx
 from openai import OpenAI
 
 from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth, TruncationError
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAICompatProvider:
@@ -29,6 +33,8 @@ class OpenAICompatProvider:
         self._id = provider_id
         self._type = "openai_compatible"
         self._label = label or provider_id
+        self._api_key = api_key
+        self._base_url = base_url.rstrip("/")
         self._client = OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -96,14 +102,25 @@ class OpenAICompatProvider:
         )
 
     def list_models(self) -> list[ModelInfo]:
-        """Fetch available models from the provider's /models endpoint."""
+        """Fetch available models from the provider's /models endpoint.
+
+        Uses a raw HTTP GET to capture non-standard fields (pricing, context_length,
+        display name) that the OpenAI SDK strips out. Falls back to the SDK if the
+        raw request fails.
+        """
         now = datetime.now(timezone.utc).isoformat()
+        models = self._list_models_raw()
+        if models is not None:
+            return models
+
+        # Fallback: use the SDK (no pricing data)
+        logger.debug("Raw /models fetch failed for '%s', falling back to SDK", self._id)
         response = self._client.models.list()
-        models: list[ModelInfo] = []
+        fallback: list[ModelInfo] = []
         for m in response.data:
-            models.append(ModelInfo(
+            fallback.append(ModelInfo(
                 id=m.id,
-                label=m.id,  # OpenAI-compatible endpoints usually don't have display names
+                label=m.id,
                 provider_id=self._id,
                 context_window=None,
                 max_output=None,
@@ -111,6 +128,55 @@ class OpenAICompatProvider:
                 source="auto",
                 available=True,
                 fetched_at=now,
+            ))
+        return fallback
+
+    def _list_models_raw(self) -> list[ModelInfo] | None:
+        """Raw HTTP GET to /models — captures pricing from Kilo/OpenRouter.
+
+        Returns None if the request fails (caller falls back to SDK).
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        url = f"{self._base_url}/models"
+        try:
+            resp = httpx.get(url, headers=headers, timeout=30.0)
+            resp.raise_for_status()
+        except Exception as e:
+            logger.debug("Raw /models fetch failed for '%s': %s", self._id, e)
+            return None
+
+        data = resp.json().get("data", [])
+        models: list[ModelInfo] = []
+        for m in data:
+            model_id = m.get("id", "")
+            if not model_id:
+                continue
+
+            # Parse pricing (per-token → per-million)
+            pricing = m.get("pricing") or {}
+            in_price = _parse_per_token_to_per_mtok(pricing.get("prompt"))
+            out_price = _parse_per_token_to_per_mtok(pricing.get("completion"))
+
+            # Some providers include context_length at top level or in top_provider
+            ctx = m.get("context_length") or m.get("context_window")
+            top_provider = m.get("top_provider") or {}
+            if ctx is None:
+                ctx = top_provider.get("context_length")
+            max_out = top_provider.get("max_completion_tokens") or m.get("max_output")
+
+            models.append(ModelInfo(
+                id=model_id,
+                label=m.get("name") or m.get("label") or model_id,
+                provider_id=self._id,
+                context_window=ctx,
+                max_output=max_out,
+                tags=[],
+                source="auto",
+                available=True,
+                fetched_at=now,
+                input_price_per_mtok=in_price,
+                output_price_per_mtok=out_price,
             ))
         return models
 
@@ -135,3 +201,23 @@ class OpenAICompatProvider:
                 latency_ms=int((time.monotonic() - start) * 1000),
                 checked_at=datetime.now(timezone.utc).isoformat(),
             )
+
+
+def _parse_per_token_to_per_mtok(value: str | None) -> float | None:
+    """Convert a per-token price string (e.g. '0.000005') to per-1M-tokens float.
+
+    Kilo/OpenRouter return pricing as USD per token. We need USD per 1M tokens.
+    Returns 0.0 for an explicit zero price (free — e.g. Ollama models).
+    Returns None only for missing/unparseable values (no pricing data).
+    """
+    if value is None:
+        return None
+    try:
+        per_token = float(value)
+    except (ValueError, TypeError):
+        return None
+    if per_token == 0:
+        return 0.0
+    if per_token < 0:
+        return None
+    return round(per_token * 1_000_000, 4)

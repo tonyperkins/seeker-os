@@ -23,6 +23,8 @@ class ModelInfoResponse(BaseModel):
     tags: list[str] = []
     source: str = "manual"
     available: bool = True
+    input_price_per_mtok: float | None = None
+    output_price_per_mtok: float | None = None
 
 
 class ProviderInfoResponse(BaseModel):
@@ -95,6 +97,8 @@ def get_providers_config():
                     tags=m.tags,
                     source=m.source,
                     available=m.available,
+                    input_price_per_mtok=m.input_price_per_mtok,
+                    output_price_per_mtok=m.output_price_per_mtok,
                 )
                 for m in all_models
             ]
@@ -172,6 +176,8 @@ def fetch_models(provider_id: str):
                 tags=m.tags,
                 source=m.source,
                 available=m.available,
+                input_price_per_mtok=m.input_price_per_mtok,
+                output_price_per_mtok=m.output_price_per_mtok,
             )
             for m in models
         ]
@@ -315,6 +321,8 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
                 id=m.id, label=m.label, provider_id=m.provider_id,
                 context_window=m.context_window, max_output=m.max_output,
                 tags=m.tags, source=m.source, available=m.available,
+                input_price_per_mtok=m.input_price_per_mtok,
+                output_price_per_mtok=m.output_price_per_mtok,
             )
             for m in all_models
         ]

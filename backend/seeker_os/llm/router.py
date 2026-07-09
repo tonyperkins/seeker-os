@@ -358,6 +358,15 @@ class ModelRouter:
                             # Update availability, keep manual tags/label
                             manual_models[am.id].available = am.available
                             manual_models[am.id].fetched_at = am.fetched_at
+                            # Enrich manual model with auto-fetched pricing + context
+                            if am.input_price_per_mtok is not None:
+                                manual_models[am.id].input_price_per_mtok = am.input_price_per_mtok
+                            if am.output_price_per_mtok is not None:
+                                manual_models[am.id].output_price_per_mtok = am.output_price_per_mtok
+                            if am.context_window is not None and manual_models[am.id].context_window is None:
+                                manual_models[am.id].context_window = am.context_window
+                            if am.max_output is not None and manual_models[am.id].max_output is None:
+                                manual_models[am.id].max_output = am.max_output
                         else:
                             # New auto-discovered model
                             am.tags = ["untagged"]

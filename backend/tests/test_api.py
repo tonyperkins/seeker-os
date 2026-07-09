@@ -62,6 +62,34 @@ class TestJobs:
             if job["score"] is not None:
                 assert job["score"] >= 6.0
 
+    def test_list_jobs_sort_by_net_score(self, client):
+        """Ready jobs should sort by net_score DESC by default, and sort_by param works."""
+        # Default sort for ready jobs should be net_score (COALESCE fallback to score)
+        r = client.get("/api/jobs?status=ready&limit=10")
+        assert r.status_code == 200
+        jobs = r.json()["jobs"]
+        for job in jobs:
+            assert job["status"] == "ready"
+        # Verify descending order by COALESCE(net_score, score)
+        scores = [(j.get("net_score") or j.get("score") or 0) for j in jobs]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_list_jobs_sort_by_score_explicit(self, client):
+        """Explicit sort_by=score should sort by raw score DESC."""
+        r = client.get("/api/jobs?status=ready&sort_by=score&limit=10")
+        assert r.status_code == 200
+        jobs = r.json()["jobs"]
+        scores = [(j.get("score") or 0) for j in jobs]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_list_jobs_sort_by_net_score_explicit(self, client):
+        """Explicit sort_by=net_score should sort by COALESCE(net_score, score) DESC."""
+        r = client.get("/api/jobs?sort_by=net_score&limit=10")
+        assert r.status_code == 200
+        jobs = r.json()["jobs"]
+        scores = [(j.get("net_score") or j.get("score") or 0) for j in jobs]
+        assert scores == sorted(scores, reverse=True)
+
     def test_get_job_not_found(self, client):
         r = client.get("/api/jobs/99999")
         assert r.status_code == 404
@@ -197,3 +225,85 @@ class TestAnalytics:
         data = r.json()
         assert "total_applied" in data
         assert "response_rate" in data
+
+    def test_movement(self, client):
+        r = client.get("/api/analytics/movement?days=7&limit=30")
+        assert r.status_code == 200
+        data = r.json()
+        assert "events" in data
+        assert "total" in data
+        assert "rejection_count" in data
+        assert "rejection_breakdown" in data
+        assert isinstance(data["events"], list)
+        assert data["total"] == len(data["events"])
+
+    def test_movement_default_params(self, client):
+        r = client.get("/api/analytics/movement")
+        assert r.status_code == 200
+        data = r.json()
+        assert "events" in data
+        assert "rejection_count" in data
+
+    def test_movement_excludes_rejections_from_rows(self, client):
+        """Rejection events should not appear in the events list."""
+        r = client.get("/api/analytics/movement?days=90&limit=200")
+        assert r.status_code == 200
+        data = r.json()
+        for evt in data["events"]:
+            assert evt["event_type"] not in ("rejected", "skipped", "company_rejected")
+
+    def test_aging(self, client):
+        r = client.get("/api/analytics/aging")
+        assert r.status_code == 200
+        data = r.json()
+        assert "buckets" in data
+        assert "stale_after_days" in data
+        assert isinstance(data["buckets"], list)
+        for bucket in data["buckets"]:
+            assert "status" in bucket
+            assert "count" in bucket
+            assert "avg_days" in bucket
+            assert "max_days" in bucket
+            assert "stale_count" in bucket
+
+    def test_signal_quality(self, client):
+        r = client.get("/api/analytics/signal-quality")
+        assert r.status_code == 200
+        data = r.json()
+        assert "total_analyzed" in data
+        assert "verdicts" in data
+        assert "apply_rate" in data
+        assert "skip_rate" in data
+        assert "calibration_available" in data
+        assert isinstance(data["verdicts"], list)
+
+    def test_spend(self, client):
+        r = client.get("/api/analytics/spend")
+        assert r.status_code == 200
+        data = r.json()
+        assert "total_calls" in data
+        assert "total_input_tokens" in data
+        assert "total_output_tokens" in data
+        assert "total_estimated_cost" in data
+        assert "pricing_configured" in data
+        assert "by_task" in data
+        assert "by_model" in data
+        assert "cost_per_ready" in data
+        assert "cost_per_applied" in data
+        assert "pricing_fetched_at" in data
+        assert "pricing_stale" in data
+        assert "pricing_stale_after_days" in data
+        assert "route_pricing" in data
+        assert isinstance(data["by_task"], list)
+        assert isinstance(data["by_model"], list)
+
+    def test_job_summary_includes_queue_fields(self, client):
+        """JobSummary should include ai_policy, score_modifiers, score_reasons for action queue."""
+        r = client.get("/api/jobs?limit=1")
+        assert r.status_code == 200
+        jobs = r.json()["jobs"]
+        if jobs:
+            job = jobs[0]
+            assert "ai_policy" in job
+            assert "score_modifiers" in job
+            assert "score_reasons" in job

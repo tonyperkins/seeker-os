@@ -366,6 +366,20 @@ class ResumeDetail(BaseModel):
     docx_path: str | None = None
 
 
+@router.get("/pending-count")
+def pending_review_count():
+    """Count of resumes with validation_passed = false (docs to review)."""
+    from seeker_os.database import get_connection
+    db = get_connection()
+    try:
+        count = db.execute(
+            "SELECT COUNT(*) as c FROM resumes WHERE validation_passed = 0"
+        ).fetchone()["c"]
+        return {"count": count}
+    finally:
+        db.close()
+
+
 @router.get("", response_model=list[ResumeSummary])
 def list_resumes(job_id: int | None = Query(None), limit: int = Query(50, ge=1, le=200)):
     """List generated resumes."""

@@ -80,16 +80,23 @@ providers:
         context_window: 200000
         max_output: 32000
         tags: [heavy]                    # which tiers this model is suited for
+        # Pricing per 1M tokens (USD) — optional, used for spend estimation on the dashboard
+        input_price_per_mtok: 15.00
+        output_price_per_mtok: 75.00
       - id: claude-sonnet-4
         label: "Claude Sonnet 4"
         context_window: 200000
         max_output: 16000
         tags: [heavy, moderate]
+        input_price_per_mtok: 3.00
+        output_price_per_mtok: 15.00
       - id: claude-haiku-4
         label: "Claude Haiku 4"
         context_window: 200000
         max_output: 8192
         tags: [light]
+        input_price_per_mtok: 0.80
+        output_price_per_mtok: 4.00
 
   # --- Provider 2: Kilo gateway (OpenAI-compatible) ---
   - id: kilo

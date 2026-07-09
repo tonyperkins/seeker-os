@@ -16,16 +16,27 @@ providers:
         context_window: 200000
         max_output: 32000
         tags: [heavy]
+        # Pricing per 1M tokens (USD) — used for spend estimation on the dashboard.
+        # See https://www.anthropic.com/pricing for current rates.
+        # verify against provider's published pricing — entered 2026-07-09
+        input_price_per_mtok: 15.00
+        output_price_per_mtok: 75.00
       - id: claude-sonnet-4-6
         label: "Claude Sonnet 4.6"
         context_window: 200000
         max_output: 16000
         tags: [heavy, moderate]
+        # verify against provider's published pricing — entered 2026-07-09
+        input_price_per_mtok: 3.00
+        output_price_per_mtok: 15.00
       - id: claude-haiku-4-5-20251001
         label: "Claude Haiku 4.5"
         context_window: 200000
         max_output: 8192
         tags: [light]
+        # verify against provider's published pricing — entered 2026-07-09
+        input_price_per_mtok: 0.80
+        output_price_per_mtok: 4.00
 
   - id: kilo
     type: openai_compatible
