@@ -126,7 +126,7 @@ export function RunStrip({
           <div className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold text-muted-foreground">Recent Pipeline Runs</h3>
             {runs && runs.length > 0 ? (
-              <div className="flex flex-col divide-y divide-border overflow-y-auto max-h-64 min-h-0">
+              <div className="flex flex-col divide-y divide-border overflow-y-auto max-h-56 min-h-0">
                 {runs.map((run) => (
                   <RecentRunRow key={run.id} run={run} />
                 ))}
