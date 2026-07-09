@@ -91,6 +91,7 @@ export interface JobSummary {
 
 export interface RecruiterContact {
   id: number;
+  recruiter_id: number;
   job_id: number;
   name: string | null;
   email: string | null;
@@ -554,15 +555,20 @@ export const api = {
       fetchAPI<RecruiterContact>(`/api/jobs/${jobId}/recruiters`, {
         method: "POST", body: JSON.stringify(data),
       }),
-    updateRecruiter: (recruiterId: number, data: {
-      name?: string; email?: string; phone?: string; linkedin?: string;
-      agency?: string; source?: string; contacted_at?: string; notes?: string;
+    updateRecruiterEntity: (recruiterId: number, data: {
+      name?: string; email?: string; phone?: string; linkedin?: string; agency?: string;
     }) =>
       fetchAPI<RecruiterContact>(`/api/jobs/recruiters/${recruiterId}`, {
         method: "PATCH", body: JSON.stringify(data),
       }),
-    deleteRecruiter: (recruiterId: number) =>
-      fetchAPI<{ message: string }>(`/api/jobs/recruiters/${recruiterId}`, {
+    updateRecruiterAssociation: (associationId: number, data: {
+      source?: string; notes?: string;
+    }) =>
+      fetchAPI<RecruiterContact>(`/api/jobs/recruiters/association/${associationId}`, {
+        method: "PATCH", body: JSON.stringify(data),
+      }),
+    deleteRecruiter: (associationId: number) =>
+      fetchAPI<{ message: string }>(`/api/jobs/recruiters/association/${associationId}`, {
         method: "DELETE",
       }),
     transition: (id: number, targetStatus: string, opts?: { occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
