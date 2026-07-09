@@ -57,17 +57,12 @@ function statusLabel(s: string | null | undefined): string {
   return STATUS_LABELS[s] ?? s.replace(/_/g, " ");
 }
 
-export function MovementFeed({ events, rejectionCount, rejectionBreakdown }: {
+export function MovementFeedContent({ events, rejectionCount, rejectionBreakdown }: {
   events: MovementEvent[];
   rejectionCount?: number;
   rejectionBreakdown?: Record<string, number>;
 }) {
-  return (
-    <CollapsibleCard
-      title="Movement"
-      description="Recent status changes in the last 7 days"
-      storageKey="dash-movement"
-    >
+  return (<>
       {/* Grouped rejection summary */}
       {rejectionCount != null && rejectionCount > 0 && (
         <div className="mb-2 flex items-center gap-2 rounded-md bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
@@ -133,6 +128,21 @@ export function MovementFeed({ events, rejectionCount, rejectionBreakdown }: {
           })}
         </div>
       )}
+  </>);
+}
+
+export function MovementFeed({ events, rejectionCount, rejectionBreakdown }: {
+  events: MovementEvent[];
+  rejectionCount?: number;
+  rejectionBreakdown?: Record<string, number>;
+}) {
+  return (
+    <CollapsibleCard
+      title="Movement"
+      description="Recent status changes in the last 7 days"
+      storageKey="dash-movement"
+    >
+      <MovementFeedContent events={events} rejectionCount={rejectionCount} rejectionBreakdown={rejectionBreakdown} />
     </CollapsibleCard>
   );
 }

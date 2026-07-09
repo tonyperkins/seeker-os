@@ -18,28 +18,16 @@ const VERDICT_LABELS: Record<string, string> = {
   SKIP: "Skip",
 };
 
-export function SignalQualityCard({ report }: { report: SignalQualityReport | null }) {
+export function SignalQualityContent({ report }: { report: SignalQualityReport | null }) {
   if (!report || report.total_analyzed === 0) {
     return (
-      <CollapsibleCard
-        title="Signal Quality"
-        description="AI verdict distribution and calibration"
-        storageKey="dash-signal-quality"
-      >
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          No AI analyses yet. Run the pipeline to generate verdicts.
-        </p>
-      </CollapsibleCard>
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        No AI analyses yet. Run the pipeline to generate verdicts.
+      </p>
     );
   }
 
-  return (
-    <CollapsibleCard
-      title="Signal Quality"
-      description="AI verdict distribution and calibration"
-      storageKey="dash-signal-quality"
-      contentClassName="flex flex-col gap-4"
-    >
+  return (<>
       {/* Verdict distribution bars */}
       <div className="flex flex-col gap-2">
         {report.verdicts.map((v) => {
@@ -118,6 +106,18 @@ export function SignalQualityCard({ report }: { report: SignalQualityReport | nu
       <div className="border-t border-border pt-2 text-xs text-muted-foreground">
         {report.total_analyzed} jobs analyzed
       </div>
+  </>);
+}
+
+export function SignalQualityCard({ report }: { report: SignalQualityReport | null }) {
+  return (
+    <CollapsibleCard
+      title="Signal Quality"
+      description="AI verdict distribution and calibration"
+      storageKey="dash-signal-quality"
+      contentClassName="flex flex-col gap-4"
+    >
+      <SignalQualityContent report={report} />
     </CollapsibleCard>
   );
 }

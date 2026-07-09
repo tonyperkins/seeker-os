@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { RunStrip } from "@/components/run-strip";
 import { ActionQueue } from "@/components/action-queue";
 import { MetricCards } from "@/components/metric-cards";
-import { ActiveApplications, Considering, StaleAlerts } from "@/components/dashboard-post-ready";
-import { MovementFeed } from "@/components/movement-feed";
-import { SignalQualityCard } from "@/components/signal-quality-card";
+import { ActiveApplicationsContent, PipelineFunnel, Considering, StaleAlerts } from "@/components/dashboard-post-ready";
+import { MovementFeedContent } from "@/components/movement-feed";
+import { SignalQualityContent } from "@/components/signal-quality-card";
+import { CollapsibleCard } from "@/components/collapsible-card";
 import { SpendBreakdownCard } from "@/components/spend-breakdown-card";
 import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport } from "@/lib/api";
 
@@ -132,25 +133,54 @@ export default async function DashboardPage() {
       {/* ZONE 3 — Action queue (hero) */}
       <ActionQueue jobs={actionQueueJobs} />
 
-      {/* ZONE 4 — Active Applications (with post-ready funnel) */}
-      <ActiveApplications jobs={activeJobs} byStatus={funnel?.by_status ?? {}} />
+      {/* ZONE 4 — Active Applications + Movement (side by side) */}
+      <CollapsibleCard
+        title="Applications & Movement"
+        description="Active applications and recent status changes"
+        storageKey="dash-apps-movement"
+        contentClassName="grid gap-4 lg:grid-cols-2"
+      >
+        <div className="flex flex-col gap-2 min-h-0">
+          <h4 className="text-sm font-semibold text-muted-foreground">Active Applications</h4>
+          <ActiveApplicationsContent jobs={activeJobs} />
+        </div>
+        <div className="flex flex-col gap-2 min-h-0 border-l border-border pl-4">
+          <h4 className="text-sm font-semibold text-muted-foreground">Movement</h4>
+          {movement && (movement.events.length > 0 || movement.rejection_count > 0) ? (
+            <MovementFeedContent
+              events={movement.events}
+              rejectionCount={movement.rejection_count}
+              rejectionBreakdown={movement.rejection_breakdown}
+            />
+          ) : (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No status changes in the last 7 days.
+            </p>
+          )}
+        </div>
+      </CollapsibleCard>
 
-      {/* ZONE 5 — Considering + Stale Alerts */}
+      {/* ZONE 5 — Signal Quality + Pipeline (side by side) */}
+      <CollapsibleCard
+        title="Signal & Pipeline"
+        description="AI verdict quality and post-ready pipeline funnel"
+        storageKey="dash-signal-pipeline"
+        contentClassName="grid gap-4 lg:grid-cols-2"
+      >
+        <div className="flex flex-col gap-4 min-h-0">
+          <h4 className="text-sm font-semibold text-muted-foreground">Signal Quality</h4>
+          <SignalQualityContent report={signalQuality} />
+        </div>
+        <div className="flex flex-col gap-3 min-h-0 border-l border-border pl-4">
+          <h4 className="text-sm font-semibold text-muted-foreground">Pipeline</h4>
+          <PipelineFunnel byStatus={funnel?.by_status ?? {}} />
+        </div>
+      </CollapsibleCard>
+
+      {/* ZONE 6 — Considering + Stale Alerts */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Considering jobs={consideringJobs} />
         <StaleAlerts jobs={allPostReadyJobs} />
-      </div>
-
-      {/* ZONE 6 — Movement + Signal Quality */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {movement && (movement.events.length > 0 || movement.rejection_count > 0) && (
-          <MovementFeed
-            events={movement.events}
-            rejectionCount={movement.rejection_count}
-            rejectionBreakdown={movement.rejection_breakdown}
-          />
-        )}
-        <SignalQualityCard report={signalQuality} />
       </div>
 
       {/* ZONE 7 — LLM Spend */}
