@@ -33,7 +33,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { JobActions } from "@/components/job-actions";
 import { JobEditDialog } from "@/components/job-edit-dialog";
-import { AIPolicyToggle } from "@/components/ai-policy-toggle";
 import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { JDRenderer } from "@/components/jd-renderer";
 import { CompanyResearch } from "@/components/company-research";
@@ -330,6 +329,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             </CardContent>
           </Card>
 
+          {/* AI Policy card hidden — feature may not be implemented
           <Card>
             <CardHeader>
               <CardTitle>AI Policy</CardTitle>
@@ -339,6 +339,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
               <AIPolicyToggle jobId={job.id} initialPolicy={job.ai_policy} />
             </CardContent>
           </Card>
+          */}
 
           {job.apply_url && (
             <Button size="lg" nativeButton={false} render={

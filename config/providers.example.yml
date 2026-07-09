@@ -19,8 +19,9 @@ providers:
         # Pricing per 1M tokens (USD) — used for spend estimation on the dashboard.
         # See https://www.anthropic.com/pricing for current rates.
         # verify against provider's published pricing — entered 2026-07-09
-        input_price_per_mtok: 15.00
-        output_price_per_mtok: 75.00
+        # https://www.finout.io/blog/anthropic-api-pricing (Opus 4.8: $5/$25 per MTok)
+        input_price_per_mtok: 5.00
+        output_price_per_mtok: 25.00
       - id: claude-sonnet-4-6
         label: "Claude Sonnet 4.6"
         context_window: 200000
@@ -35,8 +36,9 @@ providers:
         max_output: 8192
         tags: [light]
         # verify against provider's published pricing — entered 2026-07-09
-        input_price_per_mtok: 0.80
-        output_price_per_mtok: 4.00
+        # https://www.finout.io/blog/anthropic-api-pricing (Haiku 4.5: $1/$5 per MTok)
+        input_price_per_mtok: 1.00
+        output_price_per_mtok: 5.00
 
   - id: kilo
     type: openai_compatible
