@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-import json
 
 from fastapi import APIRouter, HTTPException, Query
 from seeker_os.api.schemas import (
@@ -200,7 +199,7 @@ def get_movement(
         rows = db.execute(
             """
             SELECT ae.job_id, ae.event_type, ae.occurred_at, ae.actor, ae.note,
-                   ae.metadata, j.title, j.company, j.status
+                   j.title, j.company, j.status
             FROM application_events ae
             JOIN jobs j ON j.id = ae.job_id
             WHERE ae.occurred_at >= ?
@@ -213,9 +212,7 @@ def get_movement(
             (cutoff, limit),
         ).fetchall()
 
-        # Map event_type → the status the job transitioned TO at that moment.
-        # This is more accurate than j.status (which is the CURRENT status and
-        # may have changed since the event).
+        # Map event_type → the status the job transitioned TO.
         event_to_status: dict[str, str] = {
             "applied": "applied",
             "engaged": "engaged",
@@ -229,39 +226,35 @@ def get_movement(
         }
 
         rejection_events = {"rejected", "skipped", "company_rejected"}
+
+        # Infer from_status by walking events chronologically per job:
+        # each event's "from" is the previous event's "to" for that job.
+        # Rows are DESC (newest first), so iterate in reverse for ASC order.
+        prev_status: dict[int, str] = {}
+        enriched: list[tuple] = []  # (row, from_status, to_status)
+        for r in reversed(rows):
+            to_status = event_to_status.get(r["event_type"], r["status"] or "")
+            from_s = prev_status.get(r["job_id"])
+            enriched.append((r, from_s, to_status))
+            prev_status[r["job_id"]] = to_status
+        enriched.reverse()  # back to DESC for display
+
         events: list[MovementEvent] = []
         rejection_count = 0
         rejection_breakdown: dict[str, int] = {}
 
-        for r in rows:
+        for r, from_s, to_s in enriched:
             if r["event_type"] in rejection_events:
                 rejection_count += 1
                 rejection_breakdown[r["event_type"]] = rejection_breakdown.get(r["event_type"], 0) + 1
                 continue
-
-            # Parse from_status / to_status from metadata JSON if present.
-            # transition_status() stores {"from": old, "to": new} for
-            # STATUS_CHANGED and OVERRIDDEN events.
-            from_status: str | None = None
-            to_status = event_to_status.get(r["event_type"], r["status"] or "")
-            if r["metadata"]:
-                try:
-                    md = json.loads(r["metadata"])
-                    if isinstance(md, dict):
-                        if md.get("from"):
-                            from_status = md["from"]
-                        if md.get("to"):
-                            to_status = md["to"]
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
             events.append(MovementEvent(
                 job_id=r["job_id"],
                 job_title=r["title"] or "",
                 company=r["company"] or "",
                 event_type=r["event_type"],
-                from_status=from_status,
-                to_status=to_status,
+                from_status=from_s,
+                to_status=to_s,
                 occurred_at=r["occurred_at"] or "",
                 actor=r["actor"] or "",
                 note=r["note"],
