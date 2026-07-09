@@ -30,7 +30,6 @@ const EVENT_META: Record<string, { label: string; icon: React.ComponentType<{ cl
 const REJECTION_LABELS: Record<string, string> = {
   rejected: "manual rejections",
   skipped: "skips",
-  company_rejected: "company rejections",
 };
 
 const STATUS_LABELS: Record<string, string> = {

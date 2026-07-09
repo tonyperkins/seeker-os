@@ -225,7 +225,7 @@ def get_movement(
             "overridden": "overridden",
         }
 
-        rejection_events = {"rejected", "skipped", "company_rejected"}
+        rejection_events = {"rejected", "skipped"}
 
         # Infer from_status by walking events chronologically per job:
         # each event's "from" is the previous event's "to" for that job.

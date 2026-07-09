@@ -245,12 +245,13 @@ class TestAnalytics:
         assert "rejection_count" in data
 
     def test_movement_excludes_rejections_from_rows(self, client):
-        """Rejection events should not appear in the events list."""
+        """Manual rejections and skips should not appear in the events list.
+        company_rejected IS shown as a movement row (it's a company action)."""
         r = client.get("/api/analytics/movement?days=90&limit=200")
         assert r.status_code == 200
         data = r.json()
         for evt in data["events"]:
-            assert evt["event_type"] not in ("rejected", "skipped", "company_rejected")
+            assert evt["event_type"] not in ("rejected", "skipped")
 
     def test_aging(self, client):
         r = client.get("/api/analytics/aging")
