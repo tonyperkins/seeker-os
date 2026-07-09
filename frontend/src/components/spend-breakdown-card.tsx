@@ -80,23 +80,23 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
 
   // Always-visible summary stats in the header action slot
   const headerStats = (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-      <div className="flex items-center gap-1.5">
-        <Cpu className="size-3.5 text-muted-foreground" />
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-lg">
+      <div className="flex items-center gap-2">
+        <Cpu className="size-5 text-muted-foreground" />
         <span className="text-muted-foreground">Tokens</span>
         <span className="font-mono font-semibold text-foreground">
           {formatTokens(report.total_input_tokens + report.total_output_tokens)}
         </span>
       </div>
-      <div className="flex items-center gap-1.5">
-        <DollarSign className="size-3.5 text-violet-500" />
+      <div className="flex items-center gap-2">
+        <DollarSign className="size-5 text-violet-500" />
         <span className="text-muted-foreground">Est. cost</span>
         <span className="font-mono font-semibold text-foreground">
           {hasPricing ? formatCost(report.total_estimated_cost) : "—"}
         </span>
       </div>
-      <div className="flex items-center gap-1.5">
-        <TrendingDown className="size-3.5 text-sky-500" />
+      <div className="flex items-center gap-2">
+        <TrendingDown className="size-5 text-sky-500" />
         <span className="text-muted-foreground">Per applied</span>
         <span className="font-mono font-semibold text-foreground">
           {report.cost_per_applied != null ? `$${report.cost_per_applied.toFixed(2)}` : "—"}
