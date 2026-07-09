@@ -6,16 +6,9 @@ import {
   FileText,
   AlertTriangle,
 } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardAction,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { CollapsibleCard } from "@/components/collapsible-card";
 import type { JobSummary } from "@/lib/api";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -56,19 +49,18 @@ export function ActiveApplications({ jobs }: { jobs: JobSummary[] }) {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Active Applications</CardTitle>
-        <CardDescription>Jobs in applied, engaged, or offer stages</CardDescription>
-        <CardAction>
-          <Link href="/jobs?status=applied,engaged,offer_accepted,offer_declined" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-            View all
-            <ArrowRight />
-          </Link>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col divide-y divide-border">
+    <CollapsibleCard
+      title="Active Applications"
+      description="Jobs in applied, engaged, or offer stages"
+      storageKey="dash-active-applications"
+      action={
+        <Link href="/jobs?status=applied,engaged,offer_accepted,offer_declined" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          View all
+          <ArrowRight />
+        </Link>
+      }
+    >
+      <div className="flex flex-col divide-y divide-border">
           {sorted.map((job) => {
             const days = job.days_since_last_activity ?? 0;
             return (
@@ -94,9 +86,8 @@ export function ActiveApplications({ jobs }: { jobs: JobSummary[] }) {
               </Link>
             );
           })}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }
 
@@ -106,19 +97,18 @@ export function Considering({ jobs }: { jobs: JobSummary[] }) {
   const sorted = [...jobs].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Considering</CardTitle>
-        <CardDescription>Jobs in reviewing or interested — not yet applied</CardDescription>
-        <CardAction>
-          <Link href="/jobs?status=reviewing,interested" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-            View all
-            <ArrowRight />
-          </Link>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col divide-y divide-border">
+    <CollapsibleCard
+      title="Considering"
+      description="Jobs in reviewing or interested — not yet applied"
+      storageKey="dash-considering"
+      action={
+        <Link href="/jobs?status=reviewing,interested" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          View all
+          <ArrowRight />
+        </Link>
+      }
+    >
+      <div className="flex flex-col divide-y divide-border">
           {sorted.map((job) => {
             const days = job.days_since_last_activity ?? 0;
             return (
@@ -154,9 +144,8 @@ export function Considering({ jobs }: { jobs: JobSummary[] }) {
               </Link>
             );
           })}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }
 
@@ -168,18 +157,18 @@ export function StaleAlerts({ jobs, threshold = 14 }: { jobs: JobSummary[]; thre
   if (stale.length === 0) return null;
 
   return (
-    <Card className="border-amber-500/30">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <CollapsibleCard
+      title={
+        <span className="flex items-center gap-2">
           <AlertTriangle className="size-5 text-amber-500" />
           Stale Alerts
-        </CardTitle>
-        <CardDescription>
-          No activity for {threshold}+ days — may need follow-up
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col divide-y divide-border">
+        </span>
+      }
+      description={`No activity for ${threshold}+ days — may need follow-up`}
+      storageKey="dash-stale-alerts"
+      className="border-amber-500/30"
+    >
+      <div className="flex flex-col divide-y divide-border">
           {stale.map((job) => {
             const days = job.days_since_last_activity ?? 0;
             const isCritical = days >= threshold * 2;
@@ -203,9 +192,8 @@ export function StaleAlerts({ jobs, threshold = 14 }: { jobs: JobSummary[]; thre
               </Link>
             );
           })}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }
 
@@ -226,12 +214,12 @@ export function PostReadyFunnel({ byStatus }: { byStatus: Record<string, number>
   if (total === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Post-Ready Pipeline</CardTitle>
-        <CardDescription>Jobs past the ready stage</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+    <CollapsibleCard
+      title="Post-Ready Pipeline"
+      description="Jobs past the ready stage"
+      storageKey="dash-post-ready-funnel"
+      contentClassName="flex flex-col gap-3"
+    >
         {counts.map((stage) => {
           const pct = max > 0 ? (stage.count / max) * 100 : 0;
           return (
@@ -259,7 +247,6 @@ export function PostReadyFunnel({ byStatus }: { byStatus: Record<string, number>
         <div className="border-t border-border pt-2 text-xs text-muted-foreground">
           Total in pipeline: <span className="font-mono font-semibold text-foreground">{total}</span>
         </div>
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

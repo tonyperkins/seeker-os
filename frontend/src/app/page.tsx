@@ -6,15 +6,8 @@ import {
   XCircle,
   FileSearch,
 } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardAction,
-} from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { CollapsibleCard } from "@/components/collapsible-card";
 import { RunStrip } from "@/components/run-strip";
 import { VerdictBadge } from "@/components/verdict-badge";
 import { RecentRunsCard } from "@/components/recent-runs-card";
@@ -111,11 +104,9 @@ export default async function DashboardPage() {
     return (
       <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <Card>
-          <CardContent className="py-10 text-center text-destructive">
-            {error}
-          </CardContent>
-        </Card>
+        <div className="rounded-lg bg-card p-6 text-center text-destructive ring-1 ring-foreground/10">
+          {error}
+        </div>
       </div>
     );
   }
@@ -172,15 +163,14 @@ export default async function DashboardPage() {
 
         {/* Right — Pipeline funnel (fixed) */}
         {funnelStages.length > 0 && (
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>Pipeline Funnel</CardTitle>
-              <CardDescription>
-                Cumulative jobs surviving each stage
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <FunnelChart stages={funnelStages} />
+          <CollapsibleCard
+            title="Pipeline Funnel"
+            description="Cumulative jobs surviving each stage"
+            storageKey="dash-pipeline-funnel"
+            className="h-full"
+            contentClassName="flex flex-col gap-4"
+          >
+            <FunnelChart stages={funnelStages} />
               <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-3 text-sm">
                 <div className="flex items-center gap-2">
                   <XCircle className="size-4 text-destructive" />
@@ -198,60 +188,57 @@ export default async function DashboardPage() {
                   )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         )}
       </div>
 
       {/* ZONE 3 — Top matches with verdict */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Top Matches</CardTitle>
-          <CardDescription>Highest-scoring ready jobs with AI verdict</CardDescription>
-          <CardAction>
-            <Link href="/jobs?status=ready" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              View all
-              <ArrowRight />
-            </Link>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          {topMatches.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              No ready jobs yet. Run the pipeline to discover matches.
-            </p>
-          ) : (
-            <div className="flex flex-col divide-y divide-border">
-              {topMatches.map((job, i) => (
-                <Link
-                  key={job.id}
-                  href={`/jobs/${job.id}`}
-                  className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
-                >
-                  {i === 0 ? (
-                    <Trophy className="size-4 shrink-0 text-amber-500" />
-                  ) : (
-                    <span className="w-4 shrink-0 text-center font-mono text-xs text-muted-foreground">
-                      {i + 1}
-                    </span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{job.title}</span>
-                    <span className="block truncate text-muted-foreground">{job.company}</span>
-                  </div>
-                  <VerdictBadge verdict={job.analysis_verdict} hasAnalysis={job.has_analysis} />
-                  {job.score != null && (
-                    <span className="w-10 shrink-0 text-right font-mono font-semibold">
-                      {job.score}
-                    </span>
-                  )}
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-                </Link>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Top Matches"
+        description="Highest-scoring ready jobs with AI verdict"
+        storageKey="dash-top-matches"
+        action={
+          <Link href="/jobs?status=ready" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            View all
+            <ArrowRight />
+          </Link>
+        }
+      >
+        {topMatches.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No ready jobs yet. Run the pipeline to discover matches.
+          </p>
+        ) : (
+          <div className="flex flex-col divide-y divide-border">
+            {topMatches.map((job, i) => (
+              <Link
+                key={job.id}
+                href={`/jobs/${job.id}`}
+                className="flex items-center gap-3 py-2.5 text-sm transition-colors hover:bg-muted/40 -mx-2 px-2 rounded-md"
+              >
+                {i === 0 ? (
+                  <Trophy className="size-4 shrink-0 text-amber-500" />
+                ) : (
+                  <span className="w-4 shrink-0 text-center font-mono text-xs text-muted-foreground">
+                    {i + 1}
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{job.title}</span>
+                  <span className="block truncate text-muted-foreground">{job.company}</span>
+                </div>
+                <VerdictBadge verdict={job.analysis_verdict} hasAnalysis={job.has_analysis} />
+                {job.score != null && (
+                  <span className="w-10 shrink-0 text-right font-mono font-semibold">
+                    {job.score}
+                  </span>
+                )}
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+              </Link>
+            ))}
+          </div>
+        )}
+      </CollapsibleCard>
 
       {/* ZONE 4 — Post-ready pipeline: Active Applications + Funnel */}
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
