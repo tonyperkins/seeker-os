@@ -153,12 +153,16 @@ def run_auto_analysis(
     db: sqlite3.Connection,
     limit: int | None = None,
     analyze_fn: Callable[..., dict] | None = None,
+    progress_cb: Callable[[int, int, str], None] | None = None,
 ) -> dict:
     """Analyze unanalyzed high-scorers up to the rate limit.
 
     limit overrides max_per_run when given. analyze_fn is injectable for
     tests; defaults to the real LLM-backed analyze_job. Per-job failures are
     logged and counted, never raised — one bad JD must not sink the run.
+
+    progress_cb(current, total, detail) is called after each job to report
+    per-job progress for streaming UIs.
 
     Returns {"candidates", "analyzed", "failed", "job_ids", "errors"}.
     """
@@ -174,10 +178,11 @@ def run_auto_analysis(
         limit = scoring.auto_analysis.max_per_run
 
     candidates = select_unanalyzed_high_scorers(db, scoring, limit=limit)
+    total = len(candidates)
     analyzed_ids: list[int] = []
     errors: list[str] = []
 
-    for row in candidates:
+    for i, row in enumerate(candidates):
         try:
             analyze_fn(settings=settings, job_id=row["id"])
             analyzed_ids.append(row["id"])
@@ -187,6 +192,12 @@ def run_auto_analysis(
                 row["id"], row["title"], row["company"], exc,
             )
             errors.append(f"job {row['id']}: {exc}")
+
+        if progress_cb:
+            progress_cb(
+                i + 1, total,
+                f"{len(analyzed_ids)} analyzed, {len(errors)} failed — {row['title'][:40]}",
+            )
 
     return {
         "candidates": len(candidates),
