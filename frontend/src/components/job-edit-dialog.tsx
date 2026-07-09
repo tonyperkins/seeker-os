@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Loader2, Save, Plus, Trash2 } from "lucide-react";
+import { Pencil, Loader2, Save, Plus, Trash2, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,6 +50,7 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
     name: "", email: "", phone: "", linkedin: "", agency: "", source: "", contacted_at: "", notes: "",
   });
   const [showAddRecruiter, setShowAddRecruiter] = useState(false);
+  const [editingRecruiterId, setEditingRecruiterId] = useState<number | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -68,6 +69,7 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
       setRecruiters(job.recruiter_contacts || []);
       setNewRecruiter({ name: "", email: "", phone: "", linkedin: "", agency: "", source: "", contacted_at: "", notes: "" });
       setShowAddRecruiter(false);
+      setEditingRecruiterId(null);
       setError(null);
     }
   }, [open, job]);
@@ -213,42 +215,78 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
                 id="edit-jd-full"
                 value={jdFull}
                 onChange={(e) => setJdFull(e.target.value)}
-                className="min-h-[40vh] font-mono text-xs"
+                className="max-h-[55vh] min-h-[30vh] overflow-y-auto font-mono text-xs"
                 placeholder="Paste or edit the full job description…"
               />
             </div>
           </TabsContent>
 
           <TabsContent value="recruiter">
-            <div className="flex flex-col gap-3 max-h-[50vh] overflow-y-auto p-1">
+            <div className="flex flex-col gap-3 max-h-[55vh] overflow-y-auto p-1">
               {recruiters.map((rc) => (
                 <div key={rc.id} className="flex flex-col gap-2 rounded-md border border-border/40 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{rc.name || "Unnamed recruiter"}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={demoMode}
-                      onClick={async () => {
+                  {editingRecruiterId === rc.id ? (
+                    <RecruiterEditForm
+                      initial={rc}
+                      onCancel={() => setEditingRecruiterId(null)}
+                      onSave={async (entityData, assocData) => {
                         try {
-                          await api.jobs.deleteRecruiter(rc.id);
-                          setRecruiters(recruiters.filter((r) => r.id !== rc.id));
+                          if (entityData) {
+                            await api.jobs.updateRecruiterEntity(rc.recruiter_id, entityData);
+                          }
+                          if (assocData) {
+                            await api.jobs.updateRecruiterAssociation(rc.id, assocData);
+                          }
+                          setEditingRecruiterId(null);
+                          // Refresh recruiter list
+                          const updated = await api.jobs.get(job.id);
+                          setRecruiters(updated.recruiter_contacts || []);
                         } catch (err) {
-                          setError(err instanceof Error ? err.message : "Failed to delete recruiter");
+                          setError(err instanceof Error ? err.message : "Failed to update recruiter");
                         }
                       }}
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                    {rc.agency && <div><span className="font-medium">Agency:</span> {rc.agency}</div>}
-                    {rc.source && <div><span className="font-medium">Source:</span> {rc.source}</div>}
-                    {rc.email && <div><span className="font-medium">Email:</span> {rc.email}</div>}
-                    {rc.phone && <div><span className="font-medium">Phone:</span> {rc.phone}</div>}
-                    {rc.linkedin && <div><span className="font-medium">LinkedIn:</span> {rc.linkedin}</div>}
-                    {rc.contacted_at && <div><span className="font-medium">Contacted:</span> {new Date(rc.contacted_at).toLocaleDateString()}</div>}
-                  </div>
+                    />
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{rc.name || "Unnamed recruiter"}</span>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={demoMode}
+                            onClick={() => setEditingRecruiterId(rc.id)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={demoMode}
+                            onClick={async () => {
+                              try {
+                                await api.jobs.deleteRecruiter(rc.id);
+                                setRecruiters(recruiters.filter((r) => r.id !== rc.id));
+                              } catch (err) {
+                                setError(err instanceof Error ? err.message : "Failed to delete recruiter");
+                              }
+                            }}
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        {rc.agency && <div><span className="font-medium">Agency:</span> {rc.agency}</div>}
+                        {rc.source && <div><span className="font-medium">Source:</span> {rc.source}</div>}
+                        {rc.email && <div><span className="font-medium">Email:</span> {rc.email}</div>}
+                        {rc.phone && <div><span className="font-medium">Phone:</span> {rc.phone}</div>}
+                        {rc.linkedin && <div><span className="font-medium">LinkedIn:</span> {rc.linkedin}</div>}
+                        {rc.contacted_at && <div><span className="font-medium">Contacted:</span> {new Date(rc.contacted_at).toLocaleDateString()}</div>}
+                        {rc.notes && <div className="col-span-2"><span className="font-medium">Notes:</span> {rc.notes}</div>}
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
 
@@ -329,5 +367,102 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type EntityUpdateData = {
+  name?: string; email?: string; phone?: string; linkedin?: string; agency?: string;
+};
+type AssocUpdateData = {
+  source?: string; notes?: string;
+};
+
+function RecruiterEditForm({
+  initial,
+  onCancel,
+  onSave,
+}: {
+  initial: RecruiterContact;
+  onCancel: () => void;
+  onSave: (entity: EntityUpdateData | null, assoc: AssocUpdateData | null) => void;
+}) {
+  const [name, setName] = useState(initial.name || "");
+  const [email, setEmail] = useState(initial.email || "");
+  const [phone, setPhone] = useState(initial.phone || "");
+  const [linkedin, setLinkedin] = useState(initial.linkedin || "");
+  const [agency, setAgency] = useState(initial.agency || "");
+  const [source, setSource] = useState(initial.source || "");
+  const [notes, setNotes] = useState(initial.notes || "");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const entity: EntityUpdateData = {};
+    if (name !== (initial.name || "")) entity.name = name.trim() || undefined;
+    if (email !== (initial.email || "")) entity.email = email.trim() || undefined;
+    if (phone !== (initial.phone || "")) entity.phone = phone.trim() || undefined;
+    if (linkedin !== (initial.linkedin || "")) entity.linkedin = linkedin.trim() || undefined;
+    if (agency !== (initial.agency || "")) entity.agency = agency.trim() || undefined;
+
+    const assoc: AssocUpdateData = {};
+    if (source !== (initial.source || "")) assoc.source = source.trim() || undefined;
+    if (notes !== (initial.notes || "")) assoc.notes = notes.trim() || undefined;
+
+    await onSave(
+      Object.keys(entity).length > 0 ? entity : null,
+      Object.keys(assoc).length > 0 ? assoc : null,
+    );
+    setSaving(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Name</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Smith" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Source</Label>
+          <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder="LinkedIn, email, referral…" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Agency / Firm</Label>
+          <Input value={agency} onChange={(e) => setAgency(e.target.value)} placeholder="CyberCoders, Robert Half…" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Contacted At</Label>
+          <Input value={initial.contacted_at ? new Date(initial.contacted_at).toLocaleDateString() : "—"} disabled className="text-xs" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Email</Label>
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@company.com" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">Phone</Label>
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555-123-4567" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">LinkedIn</Label>
+          <Input value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="linkedin.com/in/janesmith" />
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">Notes</Label>
+        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes about this recruiter…" />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          <X className="size-4" /> Cancel
+        </Button>
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          <Check className="size-4" /> Save
+        </Button>
+      </div>
+    </div>
   );
 }
