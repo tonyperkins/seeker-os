@@ -268,6 +268,9 @@ def _validate_occurred_at(
     except (ValueError, TypeError) as exc:
         raise ValueError(f"Invalid occurred_at format: {occurred_at}") from exc
 
+    if occurred_dt.tzinfo is None:
+        occurred_dt = occurred_dt.replace(tzinfo=timezone.utc)
+
     now = datetime.now(timezone.utc)
     if occurred_dt > now:
         raise ValueError(f"occurred_at cannot be in the future: {occurred_at}")
@@ -283,6 +286,8 @@ def _validate_occurred_at(
             discovered_dt = datetime.fromisoformat(row["discovered_at"])
         except (ValueError, TypeError):
             return
+        if discovered_dt.tzinfo is None:
+            discovered_dt = discovered_dt.replace(tzinfo=timezone.utc)
         if occurred_dt < discovered_dt:
             raise ValueError(
                 f"occurred_at cannot be before job discovery "
