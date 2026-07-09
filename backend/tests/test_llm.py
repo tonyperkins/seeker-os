@@ -485,3 +485,33 @@ class TestTaskMaxTokensConfig:
                 f"{func.__name__} has hardcoded max_tokens={param.default!r}, "
                 f"should be None (router resolves from config)"
             )
+
+
+class TestParsePerTokenToPerMtok:
+    """Tests for _parse_per_token_to_per_mtok — free vs unknown pricing."""
+
+    def test_explicit_zero_returns_free(self):
+        """'0' should return 0.0 (configured-and-free, e.g. Ollama)."""
+        from seeker_os.llm.openai_compat_provider import _parse_per_token_to_per_mtok
+        assert _parse_per_token_to_per_mtok("0") == 0.0
+
+    def test_none_returns_none(self):
+        """None (missing key) should return None (unknown pricing)."""
+        from seeker_os.llm.openai_compat_provider import _parse_per_token_to_per_mtok
+        assert _parse_per_token_to_per_mtok(None) is None
+
+    def test_normal_value_converts(self):
+        """A normal per-token price should convert to per-1M-tokens."""
+        from seeker_os.llm.openai_compat_provider import _parse_per_token_to_per_mtok
+        # $0.000003 per token = $3.00 per 1M tokens
+        assert _parse_per_token_to_per_mtok("0.000003") == 3.0
+
+    def test_unparseable_returns_none(self):
+        """Unparseable values should return None."""
+        from seeker_os.llm.openai_compat_provider import _parse_per_token_to_per_mtok
+        assert _parse_per_token_to_per_mtok("not_a_number") is None
+
+    def test_negative_returns_none(self):
+        """Negative values should return None (invalid)."""
+        from seeker_os.llm.openai_compat_provider import _parse_per_token_to_per_mtok
+        assert _parse_per_token_to_per_mtok("-0.001") is None

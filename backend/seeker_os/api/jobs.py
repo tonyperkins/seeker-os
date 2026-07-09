@@ -262,6 +262,9 @@ def _row_to_summary(
         has_resume=has_resume,
         analysis_verdict=row["analysis_verdict"] if "analysis_verdict" in row.keys() else None,
         net_score=row["net_score"] if "net_score" in row.keys() else None,
+        ai_policy=row["ai_policy"] if "ai_policy" in row.keys() else None,
+        score_modifiers=json_decode(row["score_modifiers"]) if "score_modifiers" in row.keys() and row["score_modifiers"] else {},
+        score_reasons=json_decode(row["score_reasons"]) if "score_reasons" in row.keys() and row["score_reasons"] else [],
         has_recruiter=has_recruiter,
         recruiter_source=recruiter_source,
     )
@@ -375,6 +378,7 @@ def list_jobs(
     exclude_status: str | None = Query(None, description="Comma-separated statuses to exclude (e.g. 'rejected,skipped')"),
     recruiter_source: str | None = Query(None, description="Filter by recruiter contact source (e.g. 'LinkedIn', 'email')"),
     has_recruiter: bool | None = Query(None, description="Filter to jobs with (true) or without (false) recruiter contacts"),
+    sort_by: str | None = Query(None, description="Sort field: 'net_score' or 'score'. Defaults to net_score for ready jobs, score otherwise."),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -385,8 +389,14 @@ def list_jobs(
         params: list = []
 
         if status:
-            query += " AND status = ?"
-            params.append(status)
+            statuses = [s.strip() for s in status.split(",") if s.strip()]
+            if len(statuses) == 1:
+                query += " AND status = ?"
+                params.append(statuses[0])
+            elif len(statuses) > 1:
+                placeholders = ",".join("?" for _ in statuses)
+                query += f" AND status IN ({placeholders})"
+                params.extend(statuses)
         if exclude_status:
             excluded = [s.strip() for s in exclude_status.split(",") if s.strip()]
             if excluded:
@@ -429,7 +439,14 @@ def list_jobs(
         total = db.execute(count_query, params).fetchone()["total"]
 
         query += " ORDER BY"
-        if status == "ready":
+        # Determine sort column: explicit sort_by param, then default by status
+        effective_sort = sort_by
+        if effective_sort is None:
+            effective_sort = "net_score" if status == "ready" else "score"
+        if effective_sort == "net_score":
+            # COALESCE falls back to score when net_score is NULL (pre-analysis jobs)
+            query += " COALESCE(net_score, score) DESC,"
+        else:
             query += " score DESC,"
         query += " discovered_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])

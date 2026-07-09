@@ -85,6 +85,8 @@ export interface JobSummary {
   has_resume: boolean;
   analysis_verdict: string | null;
   net_score: number | null;
+  score_modifiers: Record<string, number>;
+  score_reasons: string[];
   has_recruiter: boolean;
   recruiter_source: string | null;
 }
@@ -285,6 +287,97 @@ export interface FunnelStats {
   by_ats_source: Record<string, number>;
   rejection_reasons: Record<string, number>;
   score_distribution: Record<string, number>;
+}
+
+export interface MovementEvent {
+  job_id: number;
+  job_title: string;
+  company: string;
+  event_type: string;
+  from_status: string | null;
+  to_status: string;
+  occurred_at: string;
+  actor: string;
+  note: string | null;
+}
+
+export interface MovementReport {
+  events: MovementEvent[];
+  total: number;
+  rejection_count: number;
+  rejection_breakdown: Record<string, number>;
+}
+
+export interface AgingBucket {
+  status: string;
+  count: number;
+  avg_days: number;
+  max_days: number;
+  stale_count: number;
+}
+
+export interface AgingReport {
+  buckets: AgingBucket[];
+  stale_after_days: number;
+}
+
+export interface VerdictDistribution {
+  verdict: string;
+  count: number;
+  pct: number;
+}
+
+export interface SignalQualityReport {
+  total_analyzed: number;
+  verdicts: VerdictDistribution[];
+  apply_rate: number;
+  skip_rate: number;
+  false_positive_pct: number;
+  false_negative_pct: number;
+  calibration_available: boolean;
+}
+
+export interface SpendByTask {
+  task: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost: number;
+}
+
+export interface SpendByModel {
+  provider: string;
+  model: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost: number;
+  input_price_per_mtok: number | null;
+  output_price_per_mtok: number | null;
+  pricing_source: string;
+  pricing_fetched_at: string | null;
+}
+
+export interface PricingRouteComparison {
+  model: string;
+  routes: { provider: string; input_price_per_mtok: number | null; output_price_per_mtok: number | null }[];
+  variance_pct: number;
+}
+
+export interface SpendReport {
+  total_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_estimated_cost: number;
+  pricing_configured: boolean;
+  by_task: SpendByTask[];
+  by_model: SpendByModel[];
+  cost_per_ready: number | null;
+  cost_per_applied: number | null;
+  pricing_fetched_at: string | null;
+  pricing_stale: boolean;
+  pricing_stale_after_days: number;
+  route_pricing: PricingRouteComparison[];
 }
 
 export interface SkipReasonOption {
@@ -491,7 +584,7 @@ export const api = {
 
   // Jobs
   jobs: {
-    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; sort_by?: "net_score" | "score"; limit?: number; offset?: number }) => {
       const search = new URLSearchParams();
       if (params?.status) search.set("status", params.status);
       if (params?.min_tier) search.set("min_tier", String(params.min_tier));
@@ -502,6 +595,7 @@ export const api = {
       if (params?.run_id) search.set("run_id", params.run_id);
       if (params?.verdict) search.set("verdict", params.verdict);
       if (params?.exclude_status) search.set("exclude_status", params.exclude_status);
+      if (params?.sort_by) search.set("sort_by", params.sort_by);
       if (params?.limit) search.set("limit", String(params.limit));
       if (params?.offset) search.set("offset", String(params.offset));
       const qs = search.toString();
@@ -650,6 +744,16 @@ export const api = {
   // Analytics
   analytics: {
     funnel: () => fetchAPI<FunnelStats>("/api/analytics/funnel"),
+    movement: (params?: { days?: number; limit?: number }) => {
+      const search = new URLSearchParams();
+      if (params?.days) search.set("days", String(params.days));
+      if (params?.limit) search.set("limit", String(params.limit));
+      const qs = search.toString();
+      return fetchAPI<MovementReport>(`/api/analytics/movement${qs ? `?${qs}` : ""}`);
+    },
+    aging: () => fetchAPI<AgingReport>("/api/analytics/aging"),
+    signalQuality: () => fetchAPI<SignalQualityReport>("/api/analytics/signal-quality"),
+    spend: () => fetchAPI<SpendReport>("/api/analytics/spend"),
   },
 
   // Resumes
@@ -658,6 +762,7 @@ export const api = {
       const qs = jobId ? `?job_id=${jobId}` : "";
       return fetchAPI<ResumeSummary[]>(`/api/resumes${qs}`);
     },
+    pendingCount: () => fetchAPI<{ count: number }>("/api/resumes/pending-count"),
     get: (id: number) => fetchAPI<ResumeDetail>(`/api/resumes/${id}`),
     update: (id: number, resumeText: string) =>
       fetchAPI<MessageResponse>(`/api/resumes/${id}`, {

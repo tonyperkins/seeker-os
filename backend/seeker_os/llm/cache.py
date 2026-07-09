@@ -43,6 +43,8 @@ def get_cached_models(provider_id: str) -> list[ModelInfo] | None:
                 source=m.get("source", "auto"),
                 available=m.get("available", True),
                 fetched_at=m.get("fetched_at"),
+                input_price_per_mtok=m.get("input_price_per_mtok"),
+                output_price_per_mtok=m.get("output_price_per_mtok"),
             )
             for m in data["models"]
         ]
@@ -70,6 +72,8 @@ def save_cached_models(provider_id: str, models: list[ModelInfo]) -> None:
                 "source": m.source,
                 "available": m.available,
                 "fetched_at": m.fetched_at,
+                "input_price_per_mtok": m.input_price_per_mtok,
+                "output_price_per_mtok": m.output_price_per_mtok,
             }
             for m in models
         ],

@@ -461,6 +461,9 @@ class ProviderModel(BaseModel):
     context_window: int | None = None
     max_output: int | None = None
     tags: list[str] = []
+    # Pricing per 1M tokens (USD) — used for spend estimation
+    input_price_per_mtok: float | None = None
+    output_price_per_mtok: float | None = None
 
 
 class ProviderConfig(BaseModel):
@@ -490,6 +493,9 @@ class ProvidersConfig(BaseModel):
     providers: list[ProviderConfig] = []
     tiers: dict[str, TierMapping] = {}
     tasks: dict[str, TaskOverride] = {}
+    # Auto-fetched pricing cache staleness threshold (days). When the cached
+    # pricing data is older than this, pricing_stale=True in the spend report.
+    pricing_stale_after_days: int = 30
 
 
 # ---------------------------------------------------------------------------

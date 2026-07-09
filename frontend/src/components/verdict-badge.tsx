@@ -10,8 +10,8 @@ const VERDICT_STYLES: Record<string, { className: string; label: string }> = {
 export function VerdictBadge({ verdict, hasAnalysis }: { verdict: string | null; hasAnalysis: boolean }) {
   if (!hasAnalysis || !verdict) {
     return (
-      <Badge variant="outline" className="text-muted-foreground/50">
-        —
+      <Badge variant="outline" className="text-muted-foreground border-muted-foreground/20 bg-muted/30">
+        not analyzed
       </Badge>
     );
   }

@@ -71,6 +71,10 @@ class ModelInfo:
     source: str = "manual"  # 'manual' (in config) or 'auto' (fetched)
     available: bool = True
     fetched_at: str | None = None  # ISO timestamp when last fetched
+    # Pricing per 1M tokens (USD) — populated from provider API when available
+    # (Kilo, OpenRouter). Falls back to YAML config in providers.yml.
+    input_price_per_mtok: float | None = None
+    output_price_per_mtok: float | None = None
 
 
 @dataclass

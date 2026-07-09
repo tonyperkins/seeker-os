@@ -55,6 +55,9 @@ class JobSummary(BaseModel):
     has_resume: bool = False
     analysis_verdict: str | None = None
     net_score: float | None = None
+    ai_policy: str | None = None
+    score_modifiers: dict[str, float] = {}
+    score_reasons: list[str] = []
 
     @field_validator("comp_min", "comp_max", mode="before")
     @classmethod
@@ -683,6 +686,107 @@ class ResponseRateStats(BaseModel):
     total_responded: int = 0
     response_rate: float = 0.0
     by_source: dict[str, dict] = {}
+
+
+class MovementEvent(BaseModel):
+    """A single status-transition event in the movement feed."""
+    job_id: int
+    job_title: str = ""
+    company: str = ""
+    event_type: str = ""
+    from_status: str | None = None
+    to_status: str = ""
+    occurred_at: str = ""
+    actor: str = ""
+    note: str | None = None
+
+
+class MovementReport(BaseModel):
+    """GET /api/analytics/movement."""
+    events: list[MovementEvent] = []
+    total: int = 0
+    rejection_count: int = 0
+    rejection_breakdown: dict[str, int] = {}
+
+
+class AgingBucket(BaseModel):
+    """Aging stats for jobs in a given status."""
+    status: str
+    count: int = 0
+    avg_days: float = 0.0
+    max_days: int = 0
+    stale_count: int = 0
+
+
+class AgingReport(BaseModel):
+    """GET /api/analytics/aging."""
+    buckets: list[AgingBucket] = []
+    stale_after_days: int = 14
+
+
+class VerdictDistribution(BaseModel):
+    """Verdict distribution entry."""
+    verdict: str
+    count: int = 0
+    pct: float = 0.0
+
+
+class SignalQualityReport(BaseModel):
+    """GET /api/analytics/signal-quality."""
+    total_analyzed: int = 0
+    verdicts: list[VerdictDistribution] = []
+    apply_rate: float = 0.0
+    skip_rate: float = 0.0
+    false_positive_pct: float = 0.0
+    false_negative_pct: float = 0.0
+    calibration_available: bool = False
+
+
+class SpendByTask(BaseModel):
+    """Token usage and cost for a single task type."""
+    task: str
+    calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost: float = 0.0
+
+
+class SpendByModel(BaseModel):
+    """Token usage and cost for a single provider+model."""
+    provider: str
+    model: str
+    calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost: float = 0.0
+    input_price_per_mtok: float | None = None
+    output_price_per_mtok: float | None = None
+    pricing_source: str = ""  # "yaml", "auto", "yaml+auto", or ""
+    pricing_fetched_at: str | None = None  # ISO timestamp for auto-fetched pricing
+
+
+class PricingRouteComparison(BaseModel):
+    """Price difference for the same underlying model across routes."""
+    model: str  # underlying model id (without provider prefix)
+    routes: list[dict] = []  # [{provider, input_price, output_price}]
+    variance_pct: float = 0.0  # max variance between routes
+
+
+class SpendReport(BaseModel):
+    """GET /api/analytics/spend."""
+    total_calls: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_estimated_cost: float = 0.0
+    pricing_configured: bool = False
+    by_task: list[SpendByTask] = []
+    by_model: list[SpendByModel] = []
+    cost_per_ready: float | None = None
+    cost_per_applied: float | None = None
+    pricing_fetched_at: str | None = None  # oldest auto-fetched pricing timestamp
+    pricing_stale: bool = False  # true if any auto-fetched pricing is older than threshold
+    pricing_stale_after_days: int = 30  # configured threshold
+    route_pricing: list[PricingRouteComparison] = []  # cross-route price differences
 
 
 class AnalysisBackfillRequest(BaseModel):
