@@ -385,8 +385,14 @@ def list_jobs(
         params: list = []
 
         if status:
-            query += " AND status = ?"
-            params.append(status)
+            statuses = [s.strip() for s in status.split(",") if s.strip()]
+            if len(statuses) == 1:
+                query += " AND status = ?"
+                params.append(statuses[0])
+            elif len(statuses) > 1:
+                placeholders = ",".join("?" for _ in statuses)
+                query += f" AND status IN ({placeholders})"
+                params.extend(statuses)
         if exclude_status:
             excluded = [s.strip() for s in exclude_status.split(",") if s.strip()]
             if excluded:

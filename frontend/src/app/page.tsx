@@ -18,6 +18,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { RunStrip } from "@/components/run-strip";
 import { VerdictBadge } from "@/components/verdict-badge";
 import { RecentRunsCard } from "@/components/recent-runs-card";
+import { ActiveApplications, Considering, StaleAlerts, PostReadyFunnel } from "@/components/dashboard-post-ready";
 import { api, type FunnelStats, type FunnelStage, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,9 @@ export default async function DashboardPage() {
   let runs: PipelineRunRecord[] = [];
   let topMatches: JobSummary[] = [];
   let topMatchesResp: { jobs: JobSummary[]; total: number } = { jobs: [], total: 0 };
+  let activeJobs: JobSummary[] = [];
+  let consideringJobs: JobSummary[] = [];
+  let allPostReadyJobs: JobSummary[] = [];
   let settings: SettingsResponse | null = null;
   let resumeInfo: MasterResumeInfo | null = null;
   let providers: ProvidersConfigResponse | null = null;
@@ -78,6 +82,12 @@ export default async function DashboardPage() {
   let error: string | null = null;
 
   try {
+    const [activeResp, consideringResp, allPostReadyResp] = await Promise.all([
+      api.jobs.list({ status: "applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 50 }),
+      api.jobs.list({ status: "reviewing,interested", limit: 50 }),
+      api.jobs.list({ status: "reviewing,interested,applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 100 }),
+    ]);
+
     [funnel, runs, topMatchesResp, settings, resumeInfo, providers, { demo_mode: isDemoMode }] = await Promise.all([
       api.analytics.funnel(),
       api.pipeline.runs(),
@@ -90,6 +100,9 @@ export default async function DashboardPage() {
     topMatches = topMatchesResp.jobs;
     // Sort top matches by score desc (defensive — API may already sort)
     topMatches = [...topMatches].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 5);
+    activeJobs = activeResp.jobs ?? [];
+    consideringJobs = consideringResp.jobs ?? [];
+    allPostReadyJobs = allPostReadyResp.jobs ?? [];
   } catch (err) {
     error = err instanceof Error ? err.message : "Failed to load dashboard data";
   }
@@ -239,6 +252,18 @@ export default async function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ZONE 4 — Post-ready pipeline: Active Applications + Funnel */}
+      <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+        <ActiveApplications jobs={activeJobs} />
+        <PostReadyFunnel byStatus={funnel?.by_status ?? {}} />
+      </div>
+
+      {/* ZONE 5 — Considering + Stale Alerts */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Considering jobs={consideringJobs} />
+        <StaleAlerts jobs={allPostReadyJobs} />
+      </div>
     </div>
   );
 }
