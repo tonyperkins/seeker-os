@@ -7,6 +7,8 @@ providers:
   - id: anthropic_direct
     type: anthropic
     label: "Anthropic Direct"
+    # auth_method: how the provider authenticates (api_key, header, none)
+    auth_method: api_key
     api_key: ${ANTHROPIC_API_KEY}
     enabled: false
     auto_fetch_models: true
@@ -45,6 +47,7 @@ providers:
     label: "Kilo Gateway"
     base_url: "https://api.kilo.ai/api/gateway"
     api_key: ${KILO_API_KEY}
+    auth_method: api_key
     auto_fetch_models: true
     enabled: false
     models: []
@@ -56,6 +59,16 @@ providers:
     auto_fetch_models: true
     enabled: false
     models: []
+  # Example: OpenAI-compatible gateway (e.g. LiteLLM proxy, OpenRouter)
+  # - id: openai_gateway
+  #   type: openai_compatible
+  #   label: "OpenAI Gateway"
+  #   base_url: "http://your-gateway:8787/v1"
+  #   api_key: ${OPENAI_API_KEY}
+  #   auth_method: api_key
+  #   auto_fetch_models: true
+  #   enabled: true
+  #   models: []
 
 tiers:
   heavy:    { provider: anthropic_direct, model: claude-opus-4-8 }
@@ -63,14 +76,16 @@ tiers:
   light:    { provider: anthropic_direct, model: claude-haiku-4-5-20251001 }
 
 tasks:
-  resume_generation_high_value: { tier: heavy }
-  resume_generation_standard:   { tier: heavy }
-  accuracy_validation:          { tier: light }
-  onboarding_interview:         { tier: moderate }
-  resume_parsing:               { tier: moderate }
-  cover_letter_generation:      { tier: heavy }
+  jd_analysis:                   { tier: moderate }
+  company_dossier_generation:    { tier: heavy }
+  resume_generation_high_value:  { tier: heavy }
+  resume_generation_standard:    { tier: heavy }
+  accuracy_validation:           { tier: light }
+  onboarding_interview:          { tier: moderate }
+  resume_parsing:                { tier: moderate }
+  cover_letter_generation:       { tier: heavy }
   application_answer_generation: { tier: heavy }
-  application_answer_critique:  { tier: moderate }
+  application_answer_critique:   { tier: moderate }
   # Per-task max_tokens override (optional). If omitted, built-in defaults are used:
   #   jd_analysis: 4096, resume_generation_*: 16000, cover_letter_generation: 4000,
   #   application_answer_generation: 2000, application_answer_critique: 2000,
@@ -78,3 +93,7 @@ tasks:
   #   company_dossier_generation: 16000, onboarding_interview: 4096
   # Example override:
   # jd_analysis: { tier: moderate, max_tokens: 8192 }
+
+# Pricing cache staleness (days). When auto-fetched pricing data is older than
+# this, pricing_stale=True in the spend report.
+pricing_stale_after_days: 30

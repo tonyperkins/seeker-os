@@ -61,6 +61,7 @@ data/.anthropic_oauth.json
 
 # Seeker OS — Real config files (contain personal data)
 # Templates (*.example.yml) ARE committed
+config/prod
 config/profile.yml
 config/scoring_rubric.yml
 config/accuracy_rules.yml

@@ -19,6 +19,10 @@ skip_reasons:
   - key: domain_mismatch
     label: "Domain mismatch"
     hint: "e.g. 'Finance domain, I prefer infra/platform'"
+  # Example: AI-washed roles — AI in the title but not real AI infrastructure work
+  # - key: ai_mismatch
+  #   label: "AI-washed / not real AI infra"
+  #   hint: "e.g. 'AI in title, but it's ML research / model training / a chatbot feature team'"
   - key: comp
     label: "Compensation too low"
     hint: "e.g. 'Max is $140K, below my floor'"

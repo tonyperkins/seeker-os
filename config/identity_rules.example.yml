@@ -50,3 +50,15 @@ identity:
   never_claim: []
   # Example entries:
   #   - "<a technology you don't want claimed>"
+  #   # Gated entries — remove each line when the corresponding build ships:
+  #   - "vLLM"          # unlocks with Local Mode build
+  #   - "MCP server development"  # unlocks when your MCP server ships
+
+  # --- Agent naming rule ---
+  # If you have production agents, specify which agent names are allowed in
+  # generated materials. Retired project names should never appear.
+  # This is a documentation/comment field — enforcement is via the
+  # never_claim list and accuracy_rules.yml disallowed_phrases above.
+  # Example:
+  # # Hermes is the only production-agent claim. Never reference
+  # # OldProjectName in generated materials.

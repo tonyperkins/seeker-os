@@ -29,6 +29,19 @@ rules:
       - "guru"
     severity: medium
 
+  # Grit adjectives — tenacity is proven via postmortems and
+  # problem→pursuit→resolution bullets, never claimed as an adjective.
+  - id: no_grit_adjectives
+    description: "Tenacity is proven via evidence, never claimed as an adjective"
+    type: disallowed_phrases
+    phrases:
+      - "relentless"
+      - "tenacious"
+      - "tireless"
+      - "pitbull"
+      - "dogged"
+    severity: medium
+
   # Matches exact literal strings (case-insensitive substring). Use for known
   # inflated phrasings you want to block verbatim.
   - id: no_year_inflation
@@ -47,6 +60,28 @@ rules:
     type: forbidden_technologies
     technologies: []
     severity: high
+
+  # Gated AI technologies — real sprint builds in flight. REMOVE each entry
+  # when its build ships. Use this pattern for technologies you're actively
+  # building toward but haven't shipped yet.
+  # - id: gated_ai_technologies
+  #   description: "Technologies being built — remove each when its build ships"
+  #   type: forbidden_technologies
+  #   severity: high
+  #   technologies:
+  #     - "vLLM"
+  #     - "LiteLLM"
+  #     - "Langfuse"
+  #     - "promptfoo"
+
+  # Retired project / agent names — prevent referencing retired projects
+  # in generated materials.
+  # - id: retired_agent_names
+  #   description: "Retired project names must never appear in generated materials"
+  #   type: disallowed_phrases
+  #   severity: high
+  #   phrases:
+  #     - "OldProjectName"
 
   # --- Required phrases: ensure contact info is present ---
   # Add your portfolio, LinkedIn, GitHub URLs here so they always appear.

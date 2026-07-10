@@ -11,6 +11,7 @@ scoring:
 
   # Base score — first matching pattern wins
   # Customize these patterns for your target role(s)
+  # Higher-score patterns should be listed first (first match wins).
   base_scores:
     - pattern: "(principal|staff).*engineer"
       score: 4.5
@@ -59,6 +60,11 @@ scoring:
       pattern: "small team|startup|series [abc]"
       points: 0.5
       check: "jd"
+    # Example: culture / practice signal
+    # - signal: "you_build_it"
+    #   pattern: "you build it.*you run it|own.*production"
+    #   points: 1.0
+    #   check: "jd"
 
   # Negative modifiers — all matching patterns are summed
   negative_modifiers:
@@ -96,6 +102,23 @@ scoring:
       pattern: "staffing|consulting llc|recruiting agency"
       points: -1.5
       check: "jd"
+    # Example: comp-gated on-call penalty (requires_comp_below / requires_comp_at_least)
+    # - signal: "oncall_low_comp"
+    #   pattern: "on.?call|on-call rotation"
+    #   points: -1.0
+    #   check: "jd"
+    #   requires_comp_below: 200000    # only fires if comp_max < this
+    # - signal: "oncall_high_comp"
+    #   pattern: "on.?call|on-call rotation"
+    #   points: -0.5
+    #   check: "jd"
+    #   requires_comp_at_least: 200000  # only fires if comp_min >= this
+    # Example: title-based penalty (check: "title" checks the job title only)
+    # - signal: "generic_swe_title"
+    #   pattern: "^software engineer$"
+    #   points: -2.0
+    #   check: "title"
+    #   unless: "infrastructure|platform|sre|devops|cloud"
     - signal: "missing_location"
       points: -1.5
       check: "no_location_no_remote"
@@ -104,6 +127,7 @@ scoring:
     # matching title. patterns is a list of regexes; min_distinct_hits is the
     # number of DISTINCT patterns that must match to fire (default 3).
     # Customize the patterns for domains you want to penalize.
+    # You can define multiple domain_mismatch signals with different pattern sets.
     - signal: "domain_mismatch"
       check: "domain_mismatch"
       points: -4.0
@@ -117,6 +141,26 @@ scoring:
         - "\\bnoc\\b"
         - "carrier.?grade"
         - "\\bmpls\\b"
+    # Example: additional domain_mismatch guards for other off-target domains
+    # - signal: "crypto_web3_domain"
+    #   check: "domain_mismatch"
+    #   points: -4.0
+    #   min_distinct_hits: 3
+    #   patterns:
+    #     - "\\bweb3\\b"
+    #     - "\\bdefi\\b"
+    #     - "\\bblockchain\\b"
+    #     - "smart.?contract"
+    #     - "\\bcrypto(currency)?\\b"
+    # - signal: "ml_research_domain"
+    #   check: "domain_mismatch"
+    #   points: -3.0
+    #   min_distinct_hits: 2
+    #   patterns:
+    #     - "\\bphd\\b.{0,30}(required|strongly preferred)"
+    #     - "research.?scientist"
+    #     - "publications?"
+    #     - "neurips|icml|iclr|cvpr"
     # Never-claim density — scaled penalty for technologies in the
     # identity_rules.yml never_claim list appearing in the JD. No technology
     # names are hardcoded here or in Python — the list comes from identity
@@ -171,6 +215,20 @@ scoring:
       delta: -1.0
       confidence_threshold: 0.6
       source_section: "sentiment"
+    # Optional fields for headcount-based factors:
+    # - factor: "right_size_company"
+    #   delta: 0.5
+    #   confidence_threshold: 0.5
+    #   source_section: "funding"
+    #   headcount_min: 50
+    #   headcount_max: 500
+    # Optional: suppresses a base modifier when this factor fires
+    # (e.g. compensate a JD-text penalty already baked into base_score)
+    # - factor: "large_company_confirmed"
+    #   delta: 0.5
+    #   confidence_threshold: 0.5
+    #   source_section: "funding"
+    #   suppresses: "large_enterprise"
 
   # AI analysis verdict caps — the verdict from the JD analyzer CAPS the
   # composite (net) score rather than adding to it. The AI verdict is the layer

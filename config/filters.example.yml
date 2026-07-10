@@ -10,21 +10,28 @@ filters:
   seniority_floor: ["Senior Level"]
   seniority_reject: ["Mid Level", "Entry Level", "Junior", "Associate"]
   seniority_unknown_passes: true
-
-  # Comp floor is NOT here — it lives in profile.comp.floor (canonical source).
-  # comp_floor_margin_pct applies a tolerance below profile.comp.floor.
-  # comp_unknown_passes controls whether jobs with no comp data pass or are rejected.
-  # comp_sanity_max: values above this are implausible regardless of source.
+  # If title contains any of these patterns, pass regardless of seniority_level tag.
+  seniority_title_override: []
+  # comp_floor_margin_pct: tolerance below profile.comp.floor (percentage).
+  # E.g. 10 = jobs with comp_max >= floor * 0.9 pass the comp floor check.
+  comp_floor_margin_pct: 0
+  # comp_unknown_passes: if True, jobs with no comp data pass; if False, rejected.
+  comp_unknown_passes: true
+  # Comp provenance: values above this are implausible regardless of source.
   # Treated as comp-unknown in the filter (does not clear the floor).
   # Prevents the $130,000 → 130000000 misparse from clearing the comp floor.
   comp_sanity_max: 10000000
 
   freshness_days: 30
   commitment_required: "Full Time"
+  # Locations to exclude even if us_only passes (states or cities).
+  location_exclude: []
   # Cities where hybrid jobs are allowed even when remote_only=true.
   # Hybrid jobs whose location contains any of these city names pass the filter.
   # Leave empty to reject all non-remote jobs (strict remote-only).
   hybrid_accepted_cities: []
+  # If True, only pass jobs that offer visa sponsorship.
+  visa_sponsorship_required: false
   # Junior-level title patterns for fallback filtering when seniority_level
   # is None and seniority_unknown_passes is False. Empty this list if you
   # are targeting junior-level roles.
