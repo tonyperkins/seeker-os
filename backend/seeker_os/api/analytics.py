@@ -598,10 +598,14 @@ def get_spend():
         # Build route-price comparisons: same underlying model available on multiple routes
         # Group by the model id without provider prefix (e.g. "anthropic/claude-opus-4.8" → "claude-opus-4.8")
         # Only consider enabled providers — disabled providers are not valid routing options
+        # Deduplicate within a single provider: a gateway like Kilo may list the same base
+        # model from multiple upstreams (e.g. anthropic/claude-opus-4.8 and stealth/claude-opus-4.8).
+        # These are not independent routes — pick the cheapest entry per provider.
         enabled_provider_ids = {
             p.id for p in (settings.providers.providers if settings.providers else []) if p.enabled
         }
-        route_map: dict[str, list[dict]] = {}
+        # {base_model: {prov_id: cheapest route dict}}
+        route_map: dict[str, dict[str, dict]] = {}
         for (prov_id, model_id), (in_price, out_price) in pricing.items():
             if prov_id not in enabled_provider_ids:
                 continue
@@ -609,14 +613,25 @@ def get_spend():
                 continue
             # Normalize: strip provider prefix if present (e.g. "anthropic/claude-opus-4.8" → "claude-opus-4.8")
             base_model = model_id.split("/")[-1] if "/" in model_id else model_id
-            route_map.setdefault(base_model, []).append({
+            entry = {
                 "provider": prov_id,
                 "input_price_per_mtok": in_price,
                 "output_price_per_mtok": out_price,
-            })
+            }
+            prov_routes = route_map.setdefault(base_model, {})
+            existing = prov_routes.get(prov_id)
+            if existing is None:
+                prov_routes[prov_id] = entry
+            else:
+                # Keep the cheaper one (by input price, fall back to output)
+                old_in = existing.get("input_price_per_mtok") or float("inf")
+                new_in = in_price if in_price is not None else float("inf")
+                if new_in < old_in:
+                    prov_routes[prov_id] = entry
 
         route_pricing: list[PricingRouteComparison] = []
-        for base_model, routes in route_map.items():
+        for base_model, prov_routes in route_map.items():
+            routes = list(prov_routes.values())
             if len(routes) < 2:
                 continue
             # Compute max variance on input price
