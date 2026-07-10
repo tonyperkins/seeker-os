@@ -6,11 +6,11 @@ This shim preserves existing imports from seeker_os.resume.validator.
 """
 
 from seeker_os.validation import (
+    ARTIFACT_TYPES,
+    KNOWN_RULE_TYPES,
     AccuracyValidator,
     ValidationResult,
     Violation,
-    KNOWN_RULE_TYPES,
-    ARTIFACT_TYPES,
 )
 
 __all__ = [

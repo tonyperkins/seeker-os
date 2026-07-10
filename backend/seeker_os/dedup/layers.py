@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import re
 import sqlite3
+from datetime import UTC
 
 from rapidfuzz import fuzz
 
@@ -145,9 +146,9 @@ def register_keys(
 
     Registers composite key in dedup_registry (url_hash is in jobs table via UNIQUE).
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Register composite key
     ck = composite_key(job.source_job_id, source_map)
@@ -166,9 +167,9 @@ def register_keys(
 
 def register_content_hash(job_id: int, jd_text: str, db: sqlite3.Connection) -> None:
     """Register content hash after JD fetch."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     ch = content_hash(jd_text)
 
     db.execute(

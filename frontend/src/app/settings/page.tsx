@@ -21,6 +21,7 @@ import { CompanyResearchSettingsCard } from "@/components/company-research-setti
 import { BackupRestoreCard } from "@/components/backup-restore-card";
 import { BookmarkletCard } from "@/components/bookmarklet-card";
 import { ReloadConfigButton } from "@/components/reload-config-button";
+import { SettingsSectionNav } from "@/components/settings-section-nav";
 import { api, type SettingsResponse, type ProfileData, type FiltersData, type AccuracyRule } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -117,39 +118,53 @@ export default async function SettingsPage() {
         </Card>
       </div>
 
+      <SettingsSectionNav />
+
       {/* Resume Upload + Parse — the main CTA */}
-      <SettingsClient
-        profile={profile}
-        filters={filters}
-      />
+      <div id="profile" className="scroll-mt-20">
+        <SettingsClient
+          profile={profile}
+          filters={filters}
+        />
+      </div>
 
       <Separator />
 
       {/* Bookmarklet — drag-to-bookmarks-bar job adder */}
-      <BookmarkletCard />
+      <div id="bookmarklet" className="scroll-mt-20">
+        <BookmarkletCard />
+      </div>
 
       <Separator />
 
       {/* Accuracy Rules — editable resume validation constraints */}
-      <AccuracyRulesCard initialRules={accuracyRules} />
+      <div id="accuracy" className="scroll-mt-20">
+        <AccuracyRulesCard initialRules={accuracyRules} />
+      </div>
 
       <Separator />
 
       {/* Company Research — retrieval provider and API key configuration */}
-      <CompanyResearchSettingsCard />
+      <div id="research" className="scroll-mt-20">
+        <CompanyResearchSettingsCard />
+      </div>
 
       <Separator />
 
       {/* Advanced config — Scoring/Sources toggle lives inside the card */}
-      <SettingsConfigCard
-        scoring={settings?.scoring ?? null}
-        sources={settings?.sources ?? null}
-      />
+      <div id="config" className="scroll-mt-20">
+        <SettingsConfigCard
+          scoring={settings?.scoring ?? null}
+          sources={settings?.sources ?? null}
+        />
+      </div>
 
       <Separator />
 
       {/* Backup & Restore — export/import all non-DB configuration */}
-      <BackupRestoreCard />
+      <div id="backup" className="scroll-mt-20">
+        <BackupRestoreCard />
+      </div>
     </div>
   );
 }

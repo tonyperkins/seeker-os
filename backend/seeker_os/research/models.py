@@ -7,12 +7,12 @@ scores and source references.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, field_validator
 
 
-class VerificationState(str, Enum):
+class VerificationState(StrEnum):
     """Entity verification state for retrieval disambiguation.
 
     - VERIFIED: P856 matches company_domain, OR Wikidata/Wikipedia absent

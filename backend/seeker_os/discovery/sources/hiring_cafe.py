@@ -15,11 +15,11 @@ from urllib.parse import quote, unquote
 
 import httpx
 
-logger = logging.getLogger(__name__)
-
 from seeker_os.config import SourceConfig
 from seeker_os.discovery.cache import DiskCache
 from seeker_os.models import JobCard, SourcePage, SourceQuery
+
+logger = logging.getLogger(__name__)
 
 # hiring.cafe dateFetchedPastNDays enum values (not actual day counts).
 # Discovered from hiring.cafe's client-side JS (eT array).
@@ -159,7 +159,7 @@ class HiringCafeAdapter:
         # All httpx retries exhausted — try Playwright browser fallback.
         # This solves the Vercel challenge and caches cookies for next time.
         if self.browser_fallback:
-            from seeker_os.discovery.browser_fetch import is_available, fetch_with_browser
+            from seeker_os.discovery.browser_fetch import fetch_with_browser, is_available
             if is_available():
                 logger.warning("Falling back to headless browser for %s (%s)", url, last_error)
                 try:

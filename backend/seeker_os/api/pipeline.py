@@ -6,11 +6,15 @@ import json
 import queue
 import queue as queue_module
 import threading
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
 from seeker_os.api.schemas import (
-    PipelineRunRequest, PipelineRunSummary, PipelineRunRecord,
+    PipelineRunRecord,
+    PipelineRunRequest,
+    PipelineRunSummary,
 )
 from seeker_os.database import get_connection
 

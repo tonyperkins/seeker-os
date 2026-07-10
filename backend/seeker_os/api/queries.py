@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
-from seeker_os.api.schemas import QuerySummary, QueryCreate, QueryUpdate, MessageResponse
+
+from seeker_os.api.schemas import MessageResponse, QueryCreate, QuerySummary, QueryUpdate
 from seeker_os.database import get_connection
 
 router = APIRouter(prefix="/api/queries", tags=["queries"])
@@ -42,7 +43,7 @@ def create_query(body: QueryCreate):
     """Create a new search query."""
     db = get_connection()
     try:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             """
             INSERT INTO search_queries

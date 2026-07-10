@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from openai import OpenAI
@@ -108,7 +108,7 @@ class OpenAICompatProvider:
         display name) that the OpenAI SDK strips out. Falls back to the SDK if the
         raw request fails.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         models = self._list_models_raw()
         if models is not None:
             return models
@@ -136,7 +136,7 @@ class OpenAICompatProvider:
 
         Returns None if the request fails (caller falls back to SDK).
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         headers = {"Authorization": f"Bearer {self._api_key}"}
         url = f"{self._base_url}/models"
         try:
@@ -191,7 +191,7 @@ class OpenAICompatProvider:
                 healthy=True,
                 message="Connection OK",
                 latency_ms=latency,
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )
         except Exception as e:
             return ProviderHealth(
@@ -199,7 +199,7 @@ class OpenAICompatProvider:
                 healthy=False,
                 message=str(e),
                 latency_ms=int((time.monotonic() - start) * 1000),
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )
 
 

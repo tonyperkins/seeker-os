@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from seeker_os.config import CONFIG_DIR, ProfileConfig, FiltersConfig, invalidate_settings_cache
+from seeker_os.config import CONFIG_DIR, FiltersConfig, ProfileConfig, invalidate_settings_cache
 
 
 def _clean_none(value: Any) -> Any:

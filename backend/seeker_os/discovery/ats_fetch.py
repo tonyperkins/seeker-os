@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import time
+
 import httpx
 
 from seeker_os.models import JDFetchResult
@@ -157,7 +158,7 @@ def _fetch_url(url: str, user_agent: str, timeout: int = 15) -> str:
         return resp.text
     except httpx.HTTPStatusError as e:
         if e.response.status_code in (403, 429):
-            from seeker_os.discovery.browser_fetch import is_available, fetch_with_browser
+            from seeker_os.discovery.browser_fetch import fetch_with_browser, is_available
             if is_available():
                 import logging
                 logging.getLogger(__name__).warning(

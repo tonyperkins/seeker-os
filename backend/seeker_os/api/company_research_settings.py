@@ -6,11 +6,11 @@ import logging
 import os
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from seeker_os.api.schemas import MessageResponse
-from seeker_os.config import get_settings, CONFIG_DIR
+from seeker_os.config import CONFIG_DIR, get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings", tags=["company-research-settings"])

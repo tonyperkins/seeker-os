@@ -191,7 +191,7 @@ export function CopyAllButton({ job }: { job: JobDetail }) {
 
       // Generated Resumes (fetch list + each detail)
       try {
-        const resumeList = await api.resumes.list(job.id);
+        const resumeList = await api.resumes.list({ jobId: job.id });
         if (resumeList.length > 0) {
           for (const r of resumeList) {
             try {

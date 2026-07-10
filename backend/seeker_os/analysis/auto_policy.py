@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from typing import Callable
+from collections.abc import Callable
 
 from seeker_os.config import ScoringConfig, Settings
 from seeker_os.scoring.net_score import compute_net_score

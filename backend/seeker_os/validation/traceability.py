@@ -18,14 +18,13 @@ from __future__ import annotations
 
 import json
 import logging
-import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from seeker_os.config import Settings
-from seeker_os.validation import Violation, ValidationResult
+from seeker_os.validation import ValidationResult, Violation
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +177,7 @@ class TraceabilityChecker:
             TraceabilityResult with claims and any violations.
         """
         if not self._enabled:
-            return TraceabilityResult(checked_at=datetime.now(timezone.utc).isoformat())
+            return TraceabilityResult(checked_at=datetime.now(UTC).isoformat())
 
         if not master_resume.strip():
             logger.warning("Traceability check failed-closed — master resume is empty")
@@ -190,11 +189,11 @@ class TraceabilityChecker:
                               "Artifact flagged for manual review.",
                     severity="high",
                 )],
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )
 
-        from seeker_os.llm.router import ModelRouter
         from seeker_os.llm.models import TruncationError
+        from seeker_os.llm.router import ModelRouter
 
         router = ModelRouter(self.settings)
         user_prompt = _build_judge_user_prompt(artifact_text, master_resume, artifact_type)
@@ -215,7 +214,7 @@ class TraceabilityChecker:
                     violation=str(e),
                     severity="high",
                 )],
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )
 
         text = _extract_json(response.text)
@@ -236,7 +235,7 @@ class TraceabilityChecker:
                     violation="Could not parse LLM traceability response — manual review required",
                     severity="high",
                 )],
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )
 
         claims: list[ClaimJudgment] = []
@@ -271,5 +270,5 @@ class TraceabilityChecker:
         return TraceabilityResult(
             claims=claims,
             violations=violations,
-            checked_at=datetime.now(timezone.utc).isoformat(),
+            checked_at=datetime.now(UTC).isoformat(),
         )

@@ -15,19 +15,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from seeker_os.api.demo_guard import DemoGuardMiddleware
-from seeker_os.api.jobs import router as jobs_router
-from seeker_os.api.pipeline import router as pipeline_router
-from seeker_os.api.queries import router as queries_router
-from seeker_os.api.settings_routes import router as settings_router
 from seeker_os.api.analytics import router as analytics_router
-from seeker_os.api.resumes import router as resumes_router
-from seeker_os.api.models import router as models_router
-from seeker_os.api.profile_routes import router as profile_router
+from seeker_os.api.backup import router as backup_router
 from seeker_os.api.company_research import router as company_research_router
 from seeker_os.api.company_research_settings import router as company_research_settings_router
+from seeker_os.api.demo_guard import DemoGuardMiddleware
 from seeker_os.api.jd_analysis import router as jd_analysis_router
-from seeker_os.api.backup import router as backup_router
+from seeker_os.api.jobs import router as jobs_router
+from seeker_os.api.models import router as models_router
+from seeker_os.api.pipeline import router as pipeline_router
+from seeker_os.api.profile_routes import router as profile_router
+from seeker_os.api.queries import router as queries_router
+from seeker_os.api.resumes import router as resumes_router
+from seeker_os.api.settings_routes import router as settings_router
 from seeker_os.config import is_demo_mode
 from seeker_os.database import run_migrations
 
@@ -123,7 +123,7 @@ def _sync_queries_from_yaml() -> None:
         # Delete queries that no longer exist in YAML
         if yaml_slugs:
             db.execute(
-                "DELETE FROM search_queries WHERE query_slug NOT IN (%s)" % ",".join("?" * len(yaml_slugs)),
+                "DELETE FROM search_queries WHERE query_slug NOT IN ({})".format(",".join("?" * len(yaml_slugs))),
                 tuple(yaml_slugs),
             )
         # Upsert each query by slug (delete + insert to avoid duplicate rows)

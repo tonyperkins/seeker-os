@@ -1,598 +1,81 @@
-/** API client for Seeker OS backend. */
+/** API client for Seeker OS backend — barrel re-export from split modules. */
 
 import { trackActivity } from "@/lib/activity-store";
-import type { components as ApiComponents } from "@/lib/api-schema";
+import { fetchAPI, API_BASE } from "@/lib/api-core";
+import type * as T from "@/lib/api-types";
 
-// Server-side renders (SSR) run inside the container — use the Docker service name.
-// Client-side fetches use relative URLs so they work behind any reverse proxy
-// (Next.js rewrites /api/* to the backend).
-const API_BASE =
-  typeof window === "undefined"
-    ? process.env["SERVER_API_URL"] || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-    : "";
-
-async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
-  const isFormData = options?.body instanceof FormData;
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      // Don't set Content-Type for FormData — browser sets multipart boundary
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...options?.headers,
-    },
-  });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: res.statusText }));
-    // FastAPI validation errors return detail as an array of {msg, ...} objects
-    const detail = error.detail;
-    let message: string;
-    if (typeof detail === "string") {
-      message = detail;
-    } else if (Array.isArray(detail)) {
-      message = detail.map((e: { msg?: string; message?: string } | string) =>
-        typeof e === "string" ? e : e.msg || e.message || JSON.stringify(e)
-      ).join("; ");
-    } else if (detail && typeof detail === "object") {
-      message = detail.msg || detail.message || JSON.stringify(detail);
-    } else {
-      message = `API error: ${res.status}`;
-    }
-    throw new Error(message);
-  }
-  return res.json();
-}
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface ApplicationEvent {
-  id: number;
-  job_id: number;
-  event_type: string;
-  actor: string;
-  occurred_at: string;
-  created_at: string;
-  metadata: Record<string, unknown> | null;
-  note: string | null;
-}
-
-export interface JobSummary {
-  id: number;
-  title: string;
-  company: string;
-  score: number | null;
-  status: string;
-  tier_passed: number;
-  comp_min: number | null;
-  comp_max: number | null;
-  location: string;
-  workplace_type: string;
-  seniority_level: string | null;
-  date_posted: string;
-  discovered_at: string;
-  apply_url: string;
-  ats_source: string | null;
-  cross_ref_status: string | null;
-  is_pinned: boolean;
-  reject_reason: string | null;
-  reject_details: string | null;
-  ai_policy: string | null;
-  source_id: string;
-  discovered_query: string;
-  run_id: string | null;
-  is_stale: boolean;
-  days_since_last_activity: number | null;
-  has_analysis: boolean;
-  has_research: boolean;
-  has_resume: boolean;
-  analysis_verdict: string | null;
-  net_score: number | null;
-  score_modifiers: Record<string, number>;
-  score_reasons: string[];
-  has_recruiter: boolean;
-  recruiter_source: string | null;
-}
-
-export type JobSortKey = "score" | "net_score" | "status" | "run_id" | "title" | "company" | "comp" | "location" | "ats";
-export type SortOrder = "asc" | "desc";
-
-export type PaginatedJobsResponse = Omit<ApiComponents["schemas"]["PaginatedJobsResponse"], "jobs"> & {
-  jobs: JobSummary[];
-};
-
-export interface RecruiterContact {
-  id: number;
-  recruiter_id: number;
-  job_id: number;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  linkedin: string | null;
-  agency: string | null;
-  source: string | null;
-  contacted_at: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface JobDetail extends JobSummary {
-  core_title: string;
-  company_homepage: string | null;
-  workplace_countries: string[];
-  commitment: string[];
-  comp_currency: string | null;
-  technical_tools: string[];
-  requirements_summary: string;
-  role_type: string | null;
-  score_reasons: string[];
-  score_gaps: string[];
-  reject_details: string | null;
-  jd_full: string;
-  jd_fetch_status: string;
-  source_id: string;
-  ats_board_token: string | null;
-  ats_job_id: string | null;
-  discovered_query: string;
-  updated_at: string;
-  content_hash: string | null;
-  cross_ref_date: string | null;
-  cross_ref_score: number | null;
-  ai_policy: string | null;
-  research_adjusted_score: number | null;
-  research_delta: number;
-  analysis_verdict: string | null;
-  analysis_delta: number;
-  net_score: number | null;
-  filter_warnings: string[];
-  overridden_at: string | null;
-  override_note: string | null;
-  original_reject_reason: string | null;
-  is_stale: boolean;
-  days_since_last_activity: number | null;
-  events: ApplicationEvent[];
-  recruiter_contacts: RecruiterContact[];
-}
-
-export interface JobCreateRequest {
-  url?: string;
-  title?: string;
-  company?: string;
-  location?: string;
-  workplace_type?: string;
-  seniority_level?: string;
-  comp_min?: number;
-  comp_max?: number;
-  comp_currency?: string;
-  company_homepage?: string;
-  jd_text?: string;
-  force?: boolean;
-  recruiter_name?: string;
-  recruiter_email?: string;
-  recruiter_phone?: string;
-  recruiter_linkedin?: string;
-  recruiter_agency?: string;
-  recruiter_source?: string;
-  recruiter_contacted_at?: string;
-}
-
-export interface JobCreateResponse {
-  status: "created" | "already_exists" | "fetch_failed" | "possible_duplicate" | "likely_duplicate";
-  job: JobDetail | null;
-  existing_job_id: number | null;
-  existing_summary: string | null;
-  fetch_error: string | null;
-  filter_warnings: string[];
-}
-
-export interface RefilterRescoreResult {
-  job_id: number;
-  status: string;
-  score: number | null;
-  net_score: number | null;
-  previous_score: number | null;
-  previous_status: string | null;
-  score_changed: boolean;
-  status_changed: boolean;
-  filter_passed: boolean;
-  filter_reason: string | null;
-  research_applied: boolean;
-  analysis_verdict: string | null;
-}
-
-export interface PipelineRunSummary {
-  run_id: string;
-  cards_fetched: number;
-  cards_new: number;
-  duplicates_skipped: number;
-  tier2_passed: number;
-  tier2_rejected: number;
-  tier3_fetched: number;
-  tier3_failed: number;
-  tier4_scored: number;
-  tier4_rejected: number;
-  tier4_hard_rejected: number;
-  tier5_ready: number;
-  tier5_capped: number;
-  cross_ref_matches: number;
-  rejection_reasons: Record<string, number>;
-}
-
-export interface PipelineProgressEvent {
-  step: string;
-  step_label: string;
-  status: "started" | "in_progress" | "completed";
-  current: number;
-  total: number;
-  detail: string;
-  cards_fetched: number;
-  cards_new: number;
-  duplicates_skipped: number;
-  tier2_passed: number;
-  tier2_rejected: number;
-  tier3_fetched: number;
-  tier3_failed: number;
-  tier4_scored: number;
-  tier4_rejected: number;
-  tier4_hard_rejected: number;
-  tier5_ready: number;
-}
-
-export interface ResumeProgressEvent {
-  step: string;
-  step_label: string;
-  status: "started" | "in_progress" | "completed";
-  detail: string;
-}
-
-export interface PipelineRunRecord {
-  id: number;
-  run_id: string;
-  started_at: string;
-  completed_at: string | null;
-  cards_fetched: number;
-  cards_new: number;
-  cards_survived_tier2: number;
-  jds_fetched: number;
-  jobs_scored: number;
-  jobs_ready: number;
-  status: string;
-}
-
-export interface QuerySummary {
-  id: number | null;
-  source_id: string;
-  slug: string;
-  label: string;
-  commitment: string;
-  max_pages: number;
-  enabled: boolean;
-  last_run_at: string | null;
-  search_query: string | null;
-}
-
-export interface FunnelStage {
-  tier: number;
-  label: string;
-  count: number;
-}
-
-export interface FunnelStats {
-  total_jobs: number;
-  discovered: number;
-  filtered: number;
-  jd_fetched: number;
-  ready: number;
-  rejected: number;
-  duplicate_flagged: number;
-  capped: number;
-  funnel: FunnelStage[];
-  jd_fetch_total: number;
-  jd_fetch_success: number;
-  jd_fetch_failed: number;
-  jd_fetch_pending: number;
-  by_tier: Record<string, number>;
-  by_status: Record<string, number>;
-  by_ats_source: Record<string, number>;
-  rejection_reasons: Record<string, number>;
-  score_distribution: Record<string, number>;
-}
-
-export interface MovementEvent {
-  job_id: number;
-  job_title: string;
-  company: string;
-  event_type: string;
-  from_status: string | null;
-  to_status: string;
-  occurred_at: string;
-  actor: string;
-  note: string | null;
-}
-
-export interface MovementReport {
-  events: MovementEvent[];
-  total: number;
-  rejection_count: number;
-  rejection_breakdown: Record<string, number>;
-}
-
-export interface AgingBucket {
-  status: string;
-  count: number;
-  avg_days: number;
-  max_days: number;
-  stale_count: number;
-}
-
-export interface AgingReport {
-  buckets: AgingBucket[];
-  stale_after_days: number;
-}
-
-export interface VerdictDistribution {
-  verdict: string;
-  count: number;
-  pct: number;
-}
-
-export interface SignalQualityReport {
-  total_analyzed: number;
-  verdicts: VerdictDistribution[];
-  apply_rate: number;
-  skip_rate: number;
-  false_positive_pct: number;
-  false_negative_pct: number;
-  calibration_available: boolean;
-  partial?: boolean;
-  warnings?: string[];
-}
-
-export interface SpendByTask {
-  task: string;
-  calls: number;
-  input_tokens: number;
-  output_tokens: number;
-  estimated_cost: number;
-}
-
-export interface SpendByModel {
-  provider: string;
-  model: string;
-  calls: number;
-  input_tokens: number;
-  output_tokens: number;
-  estimated_cost: number;
-  input_price_per_mtok: number | null;
-  output_price_per_mtok: number | null;
-  pricing_source: string;
-  pricing_fetched_at: string | null;
-}
-
-export interface PricingRouteComparison {
-  model: string;
-  routes: { provider: string; input_price_per_mtok: number | null; output_price_per_mtok: number | null }[];
-  variance_pct: number;
-}
-
-export interface SpendReport {
-  total_calls: number;
-  total_input_tokens: number;
-  total_output_tokens: number;
-  total_estimated_cost: number;
-  pricing_configured: boolean;
-  by_task: SpendByTask[];
-  by_model: SpendByModel[];
-  cost_per_ready: number | null;
-  cost_per_applied: number | null;
-  pricing_fetched_at: string | null;
-  pricing_stale: boolean;
-  pricing_stale_after_days: number;
-  route_pricing: PricingRouteComparison[];
-  partial?: boolean;
-  warnings?: string[];
-}
-
-export interface SkipReasonOption {
-  key: string;
-  label: string;
-  hint: string;
-  free_text: boolean;
-}
-
-export interface NoReasonSkip {
-  job_id: number;
-  title: string | null;
-  company: string | null;
-  status: string;
-  event_id: number;
-  event_type: string;
-  occurred_at: string;
-}
-
-export interface SettingsResponse {
-  filters: Record<string, unknown> | null;
-  scoring: Record<string, unknown> | null;
-  sources: Record<string, unknown> | null;
-  profile_loaded: boolean;
-  profile_configured: boolean;
-  queries_count: number;
-  skip_reasons: SkipReasonOption[];
-}
-
-export interface ContactInfo {
-  name: string;
-  email: string;
-  phone: string;
-  location: string;
-  urls: Record<string, string>;
-}
-
-export interface MessageResponse {
-  message: string;
-}
-
-export interface RestoreResult {
-  message: string;
-  restored: string[];
-  skipped: string[];
-}
-
-export interface ProfileData {
-  user: { name: string; email: string; location: string };
-  contact: ContactInfo;
-  location: {
-    remote_only: boolean;
-    accepted_cities: string[];
-    accepted_states: string[];
-    rejected_cities: string[];
-  };
-  comp: { floor: number; target: number; stretch: number };
-  experience: { years: number; anchor_phrase: string };
-  employment: {
-    commitment: string;
-    reject_commitments: string[];
-    role_type: string;
-    reject_role_types: string[];
-  };
-  blacklist: string[];
-  resume: {
-    master_path: string;
-    accuracy_rules_path: string;
-    output_dir: string;
-    contact_urls: string[];
-  };
-  cross_reference: { repo_path: string; auto_pull: boolean };
-  hard_rejects: Array<{ reason: string; pattern: string; unless_pattern?: string }>;
-  instructions: string;
-}
-
-export interface FiltersData {
-  filters: {
-    remote_only: boolean;
-    us_only: boolean;
-    seniority_floor: string[];
-    seniority_reject: string[];
-    seniority_unknown_passes: boolean;
-    seniority_title_override: string[];
-    comp_floor_margin_pct: number;
-    comp_unknown_passes: boolean;
-    freshness_days: number;
-    commitment_required: string;
-    location_exclude: string[];
-    visa_sponsorship_required: boolean;
-  };
-  title_filters: {
-    positive: string[];
-    negative: string[];
-  };
-}
-
-export interface AccuracyRule {
-  id: string;
-  description: string;
-  type: "disallowed_phrases" | "forbidden_technologies" | "required_phrases" | "experience_anchor" | "education_omission";
-  severity: "high" | "medium";
-  phrases?: string[] | null;
-  technologies?: string[] | null;
-  patterns?: string[] | null;
-}
-
-export interface AccuracyRulesData {
-  rules: AccuracyRule[];
-}
-
-export interface ResumeParseResult {
-  contact: ContactInfo;
-  experience_years: number | null;
-  current_title: string;
-  key_skills: string[];
-  suggested_title_positive: string[];
-  suggested_comp_floor: number | null;
-  summary: string;
-}
-
-export interface ResumeSummary {
-  id: number;
-  job_id: number;
-  task: string;
-  provider: string;
-  model: string;
-  validation_passed: boolean;
-  validation_violations: Array<Record<string, unknown>>;
-  input_tokens: number;
-  output_tokens: number;
-  latency_ms: number;
-  generated_at: string;
-  markdown_path: string;
-  pdf_path: string | null;
-  docx_path: string | null;
-}
-
-export interface ResumeDetail extends ResumeSummary {
-  job_title: string;
-  job_company: string;
-  resume_text: string;
-  validation_checked_at: string | null;
-}
-
-export interface ModelInfoResponse {
-  id: string;
-  label: string;
-  provider_id: string;
-  context_window: number | null;
-  max_output: number | null;
-  tags: string[];
-  source: string;
-  available: boolean;
-  input_price_per_mtok: number | null;
-  output_price_per_mtok: number | null;
-}
-
-export interface ProviderInfoResponse {
-  id: string;
-  type: string;
-  label: string;
-  enabled: boolean;
-  auto_fetch_models: boolean;
-  base_url: string | null;
-  api_key_set: boolean;
-  models: ModelInfoResponse[];
-  healthy: boolean | null;
-  health_message: string;
-}
-
-export interface TierMappingResponse {
-  provider: string;
-  model: string;
-}
-
-export interface TaskOverrideResponse {
-  tier: string;
-  provider: string | null;
-  model: string | null;
-}
-
-export interface ProvidersConfigResponse {
-  providers: ProviderInfoResponse[];
-  tiers: Record<string, TierMappingResponse>;
-  tasks: Record<string, TaskOverrideResponse>;
-  partial?: boolean;
-  warnings?: string[];
-}
-
-export interface MasterResumeInfo {
-  path: string;
-  exists: boolean;
-  size_bytes: number;
-  format: string;
-  text_preview: string;
-}
-
-// ---------------------------------------------------------------------------
-// API functions
-// ---------------------------------------------------------------------------
+// Re-export all types
+export type {
+  ApplicationEvent,
+  JobSummary,
+  JobSortKey,
+  SortOrder,
+  PaginatedJobsResponse,
+  RecruiterContact,
+  JobDetail,
+  JobCreateRequest,
+  JobCreateResponse,
+  RefilterRescoreResult,
+  PipelineRunSummary,
+  PipelineProgressEvent,
+  ResumeProgressEvent,
+  PipelineRunRecord,
+  QuerySummary,
+  FunnelStage,
+  FunnelStats,
+  MovementEvent,
+  MovementReport,
+  AgingBucket,
+  AgingReport,
+  VerdictDistribution,
+  SignalQualityReport,
+  SpendByTask,
+  SpendByModel,
+  PricingRouteComparison,
+  SpendReport,
+  SkipReasonOption,
+  NoReasonSkip,
+  SettingsResponse,
+  ContactInfo,
+  MessageResponse,
+  RestoreResult,
+  ProfileData,
+  FiltersData,
+  AccuracyRule,
+  AccuracyRulesData,
+  ResumeParseResult,
+  ResumeSummary,
+  ResumeDetail,
+  ModelInfoResponse,
+  ProviderInfoResponse,
+  TierMappingResponse,
+  TaskOverrideResponse,
+  ProvidersConfigResponse,
+  MasterResumeInfo,
+  WikipediaInfo,
+  SourceRef,
+  LayoffEvent,
+  LastRound,
+  FundingDossier,
+  SentimentTheme,
+  SentimentDossier,
+  FitDossier,
+  VerdictFlags,
+  RetrievalSnippetData,
+  CompanyResearchResult,
+  ResearchBreakdownItem,
+  RetrievalSettings,
+  RetrievalSettingsUpdate,
+  TestConnectionResult,
+  NamedGap,
+  HardBlocker,
+  RubricDimension,
+  CompAssessment,
+  PositioningAssessment,
+  CompanyFitAssessment,
+  TailoringGuidance,
+  JobAnalysisResult,
+} from "@/lib/api-types";
 
 export const api = {
   // Demo mode
@@ -603,7 +86,7 @@ export const api = {
   // Jobs
   jobs: {
     list: (
-      params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; sort_by?: JobSortKey; order?: SortOrder; limit?: number; offset?: number },
+      params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; sort_by?: T.JobSortKey; order?: T.SortOrder; limit?: number; offset?: number },
       options?: { signal?: AbortSignal },
     ) => {
       const search = new URLSearchParams();
@@ -621,11 +104,11 @@ export const api = {
       if (params?.limit) search.set("limit", String(params.limit));
       if (params?.offset) search.set("offset", String(params.offset));
       const qs = search.toString();
-      return fetchAPI<PaginatedJobsResponse>(`/api/jobs${qs ? `?${qs}` : ""}`, options);
+      return fetchAPI<T.PaginatedJobsResponse>(`/api/jobs${qs ? `?${qs}` : ""}`, options);
     },
-    get: (id: number) => fetchAPI<JobDetail>(`/api/jobs/${id}`),
-    create: (data: JobCreateRequest) =>
-      fetchAPI<JobCreateResponse>(`/api/jobs`, { method: "POST", body: JSON.stringify(data) }),
+    get: (id: number) => fetchAPI<T.JobDetail>(`/api/jobs/${id}`),
+    create: (data: T.JobCreateRequest) =>
+      fetchAPI<T.JobCreateResponse>(`/api/jobs`, { method: "POST", body: JSON.stringify(data) }),
     override: (id: number, note?: string, targetStatus?: string) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/override`, {
         method: "POST",
@@ -668,19 +151,19 @@ export const api = {
       name?: string; email?: string; phone?: string; linkedin?: string;
       agency?: string; source?: string; contacted_at?: string; notes?: string;
     }) =>
-      fetchAPI<RecruiterContact>(`/api/jobs/${jobId}/recruiters`, {
+      fetchAPI<T.RecruiterContact>(`/api/jobs/${jobId}/recruiters`, {
         method: "POST", body: JSON.stringify(data),
       }),
     updateRecruiterEntity: (recruiterId: number, data: {
       name?: string; email?: string; phone?: string; linkedin?: string; agency?: string;
     }) =>
-      fetchAPI<RecruiterContact>(`/api/jobs/recruiters/${recruiterId}`, {
+      fetchAPI<T.RecruiterContact>(`/api/jobs/recruiters/${recruiterId}`, {
         method: "PATCH", body: JSON.stringify(data),
       }),
     updateRecruiterAssociation: (associationId: number, data: {
       source?: string; notes?: string;
     }) =>
-      fetchAPI<RecruiterContact>(`/api/jobs/recruiters/association/${associationId}`, {
+      fetchAPI<T.RecruiterContact>(`/api/jobs/recruiters/association/${associationId}`, {
         method: "PATCH", body: JSON.stringify(data),
       }),
     deleteRecruiter: (associationId: number) =>
@@ -693,7 +176,7 @@ export const api = {
         body: JSON.stringify({ target_status: targetStatus, ...opts }),
       }),
     logEngagedEvent: (id: number, eventType: string, opts?: { occurred_at?: string; note?: string; metadata?: Record<string, unknown> }) =>
-      fetchAPI<ApplicationEvent>(`/api/jobs/${id}/engaged-events`, {
+      fetchAPI<T.ApplicationEvent>(`/api/jobs/${id}/engaged-events`, {
         method: "POST",
         body: JSON.stringify({ event_type: eventType, ...opts }),
       }),
@@ -704,19 +187,19 @@ export const api = {
       }),
     crossRef: (id: number) => fetchAPI<Record<string, unknown>>(`/api/jobs/${id}/cross-ref`),
     companyResearch: {
-      get: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`),
+      get: (id: number) => fetchAPI<T.CompanyResearchResult>(`/api/jobs/${id}/company-research`),
       run: (id: number, forceRefresh?: boolean) =>
-        trackActivity("research", `Researching job #${id}`, fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research?force_refresh=${forceRefresh ?? false}`, { method: "POST" })) as Promise<CompanyResearchResult>,
+        trackActivity("research", `Researching job #${id}`, fetchAPI<T.CompanyResearchResult>(`/api/jobs/${id}/company-research?force_refresh=${forceRefresh ?? false}`, { method: "POST" })) as Promise<T.CompanyResearchResult>,
     },
     analysis: {
-      get: (id: number) => fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`),
+      get: (id: number) => fetchAPI<T.JobAnalysisResult>(`/api/jobs/${id}/analysis`),
       run: (id: number) =>
-        trackActivity("analysis", `Analyzing job #${id}`, fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`, { method: "POST" })) as Promise<JobAnalysisResult>,
+        trackActivity("analysis", `Analyzing job #${id}`, fetchAPI<T.JobAnalysisResult>(`/api/jobs/${id}/analysis`, { method: "POST" })) as Promise<T.JobAnalysisResult>,
     },
     refilterRescore: (data: { job_ids?: number[]; run_id?: string }) =>
-      trackActivity("refilter", `Refilter & rescore ${data.job_ids?.length ?? 0} jobs`, fetchAPI<RefilterRescoreResult[]>(`/api/jobs/refilter-rescore`, { method: "POST", body: JSON.stringify(data) })) as Promise<RefilterRescoreResult[]>,
+      trackActivity("refilter", `Refilter & rescore ${data.job_ids?.length ?? 0} jobs`, fetchAPI<T.RefilterRescoreResult[]>(`/api/jobs/refilter-rescore`, { method: "POST", body: JSON.stringify(data) })) as Promise<T.RefilterRescoreResult[]>,
     listNoReasonSkips: () =>
-      fetchAPI<NoReasonSkip[]>("/api/jobs/skipped/no-reason"),
+      fetchAPI<T.NoReasonSkip[]>("/api/jobs/skipped/no-reason"),
     annotateSkip: (id: number, reason: string, details?: string) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/annotate-skip`, {
         method: "POST",
@@ -727,11 +210,11 @@ export const api = {
   // Pipeline
   pipeline: {
     run: (data: { tiers?: number[]; queries?: string[]; dry_run?: boolean }) =>
-      fetchAPI<PipelineRunSummary>("/api/pipeline/run", { method: "POST", body: JSON.stringify(data) }),
+      fetchAPI<T.PipelineRunSummary>("/api/pipeline/run", { method: "POST", body: JSON.stringify(data) }),
     runTier: (tier: number) =>
-      fetchAPI<PipelineRunSummary>(`/api/pipeline/run/tier/${tier}`, { method: "POST" }),
-    runs: () => fetchAPI<PipelineRunRecord[]>("/api/pipeline/runs"),
-    getRun: (runId: string) => fetchAPI<PipelineRunRecord>(`/api/pipeline/runs/${runId}`),
+      fetchAPI<T.PipelineRunSummary>(`/api/pipeline/run/tier/${tier}`, { method: "POST" }),
+    runs: () => fetchAPI<T.PipelineRunRecord[]>("/api/pipeline/runs"),
+    getRun: (runId: string) => fetchAPI<T.PipelineRunRecord>(`/api/pipeline/runs/${runId}`),
     runStream: (data: { tiers?: number[]; queries?: string[]; dry_run?: boolean }) => {
       const controller = new AbortController();
       const response = fetch(`${API_BASE}/api/pipeline/run/stream`, {
@@ -746,10 +229,10 @@ export const api = {
 
   // Queries
   queries: {
-    list: () => fetchAPI<QuerySummary[]>("/api/queries"),
+    list: () => fetchAPI<T.QuerySummary[]>("/api/queries"),
     create: (data: { slug: string; label: string; commitment?: string; max_pages?: number; enabled?: boolean; search_query?: string }) =>
       fetchAPI<{ message: string }>("/api/queries", { method: "POST", body: JSON.stringify(data) }),
-    update: (id: number, data: Partial<QuerySummary>) =>
+    update: (id: number, data: Partial<T.QuerySummary>) =>
       fetchAPI<{ message: string }>(`/api/queries/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/queries/${id}`, { method: "DELETE" }),
@@ -759,41 +242,46 @@ export const api = {
 
   // Settings
   settings: {
-    get: () => fetchAPI<SettingsResponse>("/api/settings"),
+    get: () => fetchAPI<T.SettingsResponse>("/api/settings"),
     reload: () =>
-      fetchAPI<MessageResponse>("/api/settings/reload", { method: "POST" }),
+      fetchAPI<T.MessageResponse>("/api/settings/reload", { method: "POST" }),
   },
 
   // Analytics
   analytics: {
-    funnel: () => fetchAPI<FunnelStats>("/api/analytics/funnel"),
+    funnel: () => fetchAPI<T.FunnelStats>("/api/analytics/funnel"),
     movement: (params?: { days?: number; limit?: number }) => {
       const search = new URLSearchParams();
       if (params?.days) search.set("days", String(params.days));
       if (params?.limit) search.set("limit", String(params.limit));
       const qs = search.toString();
-      return fetchAPI<MovementReport>(`/api/analytics/movement${qs ? `?${qs}` : ""}`);
+      return fetchAPI<T.MovementReport>(`/api/analytics/movement${qs ? `?${qs}` : ""}`);
     },
-    aging: () => fetchAPI<AgingReport>("/api/analytics/aging"),
-    signalQuality: () => fetchAPI<SignalQualityReport>("/api/analytics/signal-quality"),
-    spend: () => fetchAPI<SpendReport>("/api/analytics/spend"),
+    aging: () => fetchAPI<T.AgingReport>("/api/analytics/aging"),
+    signalQuality: () => fetchAPI<T.SignalQualityReport>("/api/analytics/signal-quality"),
+    spend: () => fetchAPI<T.SpendReport>("/api/analytics/spend"),
   },
 
   // Resumes
   resumes: {
-    list: (jobId?: number) => {
-      const qs = jobId ? `?job_id=${jobId}` : "";
-      return fetchAPI<ResumeSummary[]>(`/api/resumes${qs}`);
+    list: (params?: { jobId?: number; search?: string; sort_by?: string; order?: "asc" | "desc" }) => {
+      const qs = new URLSearchParams();
+      if (params?.jobId) qs.set("job_id", String(params.jobId));
+      if (params?.search) qs.set("search", params.search);
+      if (params?.sort_by) qs.set("sort_by", params.sort_by);
+      if (params?.order) qs.set("order", params.order);
+      const q = qs.toString();
+      return fetchAPI<T.ResumeSummary[]>(`/api/resumes${q ? `?${q}` : ""}`);
     },
     pendingCount: () => fetchAPI<{ count: number }>("/api/resumes/pending-count"),
-    get: (id: number) => fetchAPI<ResumeDetail>(`/api/resumes/${id}`),
+    get: (id: number) => fetchAPI<T.ResumeDetail>(`/api/resumes/${id}`),
     update: (id: number, resumeText: string) =>
-      fetchAPI<MessageResponse>(`/api/resumes/${id}`, {
+      fetchAPI<T.MessageResponse>(`/api/resumes/${id}`, {
         method: "PUT",
         body: JSON.stringify({ resume_text: resumeText }),
       }),
     delete: (id: number) =>
-      fetchAPI<MessageResponse>(`/api/resumes/${id}`, { method: "DELETE" }),
+      fetchAPI<T.MessageResponse>(`/api/resumes/${id}`, { method: "DELETE" }),
     generate: (jobId: number, task?: string) =>
       trackActivity("resume", `Generating resume for job #${jobId}`, fetchAPI<Record<string, unknown>>("/api/resumes/generate", {
         method: "POST",
@@ -817,11 +305,11 @@ export const api = {
     validate: (id: number) =>
       fetchAPI<Record<string, unknown>>(`/api/resumes/${id}/validate`, { method: "POST" }),
     clearExports: (id: number) =>
-      fetchAPI<MessageResponse>(`/api/resumes/${id}/exports`, { method: "DELETE" }),
+      fetchAPI<T.MessageResponse>(`/api/resumes/${id}/exports`, { method: "DELETE" }),
     pdfUrl: (id: number) => `/api/resumes/${id}/pdf`,
     markdownUrl: (id: number) => `/api/resumes/${id}/markdown`,
     docxUrl: (id: number) => `/api/resumes/${id}/docx`,
-    getMaster: () => fetchAPI<MasterResumeInfo>("/api/resumes/master"),
+    getMaster: () => fetchAPI<T.MasterResumeInfo>("/api/resumes/master"),
     getMasterContent: () => fetchAPI<{ content: string }>("/api/resumes/master/content"),
     updateMasterContent: (content: string) =>
       fetchAPI<{ message: string }>("/api/resumes/master/content", {
@@ -831,41 +319,41 @@ export const api = {
     uploadMaster: (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      return fetchAPI<MasterResumeInfo>("/api/resumes/master/upload", {
+      return fetchAPI<T.MasterResumeInfo>("/api/resumes/master/upload", {
         method: "POST",
         body: formData,
       });
     },
     parse: () =>
-      fetchAPI<ResumeParseResult>("/api/resumes/parse", { method: "POST" }),
+      fetchAPI<T.ResumeParseResult>("/api/resumes/parse", { method: "POST" }),
   },
 
   // Profile & Filters (editable config)
   profile: {
-    get: () => fetchAPI<ProfileData>("/api/profile"),
-    update: (data: Partial<ProfileData>) =>
-      fetchAPI<MessageResponse>("/api/profile", {
+    get: () => fetchAPI<T.ProfileData>("/api/profile"),
+    update: (data: Partial<T.ProfileData>) =>
+      fetchAPI<T.MessageResponse>("/api/profile", {
         method: "PUT",
         body: JSON.stringify(data),
       }),
   },
   filters: {
-    get: () => fetchAPI<FiltersData>("/api/filters"),
-    update: (data: Partial<FiltersData>) =>
-      fetchAPI<MessageResponse>("/api/filters", {
+    get: () => fetchAPI<T.FiltersData>("/api/filters"),
+    update: (data: Partial<T.FiltersData>) =>
+      fetchAPI<T.MessageResponse>("/api/filters", {
         method: "PUT",
         body: JSON.stringify(data),
       }),
   },
   accuracyRules: {
-    get: () => fetchAPI<AccuracyRulesData>("/api/accuracy-rules"),
-    update: (data: AccuracyRulesData) =>
-      fetchAPI<MessageResponse>("/api/accuracy-rules", {
+    get: () => fetchAPI<T.AccuracyRulesData>("/api/accuracy-rules"),
+    update: (data: T.AccuracyRulesData) =>
+      fetchAPI<T.MessageResponse>("/api/accuracy-rules", {
         method: "PUT",
         body: JSON.stringify(data),
       }),
     aiGenerate: (description: string) =>
-      fetchAPI<AccuracyRulesData>("/api/accuracy-rules/ai-generate", {
+      fetchAPI<T.AccuracyRulesData>("/api/accuracy-rules/ai-generate", {
         method: "POST",
         body: JSON.stringify({ description }),
       }),
@@ -873,28 +361,49 @@ export const api = {
 
   // Models / Providers
   models: {
-    getConfig: () => fetchAPI<ProvidersConfigResponse>("/api/models"),
+    getConfig: () => fetchAPI<T.ProvidersConfigResponse>("/api/models"),
     fetch: (providerId: string) =>
-      fetchAPI<ModelInfoResponse[]>(`/api/models/fetch/${providerId}`, { method: "POST" }),
+      fetchAPI<T.ModelInfoResponse[]>(`/api/models/fetch/${providerId}`, { method: "POST" }),
     test: (providerId: string) =>
       fetchAPI<Record<string, unknown>>(`/api/models/test/${providerId}`, { method: "POST" }),
     testAll: () =>
       fetchAPI<Record<string, unknown>[]>("/api/models/test-all", { method: "POST" }),
     updateProvider: (providerId: string, body: Record<string, unknown>) =>
-      fetchAPI<ProviderInfoResponse>(`/api/models/providers/${providerId}`, {
+      fetchAPI<T.ProviderInfoResponse>(`/api/models/providers/${providerId}`, {
         method: "PUT",
         body: JSON.stringify(body),
       }),
     updateTier: (tier: string, provider: string, model: string) =>
-      fetchAPI<TierMappingResponse>(`/api/models/tiers/${tier}`, {
+      fetchAPI<T.TierMappingResponse>(`/api/models/tiers/${tier}`, {
         method: "PUT",
         body: JSON.stringify({ provider, model }),
       }),
     updateTask: (task: string, body: { tier: string; provider?: string; model?: string }) =>
-      fetchAPI<TaskOverrideResponse>(`/api/models/tasks/${task}`, {
+      fetchAPI<T.TaskOverrideResponse>(`/api/models/tasks/${task}`, {
         method: "PUT",
         body: JSON.stringify(body),
       }),
+    updateModelPricing: (
+      providerId: string,
+      modelId: string,
+      inputPricePerMtok: number | null,
+      outputPricePerMtok: number | null,
+    ) =>
+      fetchAPI<Record<string, unknown>>(
+        `/api/models/${providerId}/models/${encodeURIComponent(modelId)}/pricing`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            input_price_per_mtok: inputPricePerMtok,
+            output_price_per_mtok: outputPricePerMtok,
+          }),
+        },
+      ),
+    resetModelPricing: (providerId: string, modelId: string) =>
+      fetchAPI<Record<string, unknown>>(
+        `/api/models/${providerId}/models/${encodeURIComponent(modelId)}/pricing`,
+        { method: "DELETE" },
+      ),
   },
 
   // Health
@@ -906,14 +415,14 @@ export const api = {
 
   // Company Research Settings
   companyResearchSettings: {
-    get: () => fetchAPI<RetrievalSettings>("/api/settings/company-research"),
-    update: (data: RetrievalSettingsUpdate) =>
-      fetchAPI<MessageResponse>("/api/settings/company-research", {
+    get: () => fetchAPI<T.RetrievalSettings>("/api/settings/company-research"),
+    update: (data: T.RetrievalSettingsUpdate) =>
+      fetchAPI<T.MessageResponse>("/api/settings/company-research", {
         method: "PUT",
         body: JSON.stringify(data),
       }),
     testConnection: () =>
-      fetchAPI<TestConnectionResult>("/api/settings/company-research/test-connection", {
+      fetchAPI<T.TestConnectionResult>("/api/settings/company-research/test-connection", {
         method: "POST",
       }),
   },
@@ -928,7 +437,7 @@ export const api = {
       }
       return res.blob();
     },
-    restore: async (file: File): Promise<RestoreResult> => {
+    restore: async (file: File): Promise<T.RestoreResult> => {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch(`${API_BASE}/api/backup/restore`, {
@@ -949,7 +458,7 @@ export const api = {
       }
       return res.blob();
     },
-    restoreDB: async (file: File): Promise<MessageResponse> => {
+    restoreDB: async (file: File): Promise<T.MessageResponse> => {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch(`${API_BASE}/api/backup/db/restore`, {
@@ -964,242 +473,3 @@ export const api = {
     },
   },
 };
-
-// ---------------------------------------------------------------------------
-// Company Research types
-// ---------------------------------------------------------------------------
-
-export interface WikipediaInfo {
-  title: string;
-  description: string;
-  extract: string;
-  url: string | null;
-  thumbnail: string | null;
-}
-
-export interface SourceRef {
-  url: string;
-  retrieved: string;
-}
-
-export interface LayoffEvent {
-  date: string | null;
-  pct: number | null;
-  count: number | null;
-  source: string | null;
-}
-
-export interface LastRound {
-  type: string | null;
-  amount_usd: number | null;
-  date: string | null;
-  lead_investors: string[];
-}
-
-export interface FundingDossier {
-  founded: number | null;
-  hq: string | null;
-  public: boolean;
-  stage: string | null;
-  total_raised_usd: number | null;
-  valuation_usd: number | null;
-  last_round: LastRound | null;
-  headcount: number | null;
-  headcount_trend: string | null;
-  layoffs: LayoffEvent[];
-  financial_health: string | null;
-  confidence: number;
-  sources: SourceRef[];
-  stripped_count: number;
-}
-
-export interface SentimentTheme {
-  theme: string;
-  frequency: string;
-  paraphrase: string;
-  source: string;
-  age_months: number | null;
-}
-
-export interface SentimentDossier {
-  overall_rating_estimate: number | null;
-  rating_scale: string;
-  ceo_approval_pct: number | null;
-  recommend_pct: number | null;
-  positives: SentimentTheme[];
-  negatives: SentimentTheme[];
-  staleness_warning: string | null;
-  confidence: number;
-  sources: SourceRef[];
-  stripped_count: number;
-}
-
-export interface FitDossier {
-  remote_policy: string | null;
-  remote_walkback: string | null;
-  size_bucket: string | null;
-  ic_vs_mgmt_culture: string | null;
-  comp_band: string | null;
-  clearance_required: boolean;
-  confidence: number;
-  sources: SourceRef[];
-  stripped_count: number;
-}
-
-export interface VerdictFlags {
-  green: string[];
-  red: string[];
-  watch: string[];
-}
-
-export interface RetrievalSnippetData {
-  url: string;
-  title: string;
-  snippet: string;
-  source_domain: string;
-  score: number | null;
-}
-
-export interface CompanyResearchResult {
-  id: number | null;
-  job_id: number;
-  company_name: string;
-  company_homepage: string | null;
-  wikipedia: WikipediaInfo | null;
-  overall_confidence: number;
-  summary: string;
-  verdict_flags: VerdictFlags;
-  funding: FundingDossier | null;
-  sentiment: SentimentDossier | null;
-  fit: FitDossier | null;
-  gaps: string[];
-  sources_used: string[];
-  errors: string[];
-  researched_at: string;
-  verification_state: "verified" | "unverified" | "mismatch";
-  retrieval_used: boolean;
-  retrieval_sources: SourceRef[];
-  retrieval_snippets: RetrievalSnippetData[];
-  research_adjusted_score: number | null;
-  research_delta: number;
-  research_breakdown: ResearchBreakdownItem[];
-  research_adjustment_applied: boolean;
-}
-
-export interface ResearchBreakdownItem {
-  factor: string;
-  delta: number;
-  confidence: number;
-  source_section: string;
-}
-
-// ---------------------------------------------------------------------------
-// Company Research Settings types
-// ---------------------------------------------------------------------------
-
-export interface RetrievalSettings {
-  provider_type: string;
-  api_key_configured: boolean;
-  max_results: number;
-  timeout_seconds: number;
-  funding_query_template: string;
-  sentiment_query_template: string;
-  confidence_floor: number;
-  staleness_months: number;
-  source_trust_order: string[];
-  user_agent: string;
-}
-
-export interface RetrievalSettingsUpdate {
-  provider_type?: string;
-  api_key?: string;
-  max_results?: number;
-  timeout_seconds?: number;
-  funding_query_template?: string;
-  sentiment_query_template?: string;
-  confidence_floor?: number;
-  staleness_months?: number;
-  source_trust_order?: string[];
-  user_agent?: string;
-}
-
-export interface TestConnectionResult {
-  ok: boolean;
-  message: string;
-}
-
-// ---------------------------------------------------------------------------
-// JD Analysis types
-// ---------------------------------------------------------------------------
-
-export interface NamedGap {
-  area: string;
-  jd_requires: string;
-  candidate_actual: string;
-  severity: "low" | "med" | "high" | "blocker";
-}
-
-export interface HardBlocker {
-  type: string;
-  detail: string;
-}
-
-export interface RubricDimension {
-  dimension: string;
-  weight: number;
-  raw: number;
-  weighted: number;
-  note: string;
-}
-
-export interface CompAssessment {
-  posted: string | number | null;
-  meets_floor: boolean | null;
-  note: string;
-}
-
-export interface PositioningAssessment {
-  aligned: boolean;
-  note: string;
-}
-
-export interface CompanyFitAssessment {
-  size_bucket: string | null;
-  stage: string | null;
-  remote_policy: string | null;
-  note: string;
-}
-
-export interface TailoringGuidance {
-  lead_with: string[];
-  reframe_summary: string;
-  do_not_claim: string[];
-}
-
-export interface JobAnalysisResult {
-  id: number | null;
-  job_id: number;
-  provider: string;
-  model: string;
-  input_tokens: number;
-  output_tokens: number;
-  latency_ms: number;
-  company: string;
-  title: string;
-  url: string;
-  analyzed_at: string;
-  verdict: "APPLY" | "CONDITIONAL" | "MONITOR" | "SKIP";
-  weighted_score: number;
-  one_line: string;
-  named_gaps: NamedGap[];
-  hard_blockers: HardBlocker[];
-  rubric_breakdown: RubricDimension[];
-  bonuses_applied: string[];
-  penalties_applied: string[];
-  comp: CompAssessment;
-  positioning: PositioningAssessment;
-  company_fit: CompanyFitAssessment;
-  tailoring: TailoringGuidance;
-  red_flags: string[];
-  confidence: number;
-}

@@ -10,9 +10,9 @@ Commands:
 
 from __future__ import annotations
 
-import sys
 import argparse
-from datetime import datetime, timezone
+import sys
+from datetime import UTC, datetime
 
 from rich.console import Console
 from rich.table import Table
@@ -165,7 +165,7 @@ def cmd_sync_config(args: argparse.Namespace) -> None:
     settings = get_settings()
 
     db = get_connection()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Sync queries
     if settings.queries:
@@ -199,8 +199,8 @@ def cmd_sync_config(args: argparse.Namespace) -> None:
 def cmd_models(args: argparse.Namespace) -> None:
     """LLM model management commands."""
     from seeker_os.config import get_settings
-    from seeker_os.llm.router import ModelRouter
     from seeker_os.llm.cache import save_cached_models
+    from seeker_os.llm.router import ModelRouter
 
     settings = get_settings()
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Bookmark, Copy, Check, ExternalLink } from "lucide-react";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,15 @@ export function BookmarkletCard() {
     setBookmarkletJs(js);
   }, []);
 
+  // React 19 sanitizes javascript: URLs in href, so we set it directly on the DOM element.
+  // CollapsibleCard may not render the <a> until expanded, so we use a callback ref
+  // that fires whenever the element mounts.
+  const setLinkRef = useCallback((el: HTMLAnchorElement | null) => {
+    if (el && bookmarkletJs) {
+      el.href = bookmarkletJs;
+    }
+  }, [bookmarkletJs]);
+
   const targetUrl = `${origin}/jobs/new`;
 
   function handleCopy() {
@@ -64,7 +73,8 @@ export function BookmarkletCard() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3">
             <a
-              href={bookmarkletJs || "#"}
+              ref={setLinkRef}
+              href="#"
               onClick={(e) => e.preventDefault()}
               className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground cursor-grab"
               title="Drag me to your bookmarks bar"

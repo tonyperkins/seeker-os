@@ -13,6 +13,8 @@ export function CollapsibleCard({
   defaultOpen = false,
   scroll = false,
   contentClassName,
+  storageKey,
+  className,
   children,
 }: {
   title: React.ReactNode;
@@ -22,14 +24,39 @@ export function CollapsibleCard({
   defaultOpen?: boolean;
   scroll?: boolean;
   contentClassName?: string;
+  storageKey?: string;
+  className?: string;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = React.useState(defaultOpen);
+  const [stateOpen, setStateOpen] = React.useState(defaultOpen);
 
-  const toggle = () => setOpen((o) => !o);
+  // When storageKey is provided, use localStorage persistence instead of React state.
+  const persisted = React.useSyncExternalStore(
+    (cb) => {
+      if (!storageKey) return () => {};
+      const handler = (e: StorageEvent) => {
+        if (e.key === storageKey || e.key === null) cb();
+      };
+      window.addEventListener("storage", handler);
+      return () => window.removeEventListener("storage", handler);
+    },
+    () => (storageKey ? localStorage.getItem(storageKey) !== "collapsed" : false),
+    () => false,
+  );
+
+  const open = storageKey ? persisted : stateOpen;
+  const toggle = () => {
+    if (storageKey) {
+      const next = !open;
+      localStorage.setItem(storageKey, next ? "expanded" : "collapsed");
+      window.dispatchEvent(new StorageEvent("storage", { key: storageKey }));
+    } else {
+      setStateOpen((o) => !o);
+    }
+  };
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader
         role="button"
         tabIndex={0}

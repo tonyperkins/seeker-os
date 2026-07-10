@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import logging
-import os
+import threading as _threading
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
-from seeker_os.api.schemas import MessageResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/models", tags=["models"])
@@ -25,6 +23,7 @@ class ModelInfoResponse(BaseModel):
     available: bool = True
     input_price_per_mtok: float | None = None
     output_price_per_mtok: float | None = None
+    pricing_source: str | None = None
 
 
 class ProviderInfoResponse(BaseModel):
@@ -50,6 +49,7 @@ class TaskOverrideResponse(BaseModel):
     tier: str
     provider: str | None = None
     model: str | None = None
+    default_tier: str | None = None
 
 
 class ProvidersConfigResponse(BaseModel):
@@ -102,6 +102,7 @@ def get_providers_config():
                     available=m.available,
                     input_price_per_mtok=m.input_price_per_mtok,
                     output_price_per_mtok=m.output_price_per_mtok,
+                    pricing_source=m.pricing_source,
                 )
                 for m in all_models
             ]
@@ -120,6 +121,7 @@ def get_providers_config():
                     available=False,
                     input_price_per_mtok=m.input_price_per_mtok,
                     output_price_per_mtok=m.output_price_per_mtok,
+                    pricing_source="manual" if m.input_price_per_mtok is not None or m.output_price_per_mtok is not None else None,
                 )
                 for m in pc.models
             ]
@@ -158,7 +160,12 @@ def get_providers_config():
     }
 
     tasks = {
-        k: TaskOverrideResponse(tier=v.tier, provider=v.provider, model=v.model)
+        k: TaskOverrideResponse(
+            tier=v.tier,
+            provider=v.provider,
+            model=v.model,
+            default_tier=router_client._infer_tier(k),
+        )
         for k, v in (settings.providers.tasks or {}).items()
     }
 
@@ -175,8 +182,8 @@ def get_providers_config():
 def fetch_models(provider_id: str):
     """Fetch models from a provider's API and cache them."""
     from seeker_os.config import get_settings
-    from seeker_os.llm.router import ModelRouter
     from seeker_os.llm.cache import save_cached_models
+    from seeker_os.llm.router import ModelRouter
 
     settings = get_settings()
     if not settings.providers:
@@ -267,7 +274,8 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
     not stored literally in providers.yml.
     """
     import yaml
-    from seeker_os.config import get_settings, CONFIG_DIR, PROJECT_ROOT
+
+    from seeker_os.config import CONFIG_DIR, get_settings
 
     settings = get_settings()
     if not settings.providers:
@@ -394,8 +402,6 @@ class TaskUpdateRequest(BaseModel):
     model: str | None = None
 
 
-import threading as _threading
-
 _providers_yml_lock = _threading.Lock()
 
 # Canonical routing tiers (mirrors ModelRouter._infer_tier). A tier mapping
@@ -434,6 +440,7 @@ def _validate_provider_model(provider: str, model: str | None) -> None:
 def _write_providers_yml(raw: dict) -> None:
     """Write the providers.yml config back to disk."""
     import yaml
+
     from seeker_os.config import CONFIG_DIR
 
     providers_yml_path = CONFIG_DIR / "providers.yml"
@@ -446,6 +453,7 @@ def _write_providers_yml(raw: dict) -> None:
 def _read_providers_yml() -> dict:
     """Read the raw providers.yml config from disk."""
     import yaml
+
     from seeker_os.config import CONFIG_DIR
 
     providers_yml_path = CONFIG_DIR / "providers.yml"
@@ -493,3 +501,99 @@ def update_task(task: str, body: TaskUpdateRequest):
         tasks[task] = entry
         _write_providers_yml(raw)
     return TaskOverrideResponse(tier=body.tier, provider=body.provider, model=body.model)
+
+
+class ModelPricingUpdateRequest(BaseModel):
+    """PUT /api/models/{provider_id}/models/{model_id}/pricing — update model pricing."""
+    input_price_per_mtok: float | None = None
+    output_price_per_mtok: float | None = None
+
+
+class ModelPricingResponse(BaseModel):
+    """Response for pricing update."""
+    provider_id: str
+    model_id: str
+    input_price_per_mtok: float | None = None
+    output_price_per_mtok: float | None = None
+    pricing_source: str = "manual"
+
+
+@router.put("/{provider_id}/models/{model_id}/pricing", response_model=ModelPricingResponse)
+def update_model_pricing(provider_id: str, model_id: str, body: ModelPricingUpdateRequest):
+    """Update a model's pricing in providers.yml.
+
+    If the model doesn't exist in the provider's config, it will be added
+    as a manual entry with the given pricing.
+    """
+    with _providers_yml_lock:
+        raw = _read_providers_yml()
+        providers_list = raw.get("providers", [])
+        provider_found = None
+        for p in providers_list:
+            if p.get("id") == provider_id:
+                provider_found = p
+                break
+        if provider_found is None:
+            raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found in providers.yml")
+
+        models_list = provider_found.setdefault("models", [])
+        model_found = None
+        for m in models_list:
+            if m.get("id") == model_id:
+                model_found = m
+                break
+
+        if model_found is None:
+            # Create a new model entry with pricing
+            model_found = {"id": model_id, "label": model_id}
+            models_list.append(model_found)
+
+        model_found["input_price_per_mtok"] = body.input_price_per_mtok
+        model_found["output_price_per_mtok"] = body.output_price_per_mtok
+
+        _write_providers_yml(raw)
+
+    return ModelPricingResponse(
+        provider_id=provider_id,
+        model_id=model_id,
+        input_price_per_mtok=body.input_price_per_mtok,
+        output_price_per_mtok=body.output_price_per_mtok,
+        pricing_source="manual",
+    )
+
+
+@router.delete("/{provider_id}/models/{model_id}/pricing", response_model=ModelPricingResponse)
+def reset_model_pricing(provider_id: str, model_id: str):
+    """Reset a model's manual pricing, allowing auto-fetched pricing to take over.
+
+    Removes pricing fields from the model entry in providers.yml. If the model
+    was auto-discovered (not in providers.yml), this is a no-op.
+    """
+    with _providers_yml_lock:
+        raw = _read_providers_yml()
+        providers_list = raw.get("providers", [])
+        provider_found = None
+        for p in providers_list:
+            if p.get("id") == provider_id:
+                provider_found = p
+                break
+        if provider_found is None:
+            raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found in providers.yml")
+
+        models_list = provider_found.get("models", [])
+        model_found = None
+        for m in models_list:
+            if m.get("id") == model_id:
+                model_found = m
+                break
+
+        if model_found is not None:
+            model_found.pop("input_price_per_mtok", None)
+            model_found.pop("output_price_per_mtok", None)
+            _write_providers_yml(raw)
+
+    return ModelPricingResponse(
+        provider_id=provider_id,
+        model_id=model_id,
+        pricing_source="auto",
+    )

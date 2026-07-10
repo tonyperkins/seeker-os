@@ -18,17 +18,17 @@ import io
 import logging
 import os
 import sqlite3
-import zipfile
 import time
-from datetime import datetime, timedelta, timezone
+import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from seeker_os.config import CONFIG_DIR, DATA_DIR, PROJECT_ROOT
-from seeker_os.database import _db_path, MIGRATIONS, run_migrations
+from seeker_os.database import MIGRATIONS, _db_path, run_migrations
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backup", tags=["backup"])
@@ -107,7 +107,7 @@ def download_backup(include_secrets: bool = False):
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         manifest = BackupManifest(
             files=[str(f.relative_to(PROJECT_ROOT)) for f in files],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
         zf.writestr("_manifest.json", manifest.model_dump_json(indent=2))
 
@@ -116,7 +116,7 @@ def download_backup(include_secrets: bool = False):
             zf.write(f, arcname)
 
     buf.seek(0)
-    filename = f"seeker-os-backup-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.zip"
+    filename = f"seeker-os-backup-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.zip"
     return StreamingResponse(
         buf,
         media_type="application/zip",
@@ -234,7 +234,7 @@ def _create_pre_restore_snapshot() -> Path | None:
         return None
 
     _PRE_RESTORE_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     snapshot_path = _PRE_RESTORE_DIR / f"{_PRE_RESTORE_PREFIX}{ts}.db"
 
     source = sqlite3.connect(str(_db_path()))
@@ -288,7 +288,7 @@ def download_db_backup():
         dest.close()
 
     buf.seek(0)
-    filename = f"seeker-os-db-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.db"
+    filename = f"seeker-os-db-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.db"
     return StreamingResponse(
         buf,
         media_type="application/octet-stream",

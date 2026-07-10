@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+
 from pydantic import BaseModel, field_validator
 
 from seeker_os.config import Settings, get_settings

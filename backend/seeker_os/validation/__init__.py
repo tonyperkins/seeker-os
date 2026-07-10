@@ -18,10 +18,10 @@ from __future__ import annotations
 
 import logging
 import re
-import yaml
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
 from pydantic import BaseModel, Field
 
 from seeker_os.config import Settings
@@ -214,7 +214,7 @@ class AccuracyValidator:
         return ValidationResult(
             passed=passed,
             violations=violations,
-            checked_at=datetime.now(timezone.utc).isoformat(),
+            checked_at=datetime.now(UTC).isoformat(),
         )
 
     def revalidate(self, resume_id: int) -> ValidationResult:
@@ -235,7 +235,7 @@ class AccuracyValidator:
 
         # Update DB
         import json
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "UPDATE resumes SET validation_passed=?, validation_violations=?, validation_checked_at=?, updated_at=? WHERE id=?",
             (result.passed, json.dumps(result.to_dict()["violations"]), result.checked_at, now, resume_id),

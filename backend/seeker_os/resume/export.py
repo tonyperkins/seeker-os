@@ -233,9 +233,9 @@ def export_docx(markdown_path: Path, output_path: Path | None = None) -> Path | 
     """
     try:
         from docx import Document
-        from docx.shared import Pt, Inches, RGBColor
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.oxml.ns import qn
+        from docx.shared import Inches, Pt, RGBColor
         from lxml import etree
     except ImportError:
         return None

@@ -90,7 +90,7 @@ class TavilyAdapter:
         if not self._api_key:
             return False
         try:
-            results = self.search("test", max_results=1)
+            self.search("test", max_results=1)
             return True
         except Exception:
             return False

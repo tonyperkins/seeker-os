@@ -8,14 +8,19 @@ from pathlib import Path
 import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 from seeker_os.api.schemas import (
-    ProfileResponse, ProfileUpdate,
-    FiltersResponse, FiltersUpdate,
-    AccuracyRulesResponse, AccuracyRulesUpdate, AccuracyRule,
+    AccuracyRule,
+    AccuracyRulesResponse,
+    AccuracyRulesUpdate,
+    FiltersResponse,
+    FiltersUpdate,
     MessageResponse,
+    ProfileResponse,
+    ProfileUpdate,
 )
-from seeker_os.config import get_settings, ProfileConfig, FiltersConfig, FilterConfig, TitleFilters, CONFIG_DIR
-from seeker_os.config_writer import write_profile, write_filters, write_accuracy_rules
+from seeker_os.config import CONFIG_DIR, FilterConfig, FiltersConfig, ProfileConfig, TitleFilters, get_settings
+from seeker_os.config_writer import write_accuracy_rules, write_filters, write_profile
 from seeker_os.validation import KNOWN_RULE_TYPES
 
 logger = logging.getLogger(__name__)
@@ -249,7 +254,7 @@ Output the JSON now:"""
     if text.startswith("```"):
         lines = text.split("\n")
         # Remove first and last line (fences)
-        lines = [l for l in lines if not l.strip().startswith("```")]
+        lines = [line for line in lines if not line.strip().startswith("```")]
         text = "\n".join(lines).strip()
 
     try:

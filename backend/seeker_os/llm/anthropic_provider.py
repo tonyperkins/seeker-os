@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import anthropic
 
@@ -98,7 +98,7 @@ class AnthropicProvider:
 
     def list_models(self) -> list[ModelInfo]:
         """Fetch available models from Anthropic's API."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         response = self._client.models.list()
         models: list[ModelInfo] = []
         for m in response.data:
@@ -126,7 +126,7 @@ class AnthropicProvider:
                 healthy=True,
                 message="Connection OK",
                 latency_ms=latency,
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )
         except Exception as e:
             return ProviderHealth(
@@ -134,5 +134,5 @@ class AnthropicProvider:
                 healthy=False,
                 message=str(e),
                 latency_ms=int((time.monotonic() - start) * 1000),
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )

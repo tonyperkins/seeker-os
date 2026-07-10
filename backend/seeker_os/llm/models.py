@@ -75,6 +75,8 @@ class ModelInfo:
     # (Kilo, OpenRouter). Falls back to YAML config in providers.yml.
     input_price_per_mtok: float | None = None
     output_price_per_mtok: float | None = None
+    # Tracks where pricing came from: "manual" (providers.yml), "auto" (provider API), or None
+    pricing_source: str | None = None
 
 
 @dataclass

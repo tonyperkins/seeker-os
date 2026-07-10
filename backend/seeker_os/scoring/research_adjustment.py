@@ -13,15 +13,15 @@ research_modifiers section), not hardcoded in Python.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
 from seeker_os.research.models import (
     CompanyResearchResult,
+    FitDossier,
     FundingDossier,
     SentimentDossier,
-    FitDossier,
 )
 
 
@@ -79,7 +79,7 @@ def _is_recent_layoff(layoff_date: str | None, within_days: int = 180) -> bool:
         return True  # If date is unknown but layoff exists, treat as recent
     try:
         parsed = datetime.fromisoformat(layoff_date.replace("Z", "+00:00"))
-        age = (datetime.now(timezone.utc) - parsed).days
+        age = (datetime.now(UTC) - parsed).days
         return age <= within_days
     except (ValueError, TypeError):
         return True  # Unparseable date — treat as recent
@@ -107,7 +107,7 @@ def _has_healthy_runway(funding: FundingDossier) -> bool:
     if funding.last_round and funding.last_round.date:
         try:
             parsed = datetime.fromisoformat(funding.last_round.date.replace("Z", "+00:00"))
-            age_days = (datetime.now(timezone.utc) - parsed).days
+            age_days = (datetime.now(UTC) - parsed).days
             if age_days <= 365 and funding.last_round.amount_usd and funding.last_round.amount_usd > 0:
                 return True
         except (ValueError, TypeError):

@@ -12,9 +12,9 @@ from __future__ import annotations
 import logging
 import os
 
-from seeker_os.config import Settings, ProviderConfig, ProvidersConfig, ProviderModel
-from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth, TruncationError
+from seeker_os.config import ProviderConfig, ProvidersConfig, Settings
 from seeker_os.llm.base import LLMProvider
+from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +189,7 @@ class ModelRouter:
         "application_answer_generation": 2000,
         "application_answer_critique": 2000,
         "accuracy_validation": 16000,
-        "metadata_extraction": 16000,
+        "metadata_extraction": 1000,
         "resume_parsing": 2000,
         "company_dossier_generation": 16000,
         "onboarding_interview": 4096,
@@ -348,6 +348,9 @@ class ModelRouter:
                     tags=getattr(m, "tags", []),
                     source="manual",
                     available=True,
+                    input_price_per_mtok=getattr(m, "input_price_per_mtok", None),
+                    output_price_per_mtok=getattr(m, "output_price_per_mtok", None),
+                    pricing_source="manual" if getattr(m, "input_price_per_mtok", None) is not None or getattr(m, "output_price_per_mtok", None) is not None else None,
                 )
                 for m in pc.models
             }
@@ -361,11 +364,15 @@ class ModelRouter:
                             # Update availability, keep manual tags/label
                             manual_models[am.id].available = am.available
                             manual_models[am.id].fetched_at = am.fetched_at
-                            # Enrich manual model with auto-fetched pricing + context
-                            if am.input_price_per_mtok is not None:
+                            # Only fill in auto-fetched pricing when manual pricing is not set
+                            # (respect user overrides in providers.yml)
+                            if manual_models[am.id].input_price_per_mtok is None and am.input_price_per_mtok is not None:
                                 manual_models[am.id].input_price_per_mtok = am.input_price_per_mtok
-                            if am.output_price_per_mtok is not None:
+                                manual_models[am.id].pricing_source = "auto"
+                            if manual_models[am.id].output_price_per_mtok is None and am.output_price_per_mtok is not None:
                                 manual_models[am.id].output_price_per_mtok = am.output_price_per_mtok
+                                if manual_models[am.id].pricing_source is None:
+                                    manual_models[am.id].pricing_source = "auto"
                             if am.context_window is not None and manual_models[am.id].context_window is None:
                                 manual_models[am.id].context_window = am.context_window
                             if am.max_output is not None and manual_models[am.id].max_output is None:
@@ -373,6 +380,8 @@ class ModelRouter:
                         else:
                             # New auto-discovered model
                             am.tags = ["untagged"]
+                            if am.input_price_per_mtok is not None or am.output_price_per_mtok is not None:
+                                am.pricing_source = "auto"
                             manual_models[am.id] = am
                 except Exception as e:
                     print(f"Warning: failed to fetch models from '{pid}': {e}")

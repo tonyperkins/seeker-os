@@ -122,7 +122,7 @@ function ResearchProgress({ done }: { done: boolean }) {
           <div
             key={i}
             className={`flex items-center gap-2.5 text-sm transition-colors duration-300 ${
-              isPending ? "text-muted-foreground/40" : "text-foreground"
+              isPending ? "text-muted-foreground/50" : "text-foreground"
             }`}
           >
             <div className="flex size-5 items-center justify-center shrink-0">

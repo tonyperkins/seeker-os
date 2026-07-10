@@ -8,17 +8,16 @@ and stores the result.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 
 from seeker_os.config import Settings
 from seeker_os.database import get_connection, json_decode
-from seeker_os.events import transition_status, record_event, EventType, Actor, JobStatus
+from seeker_os.events import Actor, EventType, JobStatus, record_event, transition_status
 from seeker_os.llm.router import ModelRouter
 from seeker_os.validation import AccuracyValidator
 from seeker_os.validation.traceability import TraceabilityChecker
-
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 SYSTEM_PROMPT = (_PROMPTS_DIR / "resume_generation_system.txt").read_text(encoding="utf-8")
@@ -264,7 +263,7 @@ def generate_resume(
         if resume_channel.format_hints:
             channel_lines.append(f"Format: {resume_channel.format_hints}")
         if channel_lines:
-            system_prompt += f"\n\n--- CHANNEL RULES (resume) ---\n" + "\n".join(channel_lines) + "\n--- END CHANNEL RULES ---\n"
+            system_prompt += "\n\n--- CHANNEL RULES (resume) ---\n" + "\n".join(channel_lines) + "\n--- END CHANNEL RULES ---\n"
 
     # Inject content tiering instructions from channel_rules config
     tiering_text = _build_tiering_instructions(settings)
@@ -299,7 +298,7 @@ def generate_resume(
 
     # 6. Save to DB
     _emit("saving", "Saving resume", "started")
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     output_dir = Path(settings.profile.resume.output_dir or "data/resumes").expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -391,7 +390,7 @@ def create_manual_resume(settings: Settings, job_id: int, resume_text: str) -> d
         db.close()
         raise ValueError(f"Job {job_id} not found")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     output_dir = Path(
         settings.profile.resume.output_dir if settings.profile and settings.profile.resume else "data/resumes"
     ).expanduser()
@@ -458,19 +457,39 @@ def create_manual_resume(settings: Settings, job_id: int, resume_text: str) -> d
     }
 
 
-def list_resumes(job_id: int | None = None, limit: int = 50) -> list[dict]:
-    """List generated resumes."""
+def list_resumes(
+    job_id: int | None = None,
+    limit: int = 50,
+    search: str | None = None,
+    sort_by: str | None = None,
+    order: str = "desc",
+) -> list[dict]:
+    """List generated resumes with optional search and sorting."""
+    from seeker_os.api.resumes import RESUME_SORT_EXPRESSIONS
+
     db = get_connection()
+    query = """SELECT r.*, j.company as job_company
+               FROM resumes r
+               LEFT JOIN jobs j ON r.job_id = j.id
+               WHERE 1=1"""
+    params: list = []
+
     if job_id:
-        rows = db.execute(
-            "SELECT * FROM resumes WHERE job_id = ? ORDER BY generated_at DESC LIMIT ?",
-            (job_id, limit),
-        ).fetchall()
-    else:
-        rows = db.execute(
-            "SELECT * FROM resumes ORDER BY generated_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        query += " AND r.job_id = ?"
+        params.append(job_id)
+
+    if search:
+        query += " AND (j.company LIKE ? OR r.provider LIKE ? OR r.model LIKE ? OR r.task LIKE ?)"
+        pat = f"%{search}%"
+        params.extend([pat, pat, pat, pat])
+
+    effective_sort = sort_by if sort_by and sort_by in RESUME_SORT_EXPRESSIONS else "generated_at"
+    sort_expr = RESUME_SORT_EXPRESSIONS[effective_sort]
+    direction = "ASC" if order == "asc" else "DESC"
+    query += f" ORDER BY {sort_expr} {direction}, r.id DESC LIMIT ?"
+    params.append(limit)
+
+    rows = db.execute(query, params).fetchall()
     db.close()
 
     results = []
@@ -478,6 +497,7 @@ def list_resumes(job_id: int | None = None, limit: int = 50) -> list[dict]:
         results.append({
             "id": r["id"],
             "job_id": r["job_id"],
+            "job_company": r["job_company"] or "",
             "task": r["task"] or "",
             "provider": r["provider"] or "",
             "model": r["model"] or "",
