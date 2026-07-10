@@ -734,7 +734,7 @@ export const api = {
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/queries/${id}`, { method: "DELETE" }),
     run: (id: number, forceFullPull?: boolean) =>
-      fetchAPI<Record<string, unknown>>(`/api/queries/${id}/run${forceFullPull ? "?force_full_pull=true" : ""}`, { method: "POST" }),
+      trackActivity("pipeline", `Running query #${id}${forceFullPull ? " (full pull)" : ""}`, fetchAPI<Record<string, unknown>>(`/api/queries/${id}/run${forceFullPull ? "?force_full_pull=true" : ""}`, { method: "POST" })) as Promise<Record<string, unknown>>,
   },
 
   // Settings
