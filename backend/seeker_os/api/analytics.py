@@ -597,8 +597,14 @@ def get_spend():
 
         # Build route-price comparisons: same underlying model available on multiple routes
         # Group by the model id without provider prefix (e.g. "anthropic/claude-opus-4.8" → "claude-opus-4.8")
+        # Only consider enabled providers — disabled providers are not valid routing options
+        enabled_provider_ids = {
+            p.id for p in (settings.providers.providers if settings.providers else []) if p.enabled
+        }
         route_map: dict[str, list[dict]] = {}
         for (prov_id, model_id), (in_price, out_price) in pricing.items():
+            if prov_id not in enabled_provider_ids:
+                continue
             if in_price is None and out_price is None:
                 continue
             # Normalize: strip provider prefix if present (e.g. "anthropic/claude-opus-4.8" → "claude-opus-4.8")
