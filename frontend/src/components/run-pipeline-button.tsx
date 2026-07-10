@@ -12,6 +12,7 @@ import {
   FileSearch,
   Brain,
   Trophy,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, type PipelineRunSummary, type PipelineProgressEvent } from "@/lib/api";
@@ -23,6 +24,7 @@ const STEPS = [
   { key: "jd_fetch", label: "JD Fetch", icon: FileSearch },
   { key: "scoring", label: "Scoring", icon: Brain },
   { key: "ranking", label: "Ranking", icon: Trophy },
+  { key: "analysis", label: "Auto-Analysis", icon: Sparkles },
 ] as const;
 
 type StepStatus = "pending" | "started" | "in_progress" | "completed";
@@ -145,9 +147,17 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
       ? Math.round((activeEvent.current / activeEvent.total) * 100)
       : 0;
 
-  // Overall progress (completed steps / total steps)
-  const completedCount = Object.values(stepStatuses).filter((s) => s === "completed").length;
-  const overallPct = Math.round((completedCount / STEPS.length) * 100);
+  // Overall progress — only count steps that have appeared in events.
+  // The "analysis" step is conditional (auto_analysis.enabled) so it
+  // shouldn't be in the denominator when it won't run.
+  const hasAnalysisStep = events.some((e) => e.step === "analysis");
+  const visibleSteps = hasAnalysisStep
+    ? STEPS
+    : STEPS.filter((s) => s.key !== "analysis");
+  const completedCount = visibleSteps.filter(
+    (s) => stepStatuses[s.key] === "completed",
+  ).length;
+  const overallPct = Math.round((completedCount / visibleSteps.length) * 100);
 
   return (
     <div className={`flex flex-col gap-3 ${compact ? "relative" : ""}`}>
@@ -189,7 +199,7 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
 
           {/* Step list */}
           <div className="flex flex-col gap-1.5">
-            {STEPS.map((step) => {
+            {visibleSteps.map((step) => {
               const status = stepStatuses[step.key];
               const Icon = step.icon;
               const stepEvents = events.filter((e) => e.step === step.key);

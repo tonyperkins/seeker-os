@@ -1,5 +1,7 @@
 /** API client for Seeker OS backend. */
 
+import { trackActivity } from "@/lib/activity-store";
+
 // Server-side renders (SSR) run inside the container — use the Docker service name.
 // Client-side fetches use relative URLs so they work behind any reverse proxy
 // (Next.js rewrites /api/* to the backend).
@@ -684,14 +686,15 @@ export const api = {
     companyResearch: {
       get: (id: number) => fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research`),
       run: (id: number, forceRefresh?: boolean) =>
-        fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research?force_refresh=${forceRefresh ?? false}`, { method: "POST" }),
+        trackActivity("research", `Researching job #${id}`, fetchAPI<CompanyResearchResult>(`/api/jobs/${id}/company-research?force_refresh=${forceRefresh ?? false}`, { method: "POST" })) as Promise<CompanyResearchResult>,
     },
     analysis: {
       get: (id: number) => fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`),
-      run: (id: number) => fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`, { method: "POST" }),
+      run: (id: number) =>
+        trackActivity("analysis", `Analyzing job #${id}`, fetchAPI<JobAnalysisResult>(`/api/jobs/${id}/analysis`, { method: "POST" })) as Promise<JobAnalysisResult>,
     },
     refilterRescore: (data: { job_ids?: number[]; run_id?: string }) =>
-      fetchAPI<RefilterRescoreResult[]>(`/api/jobs/refilter-rescore`, { method: "POST", body: JSON.stringify(data) }),
+      trackActivity("refilter", `Refilter & rescore ${data.job_ids?.length ?? 0} jobs`, fetchAPI<RefilterRescoreResult[]>(`/api/jobs/refilter-rescore`, { method: "POST", body: JSON.stringify(data) })) as Promise<RefilterRescoreResult[]>,
     listNoReasonSkips: () =>
       fetchAPI<NoReasonSkip[]>("/api/jobs/skipped/no-reason"),
     annotateSkip: (id: number, reason: string, details?: string) =>
@@ -731,7 +734,7 @@ export const api = {
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/queries/${id}`, { method: "DELETE" }),
     run: (id: number, forceFullPull?: boolean) =>
-      fetchAPI<Record<string, unknown>>(`/api/queries/${id}/run${forceFullPull ? "?force_full_pull=true" : ""}`, { method: "POST" }),
+      trackActivity("pipeline", `Running query #${id}${forceFullPull ? " (full pull)" : ""}`, fetchAPI<Record<string, unknown>>(`/api/queries/${id}/run${forceFullPull ? "?force_full_pull=true" : ""}`, { method: "POST" })) as Promise<Record<string, unknown>>,
   },
 
   // Settings
@@ -772,10 +775,10 @@ export const api = {
     delete: (id: number) =>
       fetchAPI<MessageResponse>(`/api/resumes/${id}`, { method: "DELETE" }),
     generate: (jobId: number, task?: string) =>
-      fetchAPI<Record<string, unknown>>("/api/resumes/generate", {
+      trackActivity("resume", `Generating resume for job #${jobId}`, fetchAPI<Record<string, unknown>>("/api/resumes/generate", {
         method: "POST",
         body: JSON.stringify({ job_id: jobId, task: task || "resume_generation_standard" }),
-      }),
+      })) as Promise<Record<string, unknown>>,
     createManual: (jobId: number, resumeText: string) =>
       fetchAPI<{ resume_id: number; validation_passed: boolean }>("/api/resumes/manual", {
         method: "POST",

@@ -47,7 +47,6 @@ export function ScoreBadges({ initialJob }: { initialJob: JobDetail }) {
   return (
     <div className="flex flex-col gap-2 items-end">
       <div className="flex items-center gap-2">
-        <Badge variant="outline">{job.status}</Badge>
         {netScore != null && (
           <Badge variant="default" className="text-base">
             Net: {netScore.toFixed(1)}

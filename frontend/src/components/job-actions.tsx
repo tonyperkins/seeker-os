@@ -85,6 +85,7 @@ export function JobActions({ jobId, currentStatus }: { jobId: number; currentSta
     setError(null);
     try {
       await fn();
+      window.dispatchEvent(new Event("job-status-changed"));
       if (refresh) router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");

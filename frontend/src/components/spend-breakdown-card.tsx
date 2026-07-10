@@ -58,19 +58,19 @@ function taskSortKey(task: string): number {
   return idx >= 0 ? idx : 99;
 }
 
-function shortenModel(provider: string, model: string): string {
-  // Strip the provider namespace prefix from the model id if present
-  // e.g. "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6"
+function splitModelId(provider: string, model: string): { prefix: string | null; base: string } {
+  // Split the model id into upstream prefix and base name
+  // e.g. "anthropic/claude-sonnet-4-6" → { prefix: "anthropic", base: "claude-sonnet-4-6" }
+  // Only treat the prefix as an upstream qualifier if it differs from the provider id
   const slashIdx = model.indexOf("/");
   if (slashIdx >= 0) {
     const prefix = model.slice(0, slashIdx);
     const rest = model.slice(slashIdx + 1);
-    // Only strip if the prefix looks like a provider namespace (not a version path segment)
     if (prefix !== provider && !prefix.match(/^\d/)) {
-      return rest;
+      return { prefix, base: rest };
     }
   }
-  return model;
+  return { prefix: null, base: model };
 }
 
 export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
@@ -148,62 +148,93 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
 
       {/* By task + By model side by side */}
       {(report.by_task.length > 0 || report.by_model.length > 0) && (
-        <div className="grid grid-cols-2 gap-4 border-t border-border pt-3">
+        <div className="grid grid-cols-2 divide-x divide-border border-t border-border pt-3">
           {/* By task breakdown */}
           {report.by_task.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <h4 className="text-xs font-semibold text-muted-foreground">By Task</h4>
-              {report.by_task.slice().sort((a, b) => {
-            const pa = taskSortKey(a.task);
-            const pb = taskSortKey(b.task);
-            if (pa !== pb) return pa - pb;
-            return b.estimated_cost - a.estimated_cost;
-          }).map((t) => (
-                <div key={t.task} className="grid grid-cols-[1fr_auto_auto] items-baseline gap-2 text-sm">
-                  <span className="truncate text-muted-foreground">
-                    {TASK_LABELS[t.task] ?? t.task.replace(/_/g, " ")}
-                  </span>
-                  <span className="text-right font-mono text-xs text-muted-foreground/70">
-                    {t.calls} · {formatTokens(t.input_tokens + t.output_tokens)}
-                  </span>
-                  <span className="w-14 text-right font-mono text-xs font-semibold text-foreground">
-                    {hasPricing ? formatCost(t.estimated_cost) : ""}
-                  </span>
-                </div>
-              ))}
+            <div className="flex flex-col gap-0.5 pr-4">
+              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">By Task</h4>
+              {(() => {
+                const sorted = report.by_task.slice().sort((a, b) => {
+                  const pa = taskSortKey(a.task);
+                  const pb = taskSortKey(b.task);
+                  if (pa !== pb) return pa - pb;
+                  return b.estimated_cost - a.estimated_cost;
+                });
+                const maxCost = Math.max(...sorted.map((t) => t.estimated_cost), 0.001);
+                return sorted.map((t) => {
+                  const barPct = hasPricing ? Math.round((t.estimated_cost / maxCost) * 100) : 0;
+                  return (
+                    <div
+                      key={t.task}
+                      className="group relative rounded-sm px-2 py-1.5 transition-colors hover:bg-muted/40"
+                    >
+                      {hasPricing && barPct > 0 && (
+                        <div
+                          className="pointer-events-none absolute inset-y-0 left-0 rounded-sm bg-violet-500/8 transition-all"
+                          style={{ width: `${barPct}%` }}
+                        />
+                      )}
+                      <div className="relative grid grid-cols-[1fr_auto_auto] items-center gap-2 text-sm">
+                        <span className="truncate text-sm text-foreground/80">
+                          {TASK_LABELS[t.task] ?? t.task.replace(/_/g, " ")}
+                        </span>
+                        <span className="font-mono text-xs text-muted-foreground/60">
+                          {t.calls}&thinsp;·&thinsp;{formatTokens(t.input_tokens + t.output_tokens)}
+                        </span>
+                        <span className="w-14 text-right font-mono text-xs font-semibold text-foreground">
+                          {hasPricing ? formatCost(t.estimated_cost) : ""}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
 
           {/* By model breakdown — scrollable */}
           {report.by_model.length > 0 && (
-            <div className="flex flex-col gap-1.5 min-h-0">
-              <h4 className="text-xs font-semibold text-muted-foreground">By Model</h4>
-              <div className="flex flex-col gap-1.5 overflow-y-auto max-h-48 min-h-0 pr-1">
+            <div className="flex flex-col gap-0.5 min-h-0 pl-4">
+              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">By Model</h4>
+              <div className="flex flex-col gap-0.5 overflow-y-auto max-h-52 min-h-0 pr-1">
                 {report.by_model.map((m) => {
                   const noPricing = m.input_price_per_mtok == null && m.output_price_per_mtok == null;
+                  const { prefix, base } = splitModelId(m.provider, m.model);
                   return (
-                    <div key={`${m.provider}/${m.model}`} className="grid grid-cols-[1fr_auto] items-baseline gap-2 text-sm">
+                    <div
+                      key={`${m.provider}/${m.model}`}
+                      className="group grid grid-cols-[1fr_auto] items-start gap-3 rounded-sm px-2 py-1.5 transition-colors hover:bg-muted/40"
+                    >
                       <div className="min-w-0 flex flex-col gap-0.5">
-                        <span className="flex items-center gap-1.5">
-                          <span className="truncate text-muted-foreground">
-                            {shortenModel(m.provider, m.model)}
+                        <span className="flex items-center gap-1">
+                          {prefix && (
+                            <span className="shrink-0 font-mono text-[11px] text-muted-foreground/40">
+                              {prefix}/
+                            </span>
+                          )}
+                          <span className="truncate text-sm text-foreground/80">
+                            {base}
                           </span>
                           {m.pricing_source && (
-                            <span className="shrink-0 rounded bg-muted/50 px-1 py-0 text-[10px] font-medium text-muted-foreground/60">
+                            <span className="shrink-0 rounded border border-border/60 bg-muted/40 px-1 py-0 font-mono text-[10px] text-muted-foreground/50">
                               {SOURCE_BADGE[m.pricing_source] ?? m.pricing_source}
                             </span>
                           )}
                         </span>
-                        <span className="truncate text-xs text-muted-foreground/50">
+                        <span className="font-mono text-[11px] text-muted-foreground/40">
                           {m.provider}
-                          {m.pricing_fetched_at && ` · ${formatDate(m.pricing_fetched_at)}`}
+                          {m.pricing_fetched_at && <span className="text-muted-foreground/30"> · {formatDate(m.pricing_fetched_at)}</span>}
                         </span>
                       </div>
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className={`font-mono text-xs font-semibold ${noPricing ? "text-muted-foreground/40" : "text-foreground"}`}>
-                          {noPricing ? "no pricing" : formatCost(m.estimated_cost)}
-                        </span>
-                        <span className="font-mono text-xs text-muted-foreground/60">
+                      <div className="flex flex-col items-end gap-0.5 pt-0.5">
+                        {noPricing ? (
+                          <span className="font-mono text-xs text-muted-foreground/35 italic">no pricing</span>
+                        ) : (
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            {formatCost(m.estimated_cost)}
+                          </span>
+                        )}
+                        <span className="font-mono text-[11px] text-muted-foreground/40">
                           {formatPrice(m.input_price_per_mtok)}/{formatPrice(m.output_price_per_mtok)}
                         </span>
                       </div>

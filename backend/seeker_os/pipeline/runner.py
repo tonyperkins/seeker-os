@@ -601,7 +601,9 @@ def run_pipeline(
               detail="Analyzing unanalyzed high-scoring jobs…")
         try:
             from seeker_os.analysis.auto_policy import run_auto_analysis
-            auto_result = run_auto_analysis(settings, db)
+            auto_result = run_auto_analysis(settings, db, progress_cb=lambda cur, tot, detail:
+                _emit("analysis", "Auto-Analysis", "in_progress",
+                      current=cur, total=tot, detail=detail))
             print(f"\nAuto-analysis: {auto_result['analyzed']} analyzed, "
                   f"{auto_result['failed']} failed "
                   f"(of {auto_result['candidates']} candidates)")
