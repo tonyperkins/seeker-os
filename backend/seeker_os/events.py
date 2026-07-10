@@ -48,7 +48,7 @@ import json
 import logging
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -239,7 +239,7 @@ def compute_stale_flag(
     except (ValueError, TypeError):
         return False, None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     delta = now - last_dt
     days_since = delta.days
     is_stale = days_since > stale_after_days
@@ -247,7 +247,7 @@ def compute_stale_flag(
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _validate_occurred_at(
@@ -269,9 +269,9 @@ def _validate_occurred_at(
         raise ValueError(f"Invalid occurred_at format: {occurred_at}") from exc
 
     if occurred_dt.tzinfo is None:
-        occurred_dt = occurred_dt.replace(tzinfo=timezone.utc)
+        occurred_dt = occurred_dt.replace(tzinfo=UTC)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if occurred_dt > now:
         raise ValueError(f"occurred_at cannot be in the future: {occurred_at}")
 
@@ -287,7 +287,7 @@ def _validate_occurred_at(
         except (ValueError, TypeError):
             return
         if discovered_dt.tzinfo is None:
-            discovered_dt = discovered_dt.replace(tzinfo=timezone.utc)
+            discovered_dt = discovered_dt.replace(tzinfo=UTC)
         if occurred_dt < discovered_dt:
             raise ValueError(
                 f"occurred_at cannot be before job discovery "

@@ -7,14 +7,14 @@ import logging
 import queue
 import queue as queue_module
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from seeker_os.api.schemas import ResumeParseResult, ContactInfoSchema, MessageResponse
+from seeker_os.api.schemas import ContactInfoSchema, MessageResponse, ResumeParseResult
 from seeker_os.database import get_connection
 
 logger = logging.getLogger(__name__)
@@ -262,7 +262,7 @@ def parse_master_resume():
 
 def _save_parsed_to_config(settings, result: ResumeParseResult) -> None:
     """Save parsed resume data to profile.yml and filters.yml."""
-    from seeker_os.config_writer import write_profile, write_filters
+    from seeker_os.config_writer import write_filters, write_profile
 
     profile = settings.profile
     filters_cfg = settings.filters
@@ -338,6 +338,7 @@ class ResumeSummary(BaseModel):
     """Resume summary for list views."""
     id: int
     job_id: int
+    job_company: str = ""
     task: str = ""
     provider: str = ""
     model: str = ""
@@ -345,6 +346,7 @@ class ResumeSummary(BaseModel):
     validation_violations: list[dict] = []
     input_tokens: int = 0
     output_tokens: int = 0
+    estimated_cost: float | None = None
     latency_ms: int = 0
     generated_at: str = ""
     markdown_path: str = ""
@@ -388,15 +390,91 @@ def pending_review_count():
         db.close()
 
 
+def _build_pricing_map() -> dict[tuple[str, str], tuple[float | None, float | None]]:
+    """Build a (provider, model) → (input_price, output_price) map.
+
+    Merges YAML config pricing (providers.yml) with auto-fetched pricing
+    from provider model caches (Kilo, OpenRouter, etc.), matching the
+    logic in the spend analytics endpoint.
+    """
+    from seeker_os.config import get_settings
+    from seeker_os.llm.cache import get_cached_models
+
+    settings = get_settings()
+    pricing: dict[tuple[str, str], tuple[float | None, float | None]] = {}
+
+    # 1. YAML config pricing (providers.yml)
+    if settings.providers:
+        for prov in settings.providers.providers:
+            for model in prov.models:
+                pricing[(prov.id, model.id)] = (
+                    model.input_price_per_mtok,
+                    model.output_price_per_mtok,
+                )
+
+    # 2. Auto-fetched pricing from model cache (fills in missing prices)
+    if settings.providers:
+        for prov in settings.providers.providers:
+            cached = get_cached_models(prov.id)
+            if cached is None:
+                continue
+            for m in cached:
+                key = (prov.id, m.id)
+                yaml_in, yaml_out = pricing.get(key, (None, None))
+                in_price = yaml_in if yaml_in is not None else m.input_price_per_mtok
+                out_price = yaml_out if yaml_out is not None else m.output_price_per_mtok
+                pricing[key] = (in_price, out_price)
+
+    return pricing
+
+
+def _estimate_cost(
+    provider: str,
+    model: str,
+    in_tok: int,
+    out_tok: int,
+    pricing: dict[tuple[str, str], tuple[float | None, float | None]],
+) -> float | None:
+    """Estimate cost from token counts and pricing map. Returns None if no pricing."""
+    in_price, out_price = pricing.get((provider, model), (None, None))
+    if in_price is None and out_price is None:
+        return None
+    cost = 0.0
+    if in_price is not None:
+        cost += in_tok / 1_000_000 * in_price
+    if out_price is not None:
+        cost += out_tok / 1_000_000 * out_price
+    return cost
+
+
+RESUME_SORT_EXPRESSIONS: dict[str, str] = {
+    "generated_at": "r.generated_at",
+    "id": "r.id",
+    "job_company": "LOWER(COALESCE(j.company, ''))",
+    "provider": "LOWER(COALESCE(r.provider, ''))",
+    "model": "LOWER(COALESCE(r.model, ''))",
+    "tokens": "(r.input_tokens + r.output_tokens)",
+    "latency_ms": "r.latency_ms",
+}
+
+
 @router.get("", response_model=list[ResumeSummary])
-def list_resumes(job_id: int | None = Query(None), limit: int = Query(50, ge=1, le=200)):
-    """List generated resumes."""
+def list_resumes(
+    job_id: int | None = Query(None),
+    search: str | None = Query(None, description="Free-text search across company, provider, model, task"),
+    sort_by: str | None = Query(None, description="Sort field"),
+    order: str = Query("desc", description="Sort direction: asc or desc"),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """List generated resumes with optional search and sorting."""
     from seeker_os.resume.generator import list_resumes as _list
-    resumes = _list(job_id=job_id, limit=limit)
+    resumes = _list(job_id=job_id, limit=limit, search=search, sort_by=sort_by, order=order)
+    pricing = _build_pricing_map()
     return [
         ResumeSummary(
             id=r["id"],
             job_id=r["job_id"],
+            job_company=r.get("job_company", ""),
             task=r["task"],
             provider=r["provider"],
             model=r["model"],
@@ -404,6 +482,9 @@ def list_resumes(job_id: int | None = Query(None), limit: int = Query(50, ge=1, 
             validation_violations=r["validation_violations"],
             input_tokens=r["input_tokens"],
             output_tokens=r["output_tokens"],
+            estimated_cost=_estimate_cost(
+                r["provider"], r["model"], r["input_tokens"], r["output_tokens"], pricing,
+            ),
             latency_ms=r["latency_ms"],
             generated_at=r["generated_at"],
             markdown_path=r["markdown_path"],
@@ -438,7 +519,7 @@ def update_resume_text(resume_id: int, body: ResumeTextUpdate):
         db.close()
         raise HTTPException(status_code=404, detail=f"Resume {resume_id} not found")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Update the markdown file on disk if it exists
     md_path = row["markdown_path"]
@@ -635,7 +716,7 @@ def clear_exports(resume_id: int):
 
     db.execute(
         "UPDATE resumes SET pdf_path=NULL, docx_path=NULL, updated_at=? WHERE id=?",
-        (datetime.now(timezone.utc).isoformat(), resume_id),
+        (datetime.now(UTC).isoformat(), resume_id),
     )
     db.commit()
     db.close()

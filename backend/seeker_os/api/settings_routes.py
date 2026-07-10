@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
-from seeker_os.api.schemas import SettingsResponse, SettingUpdate, MessageResponse, SkipReasonOption
+
+from seeker_os.api.schemas import MessageResponse, SettingsResponse, SettingUpdate, SkipReasonOption
 from seeker_os.config import get_settings as get_cached_settings
 from seeker_os.database import get_connection
 
@@ -81,7 +82,7 @@ def get_setting(key: str):
 def update_setting(key: str, body: SettingUpdate):
     """Update a setting in the settings table."""
     db = get_connection()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     db.execute(
         "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
         (key, body.value, now),

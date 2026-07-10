@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query
+
 from seeker_os.api.schemas import (
     AgingBucket,
     AgingReport,
@@ -199,7 +199,7 @@ def get_movement(
     """
     db = get_connection()
     try:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
         rows = db.execute(
             """
             SELECT ae.job_id, ae.event_type, ae.occurred_at, ae.actor, ae.note,
@@ -311,7 +311,7 @@ def get_aging():
                 buckets.append(AgingBucket(status=status, count=0))
                 continue
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             days_list: list[float] = []
             for r in rows:
                 last = r["last_activity"]
@@ -597,7 +597,7 @@ def get_spend():
         stale_threshold_days = settings.providers.pricing_stale_after_days if settings.providers else 30
         pricing_stale = False
         oldest_fetched_at: str | None = None
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for prov_id, fetched_at in pricing_fetched_at.items():
             if fetched_at is None:
                 continue

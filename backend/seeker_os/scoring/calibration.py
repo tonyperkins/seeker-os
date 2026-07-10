@@ -19,7 +19,6 @@ See docs/SCORING_RUBRIC.md § Calibration Report.
 
 from __future__ import annotations
 
-import json
 import math
 import sqlite3
 

@@ -97,6 +97,18 @@ class TestHardFilters:
         assert result.passed is False
         assert "us" in result.reason.lower()
 
+    def test_passes_us_full_country_name(self):
+        """Source data may use 'United States' instead of 'US' — should still pass."""
+        job = _make_job(workplace_countries=["United States"])
+        result = apply_filters(job, _make_profile(), _make_filters(), _make_title_filters())
+        assert result.passed is True
+
+    def test_passes_usa_variant(self):
+        """'USA' variant should also normalize to US and pass."""
+        job = _make_job(workplace_countries=["USA"])
+        result = apply_filters(job, _make_profile(), _make_filters(), _make_title_filters())
+        assert result.passed is True
+
     def test_rejects_mid_level(self):
         job = _make_job(seniority_level="Mid Level")
         result = apply_filters(job, _make_profile(), _make_filters(), _make_title_filters())

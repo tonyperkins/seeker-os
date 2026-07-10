@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, type RefilterRescoreResult } from "@/lib/api";
@@ -29,6 +30,7 @@ export function RefilterRescoreButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  const router = useRouter();
 
   async function handleClick() {
     setLoading(true);
@@ -54,6 +56,7 @@ export function RefilterRescoreButton({
 
       setSummary(parts.join(" · "));
       onDone?.(results);
+      router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to refilter & rescore";
       setError(message);

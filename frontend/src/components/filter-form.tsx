@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, type FiltersData, type ResumeParseResult } from "@/lib/api";
+import { useDirtyState } from "@/lib/use-dirty-state";
 
 export function FilterForm({
   filters,
@@ -23,6 +24,9 @@ export function FilterForm({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialized = useRef(false);
+
+  const dirty = JSON.stringify(form) !== JSON.stringify(filters);
+  useDirtyState(dirty);
 
   // Pre-fill from parse result when available
   useEffect(() => {
@@ -199,8 +203,11 @@ export function FilterForm({
       <div className="flex items-center gap-3">
         <Button onClick={handleSave} disabled={saving || disabled}>
           {saving ? <Loader2 className="animate-spin" /> : saved ? <CheckCircle2 /> : <Save />}
-          {saving ? "Saving..." : disabled ? "Demo mode" : saved ? "Saved!" : "Save Filters"}
+          {saving ? "Saving..." : disabled ? "Demo mode" : saved ? "Saved!" : dirty ? "Save Filters *" : "Save Filters"}
         </Button>
+        {dirty && !disabled && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">Unsaved changes</span>
+        )}
       </div>
     </div>
   );

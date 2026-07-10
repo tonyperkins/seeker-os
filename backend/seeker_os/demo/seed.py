@@ -19,10 +19,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from seeker_os.database import json_decode, json_encode, run_migrations
+from seeker_os.database import json_encode, run_migrations
 from seeker_os.dedup.layers import content_hash, url_hash
 from seeker_os.dedup.normalize import normalize_company, normalize_title
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -182,10 +181,6 @@ def _insert_job(conn: sqlite3.Connection, data: dict[str, Any]) -> None:
     """Insert a job row from a fixture."""
     now = data.get("discovered_at", "2026-06-28T12:00:00+00:00")
     jd_text = _build_jd_text(data)
-    comp_display = (
-        f"${data['comp_min']:,} - ${data['comp_max']:,} {data['comp_currency']}"
-        if data["comp_min"] is not None else "Not listed"
-    )
 
     row = {
         "id": data["id"],
@@ -238,7 +233,7 @@ def _insert_job(conn: sqlite3.Connection, data: dict[str, Any]) -> None:
     }
 
     columns = ", ".join(row.keys())
-    placeholders = ", ".join([f"?" for _ in row])
+    placeholders = ", ".join(["?" for _ in row])
     conn.execute(
         f"INSERT INTO jobs ({columns}) VALUES ({placeholders})",
         tuple(row.values()),
@@ -274,7 +269,7 @@ def _insert_dossier(conn: sqlite3.Connection, data: dict[str, Any]) -> None:
     }
 
     columns = ", ".join(row.keys())
-    placeholders = ", ".join([f"?" for _ in row])
+    placeholders = ", ".join(["?" for _ in row])
     conn.execute(
         f"INSERT INTO company_research ({columns}) VALUES ({placeholders})",
         tuple(row.values()),
@@ -305,7 +300,7 @@ def _insert_resume(conn: sqlite3.Connection, data: dict[str, Any]) -> None:
     }
 
     columns = ", ".join(row.keys())
-    placeholders = ", ".join([f"?" for _ in row])
+    placeholders = ", ".join(["?" for _ in row])
     conn.execute(
         f"INSERT INTO resumes ({columns}) VALUES ({placeholders})",
         tuple(row.values()),

@@ -14,7 +14,6 @@ from starlette.responses import JSONResponse
 
 from seeker_os.config import is_demo_mode
 
-
 # Allowed methods for any path (health, logs, static OpenAPI docs, etc.)
 _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 

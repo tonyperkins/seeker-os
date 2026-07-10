@@ -6,12 +6,12 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
+from seeker_os.analysis.jd_analyzer import analyze_job, get_latest_analysis
 from seeker_os.api.schemas import (
     AnalysisBackfillRequest,
     AnalysisBackfillResponse,
     JobAnalysisResponse,
 )
-from seeker_os.analysis.jd_analyzer import analyze_job, get_latest_analysis
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/jobs", tags=["jd-analysis"])
@@ -20,12 +20,12 @@ router = APIRouter(prefix="/api/jobs", tags=["jd-analysis"])
 def _dict_to_response(data: dict) -> JobAnalysisResponse:
     """Convert a raw analysis dict to JobAnalysisResponse."""
     from seeker_os.api.schemas import (
-        NamedGapSchema,
-        HardBlockerSchema,
-        RubricDimensionSchema,
-        CompAssessmentSchema,
-        PositioningSchema,
         CompanyFitSchema,
+        CompAssessmentSchema,
+        HardBlockerSchema,
+        NamedGapSchema,
+        PositioningSchema,
+        RubricDimensionSchema,
         TailoringSchema,
     )
 

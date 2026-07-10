@@ -7,7 +7,7 @@ Cache TTL: 24 hours (configurable).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from seeker_os.llm.models import ModelInfo
@@ -29,7 +29,7 @@ def get_cached_models(provider_id: str) -> list[ModelInfo] | None:
     try:
         data = json.loads(path.read_text())
         fetched_at = datetime.fromisoformat(data["fetched_at"])
-        if datetime.now(timezone.utc) - fetched_at > timedelta(hours=CACHE_TTL_HOURS):
+        if datetime.now(UTC) - fetched_at > timedelta(hours=CACHE_TTL_HOURS):
             return None  # stale
 
         return [
@@ -45,6 +45,7 @@ def get_cached_models(provider_id: str) -> list[ModelInfo] | None:
                 fetched_at=m.get("fetched_at"),
                 input_price_per_mtok=m.get("input_price_per_mtok"),
                 output_price_per_mtok=m.get("output_price_per_mtok"),
+                pricing_source=m.get("pricing_source"),
             )
             for m in data["models"]
         ]
@@ -56,7 +57,7 @@ def save_cached_models(provider_id: str, models: list[ModelInfo]) -> None:
     """Save models to cache."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = _cache_path(provider_id)
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     data = {
         "provider_id": provider_id,
@@ -74,6 +75,7 @@ def save_cached_models(provider_id: str, models: list[ModelInfo]) -> None:
                 "fetched_at": m.fetched_at,
                 "input_price_per_mtok": m.input_price_per_mtok,
                 "output_price_per_mtok": m.output_price_per_mtok,
+                "pricing_source": m.pricing_source,
             }
             for m in models
         ],

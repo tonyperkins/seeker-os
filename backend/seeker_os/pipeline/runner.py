@@ -3,36 +3,36 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Callable
 import sqlite3
+from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
 
 from seeker_os.config import Settings
-from seeker_os.database import get_connection, json_encode, json_decode
-from seeker_os.discovery.cache import DiskCache
-from seeker_os.discovery.engine import fetch_all_queries
-from seeker_os.discovery.sources.registry import build_adapters
-from seeker_os.filtering.hard_filters import apply_filters
-from seeker_os.scoring.engine import score_job
+from seeker_os.crossref.jobsearch_repo import check_cross_reference, sync_repo
+from seeker_os.database import get_connection, json_decode, json_encode
 from seeker_os.dedup.layers import (
-    check_duplicate,
     check_content_duplicate,
-    register_keys,
+    check_duplicate,
     register_content_hash,
+    register_keys,
     url_hash,
 )
 from seeker_os.discovery.ats_fetch import fetch_jd
-from seeker_os.crossref.jobsearch_repo import sync_repo, check_cross_reference
+from seeker_os.discovery.cache import DiskCache
+from seeker_os.discovery.engine import fetch_all_queries
+from seeker_os.discovery.sources.registry import build_adapters
+from seeker_os.events import Actor, EventType, record_event, transition_status
+from seeker_os.filtering.hard_filters import apply_filters
 from seeker_os.models import JobCard, PipelineProgressEvent, PipelineRunResult
-from seeker_os.events import record_event, transition_status, EventType, Actor
+from seeker_os.scoring.engine import score_job
 
 logger = logging.getLogger(__name__)
 
 
 def _insert_job(db: sqlite3.Connection, job: JobCard, run_id: str | None = None) -> int:
     """Insert a new job into the DB. Returns the job ID."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     uh = url_hash(job.apply_url)
 
     cursor = db.execute(
@@ -106,7 +106,7 @@ def run_pipeline(
                 tier4_hard_rejected=result.tier4_hard_rejected,
                 tier5_ready=result.tier5_ready,
             ))
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db = get_connection()
     date_part = now.strftime("%m%d")
     existing = db.execute(
@@ -180,7 +180,7 @@ def run_pipeline(
                     try:
                         last_dt = datetime.fromisoformat(last_run)
                         if last_dt.tzinfo is None:
-                            last_dt = last_dt.replace(tzinfo=timezone.utc)
+                            last_dt = last_dt.replace(tzinfo=UTC)
                         delta = now - last_dt
                         posted_within_days = max(1, delta.days)
                     except (ValueError, TypeError):
@@ -253,7 +253,7 @@ def run_pipeline(
                         if existing and not existing["detail_url"]:
                             db.execute(
                                 "UPDATE jobs SET detail_url=?, updated_at=? WHERE id=?",
-                                (card.detail_url, datetime.now(timezone.utc).isoformat(), dedup.matched_job_id),
+                                (card.detail_url, datetime.now(UTC).isoformat(), dedup.matched_job_id),
                             )
                     continue
 
@@ -269,7 +269,7 @@ def run_pipeline(
             db.commit()
 
             # Update last_run_at for each query that was run
-            run_timestamp = datetime.now(timezone.utc).isoformat()
+            run_timestamp = datetime.now(UTC).isoformat()
             for sq in source_queries:
                 db.execute(
                     "UPDATE search_queries SET last_run_at=? WHERE query_slug=? AND source_id=?",
@@ -626,8 +626,8 @@ def run_pipeline(
             """,
             (
                 run_id,
-                datetime.now(timezone.utc).isoformat(),
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
+                datetime.now(UTC).isoformat(),
                 result.cards_fetched, result.cards_new, result.tier2_passed,
                 result.tier3_fetched, result.tier4_scored, result.tier5_ready,
             ),

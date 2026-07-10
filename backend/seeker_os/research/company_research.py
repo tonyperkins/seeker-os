@@ -14,17 +14,15 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 
 from seeker_os.research.models import (
     CompanyResearchResult,
-    FundingDossier,
     FitDossier,
+    FundingDossier,
     LastRound,
     SentimentDossier,
     SourceRef,
@@ -230,7 +228,7 @@ def fetch_wikidata_info(
         # Only return if we found something useful
         if founded_year or employees:
             wikidata_url = f"https://www.wikidata.org/wiki/{item_id}"
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             return FundingDossier(
                 founded=founded_year,
                 headcount=str(employees) if employees is not None else None,
@@ -306,8 +304,8 @@ def fetch_llm_dossier(
     those URLs to claims.
     """
     try:
-        from seeker_os.llm.router import ModelRouter
         from seeker_os.config import get_settings
+        from seeker_os.llm.router import ModelRouter
     except ImportError:
         return None
 
@@ -399,7 +397,7 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
 
     try:
         # Build the result from LLM output
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Parse funding
         funding = None
@@ -924,7 +922,7 @@ def research_company(
     Returns:
         CompanyResearchResult with whatever data could be gathered.
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     result = CompanyResearchResult(
         company_name=company,
         company_homepage=company_homepage,

@@ -113,7 +113,7 @@ export function MovementFeedContent({ events, rejectionCount, rejectionBreakdown
                     {evt.from_status && (
                       <>
                         <span className="text-muted-foreground/60">{statusLabel(evt.from_status)}</span>
-                        <ArrowRight className="size-3 text-muted-foreground/40" />
+                        <ArrowRight className="size-3 text-muted-foreground/50" />
                       </>
                     )}
                     <span className={meta.color}>{statusLabel(evt.to_status)}</span>

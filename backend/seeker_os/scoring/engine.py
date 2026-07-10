@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from seeker_os.config import ProfileConfig, ScoringConfig, ModifierRule
+from seeker_os.config import ModifierRule, ProfileConfig, ScoringConfig
 from seeker_os.models import ScoreResult
 
 

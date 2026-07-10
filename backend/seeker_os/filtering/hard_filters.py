@@ -5,16 +5,47 @@ The filter engine is GENERIC — all thresholds and lists come from config.
 
 from __future__ import annotations
 
-import re
-from datetime import datetime, timezone
-
 import logging
+import re
+from datetime import UTC, datetime
 
 from seeker_os.config import FilterConfig, ProfileConfig, TitleFilters
 from seeker_os.filtering.title_patterns import title_matches
-from seeker_os.models import JobCard, FilterResult
+from seeker_os.models import FilterResult, JobCard
 
 logger = logging.getLogger(__name__)
+
+_COUNTRY_NORMALIZE: dict[str, str] = {
+    "united states": "US",
+    "united states of america": "US",
+    "usa": "US",
+    "u.s.": "US",
+    "u.s.a.": "US",
+    "united kingdom": "GB",
+    "great britain": "GB",
+    "canada": "CA",
+    "germany": "DE",
+    "france": "FR",
+    "australia": "AU",
+    "india": "IN",
+    "ireland": "IE",
+    "netherlands": "NL",
+    "spain": "ES",
+    "portugal": "PT",
+    "poland": "PL",
+    "brazil": "BR",
+    "mexico": "MX",
+}
+
+
+def _normalize_country(c: str) -> str:
+    """Normalize a country name to its ISO 3166-1 alpha-2 code.
+
+    Handles full names (e.g. 'United States') and common variants.
+    If no mapping exists, returns the uppercased input.
+    """
+    lower = c.strip().lower()
+    return _COUNTRY_NORMALIZE.get(lower, c.upper())
 
 
 def _parse_date(date_str: str) -> datetime | None:
@@ -82,7 +113,7 @@ def apply_filters(
 
     # 3. US only
     if filters.us_only:
-        countries = [c.upper() for c in job.workplace_countries]
+        countries = [_normalize_country(c) for c in job.workplace_countries]
         if countries and "US" not in countries:
             return FilterResult(passed=False, reason=f"Not US (countries={job.workplace_countries})")
 
@@ -161,7 +192,7 @@ def apply_filters(
     company_lower = (job.company or "").lower()
     for dc in profile.defense_blocklist:
         if dc.lower() in company_lower:
-            return FilterResult(passed=False, reason=f"Defense contractor (company blocklist)")
+            return FilterResult(passed=False, reason="Defense contractor (company blocklist)")
 
     # 9. Blacklist
     for bl in profile.blacklist:
@@ -190,7 +221,7 @@ def apply_filters(
     if filters.freshness_days > 0:
         posted = _parse_date(job.date_posted)
         if posted:
-            age_days = (datetime.now(timezone.utc) - posted).days
+            age_days = (datetime.now(UTC) - posted).days
             if age_days > filters.freshness_days:
                 return FilterResult(passed=False, reason=f"Freshness expired ({age_days} days old)")
 

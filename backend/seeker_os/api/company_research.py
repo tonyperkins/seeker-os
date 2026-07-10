@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,9 +12,9 @@ from seeker_os.dedup.normalize import normalize_company
 from seeker_os.research.company_research import research_company
 from seeker_os.research.models import (
     CompanyResearchResult,
+    FitDossier,
     FundingDossier,
     SentimentDossier,
-    FitDossier,
 )
 from seeker_os.scoring.research_adjustment import (
     ResearchModifierRule,
@@ -32,11 +32,11 @@ def _row_to_response(
 ) -> CompanyResearchResponse:
     """Convert a DB row to CompanyResearchResponse."""
     from seeker_os.api.schemas import (
-        WikipediaInfoSchema,
+        FitDossierSchema,
         FundingDossierSchema,
         SentimentDossierSchema,
-        FitDossierSchema,
         VerdictFlagsSchema,
+        WikipediaInfoSchema,
     )
 
     wiki_data = json_decode(row["wikipedia_data"]) if row["wikipedia_data"] else None
@@ -215,7 +215,7 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
             result.research_delta,
             breakdown_json,
             net,
-            datetime.now(timezone.utc).isoformat(),
+            datetime.now(UTC).isoformat(),
             job_id,
         ),
     )
@@ -250,7 +250,7 @@ def _find_fresh_dossier(db, company_norm: str, ttl_days: int):
     if researched_at:
         try:
             parsed = datetime.fromisoformat(researched_at.replace("Z", "+00:00"))
-            age_days = (datetime.now(timezone.utc) - parsed).days
+            age_days = (datetime.now(UTC) - parsed).days
         except (ValueError, TypeError):
             age_days = None
     if age_days is not None and age_days <= ttl_days:
@@ -289,7 +289,7 @@ def get_company_research(job_id: int):
         if researched_at:
             try:
                 parsed = datetime.fromisoformat(researched_at.replace("Z", "+00:00"))
-                age_days = (datetime.now(timezone.utc) - parsed).days
+                age_days = (datetime.now(UTC) - parsed).days
             except (ValueError, TypeError):
                 pass
 
@@ -383,7 +383,7 @@ def run_company_research(job_id: int, force_refresh: bool = False):
                 detail="Research completed but produced no usable data — LLM dossier generation may have failed. Check server logs.",
             )
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Serialize sub-objects to JSON for storage
         wiki_json = json_encode(result.wikipedia.model_dump()) if result.wikipedia else None

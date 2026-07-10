@@ -25,6 +25,8 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",           # for TestClient
+    "ruff>=0.6",
+    "mypy>=1.11",
 ]
 browser = [
     "playwright>=1.40",      # Headless browser fallback for Vercel JS challenges
@@ -42,3 +44,25 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 120
+
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["seeker_os"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["seeker_os"]
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+follow_imports = "silent"

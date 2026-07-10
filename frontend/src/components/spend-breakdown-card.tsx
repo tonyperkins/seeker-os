@@ -148,7 +148,7 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
 
       {/* By task + By model side by side */}
       {(report.by_task.length > 0 || report.by_model.length > 0) && (
-        <div className="grid grid-cols-2 divide-x divide-border border-t border-border pt-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border border-t border-border pt-3">
           {/* By task breakdown */}
           {report.by_task.length > 0 && (
             <div className="flex flex-col gap-0.5 pr-4">
@@ -194,7 +194,7 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
 
           {/* By model breakdown — scrollable */}
           {report.by_model.length > 0 && (
-            <div className="flex flex-col gap-0.5 min-h-0 pl-4">
+            <div className="flex flex-col gap-0.5 min-h-0 pt-4 lg:pt-0 lg:pl-4">
               <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">By Model</h4>
               <div className="flex flex-col gap-0.5 overflow-y-auto max-h-52 min-h-0 pr-1">
                 {report.by_model.map((m) => {
@@ -208,7 +208,7 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
                       <div className="min-w-0 flex flex-col gap-0.5">
                         <span className="flex items-center gap-1">
                           {prefix && (
-                            <span className="shrink-0 font-mono text-[11px] text-muted-foreground/40">
+                            <span className="shrink-0 font-mono text-[11px] text-muted-foreground/50">
                               {prefix}/
                             </span>
                           )}
@@ -221,20 +221,20 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
                             </span>
                           )}
                         </span>
-                        <span className="font-mono text-[11px] text-muted-foreground/40">
+                        <span className="font-mono text-[11px] text-muted-foreground/50">
                           {m.provider}
-                          {m.pricing_fetched_at && <span className="text-muted-foreground/30"> · {formatDate(m.pricing_fetched_at)}</span>}
+                          {m.pricing_fetched_at && <span className="text-muted-foreground/50"> · {formatDate(m.pricing_fetched_at)}</span>}
                         </span>
                       </div>
                       <div className="flex flex-col items-end gap-0.5 pt-0.5">
                         {noPricing ? (
-                          <span className="font-mono text-xs text-muted-foreground/35 italic">no pricing</span>
+                          <span className="font-mono text-xs text-muted-foreground/50 italic">no pricing</span>
                         ) : (
                           <span className="font-mono text-sm font-semibold text-foreground">
                             {formatCost(m.estimated_cost)}
                           </span>
                         )}
-                        <span className="font-mono text-[11px] text-muted-foreground/40">
+                        <span className="font-mono text-[11px] text-muted-foreground/50">
                           {formatPrice(m.input_price_per_mtok)}/{formatPrice(m.output_price_per_mtok)}
                         </span>
                       </div>

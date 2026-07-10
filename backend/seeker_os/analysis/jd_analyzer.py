@@ -12,14 +12,13 @@ files — nothing is hardcoded.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
 
 from seeker_os.config import Settings
-from seeker_os.database import get_connection, json_decode, json_encode
-
+from seeker_os.database import get_connection, json_decode
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 SYSTEM_PROMPT = (_PROMPTS_DIR / "jd_analysis_system.txt").read_text(encoding="utf-8")
@@ -201,7 +200,7 @@ def _load_company_research_text(db, company: str) -> str:
         if funding_data.get("headcount"):
             lines.append(f"  Headcount: {funding_data['headcount']}")
         if funding_data.get("public"):
-            lines.append(f"  Public company: yes")
+            lines.append("  Public company: yes")
         if funding_data.get("total_raised_usd"):
             lines.append(f"  Total raised: ${funding_data['total_raised_usd']:,}")
         if funding_data.get("financial_health"):
@@ -250,7 +249,7 @@ def _load_company_research_text(db, company: str) -> str:
         if fit_data.get("comp_band"):
             lines.append(f"  Comp band: {fit_data['comp_band']}")
         if fit_data.get("clearance_required"):
-            lines.append(f"  Clearance required: yes")
+            lines.append("  Clearance required: yes")
 
     # Verdict flags
     verdict_data = json_decode(row["verdict_flags"]) if "verdict_flags" in row.keys() and row["verdict_flags"] else None
@@ -400,7 +399,7 @@ def analyze_job(
         ) from exc
 
     # 6. Store in DB
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     analysis_json = json.dumps(data)
 
     cursor = db.execute(

@@ -18,20 +18,20 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
+    from playwright.sync_api import sync_playwright
     _PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     _PLAYWRIGHT_AVAILABLE = False
 
 # Cached Vercel verification cookies from the last successful challenge solve.
 # Keyed by domain. Expires after _COOKIE_TTL_SECONDS.
-_cached_cookies: Dict[str, Dict[str, str]] = {}
-_cookie_timestamps: Dict[str, float] = {}
+_cached_cookies: dict[str, dict[str, str]] = {}
+_cookie_timestamps: dict[str, float] = {}
 _COOKIE_TTL_SECONDS = 300  # 5 minutes — Vercel cookies are short-lived
 
 
