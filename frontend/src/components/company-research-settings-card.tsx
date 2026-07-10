@@ -66,6 +66,8 @@ export function CompanyResearchSettingsCard() {
   }, []);
 
   useEffect(() => {
+    // Initial form state is synchronized from the backend settings resource.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSettings();
   }, [loadSettings]);
 

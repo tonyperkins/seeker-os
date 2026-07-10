@@ -197,6 +197,8 @@ def run_pipeline(
                 fc = settings.filters.filters
                 if fc.remote_only:
                     sq_workplace_types = ["Remote"]
+                    if fc.hybrid_accepted_cities:
+                        sq_workplace_types = ["Remote", "Hybrid"]
                 if fc.commitment_required:
                     # Map our config value to hiring.cafe's format
                     commitment_map = {

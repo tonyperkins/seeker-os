@@ -11,6 +11,15 @@ import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type Se
 
 export const dynamic = "force-dynamic";
 
+async function settled<T>(label: string, request: Promise<T>, failures: string[]): Promise<T | null> {
+  try {
+    return await request;
+  } catch {
+    failures.push(label);
+    return null;
+  }
+}
+
 export default async function DashboardPage() {
   let funnel: FunnelStats | null = null;
   let runs: PipelineRunRecord[] = [];
@@ -26,46 +35,41 @@ export default async function DashboardPage() {
   let movement: MovementReport | null = null;
   let signalQuality: SignalQualityReport | null = null;
   let spend: SpendReport | null = null;
-  let error: string | null = null;
+  const unavailable: string[] = [];
+  const [activeResp, consideringResp, allPostReadyResp, actionQueueResp] = await Promise.all([
+    settled("Active applications", api.jobs.list({ status: "applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 50 }), unavailable),
+    settled("Considering jobs", api.jobs.list({ status: "reviewing,interested", limit: 50 }), unavailable),
+    settled("Stale alerts", api.jobs.list({ status: "reviewing,interested,applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 100 }), unavailable),
+    settled("Action queue", api.jobs.list({ status: "ready", sort_by: "net_score", limit: 5 }), unavailable),
+  ]);
 
-  try {
-    const [activeResp, consideringResp, allPostReadyResp, actionQueueResp] = await Promise.all([
-      api.jobs.list({ status: "applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 50 }),
-      api.jobs.list({ status: "reviewing,interested", limit: 50 }),
-      api.jobs.list({ status: "reviewing,interested,applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 100 }),
-      api.jobs.list({ status: "ready", sort_by: "net_score", limit: 5 }),
-    ]);
+  const [funnelResult, runsResult, settingsResult, resumeResult, providersResult, demoResult, pendingResult, movementResult, signalResult, spendResult] = await Promise.all([
+    settled("Pipeline metrics", api.analytics.funnel(), unavailable),
+    settled("Pipeline runs", api.pipeline.runs(), unavailable),
+    settled("Settings", api.settings.get(), unavailable),
+    settled("Master resume", api.resumes.getMaster(), unavailable),
+    settled("Model providers", api.models.getConfig(), unavailable),
+    settled("Demo mode", api.demoMode.get(), unavailable),
+    settled("Documents to review", api.resumes.pendingCount(), unavailable),
+    settled("Movement", api.analytics.movement({ days: 7, limit: 30 }), unavailable),
+    settled("Signal quality", api.analytics.signalQuality(), unavailable),
+    settled("Spend", api.analytics.spend(), unavailable),
+  ]);
 
-    [funnel, runs, settings, resumeInfo, providers, { demo_mode: isDemoMode }, { count: docsToReview }, movement, signalQuality, spend] = await Promise.all([
-      api.analytics.funnel(),
-      api.pipeline.runs(),
-      api.settings.get(),
-      api.resumes.getMaster().catch(() => null),
-      api.models.getConfig().catch(() => null),
-      api.demoMode.get().catch(() => ({ demo_mode: false })),
-      api.resumes.pendingCount().catch(() => ({ count: 0 })),
-      api.analytics.movement({ days: 7, limit: 30 }).catch(() => null),
-      api.analytics.signalQuality().catch(() => null),
-      api.analytics.spend().catch(() => null),
-    ]);
-    actionQueueJobs = actionQueueResp.jobs ?? [];
-    activeJobs = activeResp.jobs ?? [];
-    consideringJobs = consideringResp.jobs ?? [];
-    allPostReadyJobs = allPostReadyResp.jobs ?? [];
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Failed to load dashboard data";
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <div className="rounded-lg bg-card p-6 text-center text-destructive ring-1 ring-foreground/10">
-          {error}
-        </div>
-      </div>
-    );
-  }
+  funnel = funnelResult;
+  runs = runsResult ?? [];
+  settings = settingsResult;
+  resumeInfo = resumeResult;
+  providers = providersResult;
+  isDemoMode = demoResult?.demo_mode ?? false;
+  docsToReview = pendingResult?.count ?? 0;
+  movement = movementResult;
+  signalQuality = signalResult;
+  spend = spendResult;
+  actionQueueJobs = actionQueueResp?.jobs ?? [];
+  activeJobs = activeResp?.jobs ?? [];
+  consideringJobs = consideringResp?.jobs ?? [];
+  allPostReadyJobs = allPostReadyResp?.jobs ?? [];
 
   // Check if setup is complete — redirect to onboarding if not
   const hasProvider = (providers?.providers ?? []).some(
@@ -85,7 +89,8 @@ export default async function DashboardPage() {
 
   // Demo mode ships with a synthetic profile, resume, and zero providers.
   // It should land directly on the dashboard, not the onboarding wizard.
-  if (!setupComplete && !isDemoMode) {
+  const setupStateAvailable = settingsResult !== null && providersResult !== null;
+  if (setupStateAvailable && !setupComplete && !isDemoMode) {
     redirect("/onboarding");
   }
 
@@ -105,6 +110,19 @@ export default async function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
       </div>
+
+      {unavailable.length > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          <span className="font-medium">Partial dashboard data.</span>{" "}
+          Unavailable: {unavailable.join(", ")}. Refresh to retry.
+        </div>
+      )}
+
+      {(providers?.partial || signalQuality?.partial || spend?.partial) && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          {[...(providers?.warnings ?? []), ...(signalQuality?.warnings ?? []), ...(spend?.warnings ?? [])].join(" ")}
+        </div>
+      )}
 
       {/* ZONE 1 — Ops strip (with expandable run history + funnel) */}
       <RunStrip

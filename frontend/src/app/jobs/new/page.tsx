@@ -37,10 +37,10 @@ export default function NewJobPage() {
   const [title, setTitle] = useState("");
   const [company, setCompany] = useState("");
   const [location, setLocation] = useState("");
-  const [workplaceType, setWorkplaceType] = useState("");
-  const [seniorityLevel, setSeniorityLevel] = useState("");
-  const [compMin, setCompMin] = useState("");
-  const [compMax, setCompMax] = useState("");
+  const [workplaceType] = useState("");
+  const [seniorityLevel] = useState("");
+  const [compMin] = useState("");
+  const [compMax] = useState("");
   const [jdText, setJdText] = useState("");
   const [recruiterName, setRecruiterName] = useState("");
   const [recruiterEmail, setRecruiterEmail] = useState("");
@@ -114,6 +114,8 @@ export default function NewJobPage() {
       const titleParam = params.get("title") || "";
       const companyParam = params.get("company") || "";
       const locationParam = params.get("location") || "";
+      // Hydrate bookmarklet data from the browser URL exactly once.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUrl(urlParam);
       if (titleParam) setTitle(titleParam);
       if (companyParam) setCompany(companyParam);

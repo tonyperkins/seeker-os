@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from seeker_os.api.schemas import MessageResponse
-from seeker_os.config import Settings, CONFIG_DIR
+from seeker_os.config import get_settings, CONFIG_DIR
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings", tags=["company-research-settings"])
@@ -95,7 +95,7 @@ def _seed_cr_yaml() -> dict:
 @router.get("/company-research", response_model=RetrievalSettingsResponse)
 def get_retrieval_settings():
     """Get retrieval settings, sanitized — never returns the API key."""
-    settings = Settings()
+    settings = get_settings()
     cr = settings.company_research
 
     if cr is None:
@@ -184,7 +184,7 @@ def update_retrieval_settings(body: RetrievalSettingsUpdate):
 @router.post("/company-research/test-connection", response_model=TestConnectionResponse)
 def test_retrieval_connection():
     """Test that the configured retrieval adapter is reachable and the key is valid."""
-    settings = Settings()
+    settings = get_settings()
     cr = settings.company_research
 
     if cr is None or not cr.retrieval or not cr.retrieval.type:

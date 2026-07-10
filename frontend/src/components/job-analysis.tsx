@@ -106,7 +106,7 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
-  async function loadAnalysis() {
+  const loadAnalysis = useCallback(async () => {
     setLoading(true);
     setError(null);
     setNotFound(false);
@@ -123,7 +123,7 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [jobId]);
 
   const runAnalysis = useCallback(async () => {
     setRunning(true);
@@ -142,8 +142,10 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
   }, [jobId]);
 
   useEffect(() => {
+    // Load the resource whenever the route job changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAnalysis();
-  }, [jobId]);
+  }, [loadAnalysis]);
 
   useEffect(() => {
     function onRunAnalysis() {

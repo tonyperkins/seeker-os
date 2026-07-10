@@ -685,7 +685,7 @@ function EditProviderInline({
     } finally {
       setSaving(false);
     }
-  }, [label, baseUrl, apiKey, provider.id, onSaved, onClose]);
+  }, [label, baseUrl, apiKey, provider.id, onSaved, onClose, isAnthropic]);
 
   return (
     <div className="rounded-md border border-border p-4 space-y-3">

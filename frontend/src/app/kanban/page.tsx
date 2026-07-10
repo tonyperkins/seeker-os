@@ -46,8 +46,6 @@ const POST_APPLY_COLUMNS = [
   { key: "offer_declined", label: "Offer Declined", icon: XCircle, color: "text-destructive" },
 ] as const;
 
-const PRE_APPLY_STATUSES = new Set(["ready", "reviewing", "interested", "rejected", "discovered", "filtered", "jd_fetched", "duplicate_flagged", "skipped", "capped"]);
-
 export default function KanbanPage() {
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);

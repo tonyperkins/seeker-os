@@ -14,7 +14,7 @@ import json
 import logging
 from pydantic import BaseModel, field_validator
 
-from seeker_os.config import Settings
+from seeker_os.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,15 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary.
 
 Extract these fields (all optional — use null if not found or ambiguous):
 {
+  "jd_text": <string or null>,        // the cleaned job description text — ONLY the actual job posting
+                                      // content (duties, requirements, company info, benefits).
+                                      // EXCLUDE all site navigation, sign-in prompts, similar jobs,
+                                      // people also viewed, recommended jobs, job alerts, footer,
+                                      // cookie notices, and any other page chrome. If the input
+                                      // is already a clean JD, return it as-is.
+  "title": <string or null>,          // job title, e.g. "Staff AI Infrastructure Engineer"
   "company": <string or null>,        // company name, e.g. "Chainguard", "Google"
+  "location": <string or null>,       // primary work location, e.g. "Austin, TX" or "Reston, VA"
   "comp_min": <integer or null>,      // minimum salary/baseline, in annual USD equivalent
   "comp_max": <integer or null>,      // maximum salary/top of range, in annual USD equivalent
   "comp_currency": <string or null>,  // e.g. "USD", "EUR", "GBP", "CAD"
@@ -37,7 +45,10 @@ Extract these fields (all optional — use null if not found or ambiguous):
 }
 
 Rules:
+- For jd_text, return ONLY the job posting content. The input may be a raw web page that includes navigation, similar jobs listings, sign-in forms, and other non-JD content. Strip all of that and return only the actual job description. If the input is already a clean JD (no page chrome), return it verbatim.
+- For title, extract the job title from the JD header or first line (e.g. "Staff AI Infrastructure Engineer", "Senior SRE"). Use the full title as written.
 - For company, look for the company name in the JD text (e.g. "Chainguard is the trusted source...", "About Us: Acme Corp"). Use the proper capitalized name.
+- For location, extract the primary work location from the JD (e.g. "Austin, TX", "Reston, VA", "Remote, US"). If multiple locations are listed, use the first or primary one.
 - For compensation, look for salary ranges, base salary, or pay bands. Convert to annual integers (strip commas/currency symbols). If only an hourly/monthly rate is given, annualize it (hourly * 2080, monthly * 12).
 - For workplace_type, infer from phrases like "remote-first", "work from anywhere", "hybrid", "in-office", "on-site".
 - For seniority_level, infer from the job title and experience requirements (e.g. "5-7 years" → "Senior", "10+ years" → "Staff/Principal").
@@ -49,7 +60,10 @@ Rules:
 
 class ExtractedMetadata(BaseModel):
     """Structured metadata extracted from JD text by the LLM."""
+    jd_text: str | None = None
+    title: str | None = None
     company: str | None = None
+    location: str | None = None
     comp_min: int | None = None
     comp_max: int | None = None
     comp_currency: str | None = None
@@ -100,7 +114,7 @@ def extract_metadata_from_jd(
         return ExtractedMetadata()
 
     if settings is None:
-        settings = Settings()
+        settings = get_settings()
 
     if not settings.providers:
         logger.info("No LLM providers configured — skipping metadata extraction")
@@ -111,6 +125,10 @@ def extract_metadata_from_jd(
     router = ModelRouter(settings)
 
     max_chars = settings.scoring.metadata_max_jd_chars if settings.scoring else 8000
+    # When the input looks like a raw web page (not a clean JD), send more
+    # text so the LLM can extract the JD content from amidst page chrome.
+    if len(jd_text) > max_chars:
+        max_chars = min(len(jd_text), 32000)
     user_prompt = (
         f"Job Title: {title or 'Unknown'}\n"
         f"Location: {location or 'Unknown'}\n"
@@ -143,7 +161,10 @@ def extract_metadata_from_jd(
 
     try:
         return ExtractedMetadata(
+            jd_text=data.get("jd_text"),
+            title=data.get("title"),
             company=data.get("company"),
+            location=data.get("location"),
             comp_min=data.get("comp_min"),
             comp_max=data.get("comp_max"),
             comp_currency=data.get("comp_currency"),

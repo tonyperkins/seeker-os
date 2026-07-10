@@ -111,7 +111,7 @@ def run_single_query(query_id: int, force_full_pull: bool = False):
     requests only jobs posted since last_run_at (incremental search).
     When force_full_pull is True, no date filter is applied (full pull).
     """
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.pipeline.runner import run_pipeline as _run
 
     db = get_connection()
@@ -120,7 +120,7 @@ def run_single_query(query_id: int, force_full_pull: bool = False):
         if not row:
             raise HTTPException(status_code=404, detail=f"Query {query_id} not found")
 
-        settings = Settings()
+        settings = get_settings()
         result = _run(
             settings,
             queries=[row["query_slug"]],

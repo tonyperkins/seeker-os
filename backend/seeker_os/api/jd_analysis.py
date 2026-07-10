@@ -121,9 +121,9 @@ def get_analysis(job_id: int):
 @router.post("/{job_id}/analysis", response_model=JobAnalysisResponse)
 def run_analysis(job_id: int):
     """Run JD analysis for a job and cache the result."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     try:
         result = analyze_job(settings=settings, job_id=job_id)
         return _dict_to_response(result)

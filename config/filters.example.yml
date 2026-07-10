@@ -21,6 +21,10 @@ filters:
 
   freshness_days: 30
   commitment_required: "Full Time"
+  # Cities where hybrid jobs are allowed even when remote_only=true.
+  # Hybrid jobs whose location contains any of these city names pass the filter.
+  # Leave empty to reject all non-remote jobs (strict remote-only).
+  hybrid_accepted_cities: []
   # Junior-level title patterns for fallback filtering when seniority_level
   # is None and seniority_unknown_passes is False. Empty this list if you
   # are targeting junior-level roles.

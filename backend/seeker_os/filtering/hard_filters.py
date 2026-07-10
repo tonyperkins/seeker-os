@@ -71,8 +71,14 @@ def apply_filters(
 
     # 2. Remote only
     if filters.remote_only:
-        if job.workplace_type and job.workplace_type.lower() != "remote":
-            return FilterResult(passed=False, reason=f"Not remote (workplace_type={job.workplace_type})")
+        wt = (job.workplace_type or "").lower()
+        if wt and wt != "remote":
+            if wt == "hybrid" and filters.hybrid_accepted_cities:
+                location_lower = (job.location or "").lower()
+                if not any(c.lower() in location_lower for c in filters.hybrid_accepted_cities):
+                    return FilterResult(passed=False, reason=f"Not remote (workplace_type={job.workplace_type})")
+            else:
+                return FilterResult(passed=False, reason=f"Not remote (workplace_type={job.workplace_type})")
 
     # 3. US only
     if filters.us_only:

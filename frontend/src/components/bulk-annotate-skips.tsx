@@ -41,6 +41,8 @@ export function BulkAnnotateSkips() {
 
   useEffect(() => {
     if (open) {
+      // Opening the dialog intentionally synchronizes it with backend state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchSkips();
       api.settings.get().then((s) => {
         if (s.skip_reasons?.length) setSkipReasons(s.skip_reasons);

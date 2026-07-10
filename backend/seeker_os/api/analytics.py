@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import sqlite3
+
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -25,6 +28,7 @@ from seeker_os.database import get_connection
 from seeker_os.scoring.calibration import build_calibration_report
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/funnel", response_model=FunnelStats)
@@ -382,13 +386,16 @@ def get_signal_quality():
             settings = get_settings()
             if settings.scoring:
                 report = build_calibration_report(db, settings.scoring)
-                total_decided = report.total_applied + report.total_skipped
+                total_decided = report["total_applied"] + report["total_skipped"]
                 if total_decided > 0:
-                    false_pos = len(report.false_positives) / total_decided * 100.0
-                    false_neg = len(report.false_negatives) / total_decided * 100.0
+                    false_pos = len(report["false_positives"]) / total_decided * 100.0
+                    false_neg = len(report["false_negatives"]) / total_decided * 100.0
                 cal_available = True
         except Exception:
-            pass
+            logger.exception("Signal-quality calibration data is unavailable")
+            warnings = ["Calibration metrics are unavailable."]
+        else:
+            warnings = []
 
         return SignalQualityReport(
             total_analyzed=total,
@@ -398,6 +405,8 @@ def get_signal_quality():
             false_positive_pct=round(false_pos, 1),
             false_negative_pct=round(false_neg, 1),
             calibration_available=cal_available,
+            partial=bool(warnings),
+            warnings=warnings,
         )
     finally:
         db.close()
@@ -508,8 +517,11 @@ def get_spend():
                 GROUP BY provider, model, task
                 """,
             ).fetchall()
-        except Exception:
-            pass
+        except sqlite3.OperationalError as exc:
+            if "no such table" not in str(exc).lower():
+                logger.exception("Failed to aggregate cover-letter spend")
+                raise
+            logger.debug("Cover-letter spend table is not present")
 
         # Aggregate from application_answers (if table exists — dropped in v28)
         answer_rows = []
@@ -525,8 +537,11 @@ def get_spend():
                 GROUP BY provider, model, task
                 """,
             ).fetchall()
-        except Exception:
-            pass
+        except sqlite3.OperationalError as exc:
+            if "no such table" not in str(exc).lower():
+                logger.exception("Failed to aggregate application-answer spend")
+                raise
+            logger.debug("Application-answer spend table is not present")
 
         # Combine
         by_task: dict[str, dict] = {}

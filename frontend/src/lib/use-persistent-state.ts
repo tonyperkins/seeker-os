@@ -26,6 +26,8 @@ export function usePersistentState<T>(
       const stored = localStorage.getItem(key);
       if (stored !== null) {
         const parsed = JSON.parse(stored) as T;
+        // localStorage is an external store that is only available after hydration.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setState(parsed);
       }
     } catch {

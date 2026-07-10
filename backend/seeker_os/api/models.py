@@ -56,6 +56,8 @@ class ProvidersConfigResponse(BaseModel):
     providers: list[ProviderInfoResponse] = []
     tiers: dict[str, TierMappingResponse] = {}
     tasks: dict[str, TaskOverrideResponse] = {}
+    partial: bool = False
+    warnings: list[str] = []
 
 
 class ProviderUpdateRequest(BaseModel):
@@ -70,10 +72,10 @@ class ProviderUpdateRequest(BaseModel):
 @router.get("", response_model=ProvidersConfigResponse)
 def get_providers_config():
     """Get all providers, their models, tier mappings, and task overrides."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.llm.router import ModelRouter
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.providers:
         return ProvidersConfigResponse()
 
@@ -81,6 +83,7 @@ def get_providers_config():
     router_client._init_providers()
 
     providers_response: list[ProviderInfoResponse] = []
+    warnings: list[str] = []
 
     for pc in settings.providers.providers:
         # Get models (merge manual + auto-fetched)
@@ -102,8 +105,27 @@ def get_providers_config():
                 )
                 for m in all_models
             ]
+        except KeyError:
+            # Disabled or unauthenticated providers are intentionally absent
+            # from the live router; their configured models remain visible.
+            models = [
+                ModelInfoResponse(
+                    id=m.id,
+                    label=m.label,
+                    provider_id=pc.id,
+                    context_window=m.context_window,
+                    max_output=m.max_output,
+                    tags=m.tags,
+                    source="manual",
+                    available=False,
+                    input_price_per_mtok=m.input_price_per_mtok,
+                    output_price_per_mtok=m.output_price_per_mtok,
+                )
+                for m in pc.models
+            ]
         except Exception:
-            pass
+            logger.exception("Failed to enumerate models for provider '%s'", pc.id)
+            warnings.append(f"Models for provider '{pc.id}' are unavailable.")
 
         # Health is intentionally NOT probed here: this endpoint is hit on every
         # dashboard load and a synchronous test_connection() per provider adds N
@@ -144,17 +166,19 @@ def get_providers_config():
         providers=providers_response,
         tiers=tiers,
         tasks=tasks,
+        partial=bool(warnings),
+        warnings=warnings,
     )
 
 
 @router.post("/fetch/{provider_id}", response_model=list[ModelInfoResponse])
 def fetch_models(provider_id: str):
     """Fetch models from a provider's API and cache them."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.llm.router import ModelRouter
     from seeker_os.llm.cache import save_cached_models
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.providers:
         raise HTTPException(status_code=400, detail="No providers configured")
 
@@ -189,10 +213,10 @@ def fetch_models(provider_id: str):
 @router.post("/test/{provider_id}", response_model=dict)
 def test_provider(provider_id: str):
     """Test connectivity to a provider."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.llm.router import ModelRouter
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.providers:
         raise HTTPException(status_code=400, detail="No providers configured")
 
@@ -214,10 +238,10 @@ def test_provider(provider_id: str):
 @router.post("/test-all", response_model=list[dict])
 def test_all_providers():
     """Test connectivity to all configured providers."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.llm.router import ModelRouter
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.providers:
         return []
 
@@ -243,9 +267,9 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
     not stored literally in providers.yml.
     """
     import yaml
-    from seeker_os.config import Settings, CONFIG_DIR, PROJECT_ROOT
+    from seeker_os.config import get_settings, CONFIG_DIR, PROJECT_ROOT
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.providers:
         raise HTTPException(status_code=400, detail="No providers configured")
 
@@ -298,12 +322,12 @@ def update_provider(provider_id: str, body: ProviderUpdateRequest):
         with open(providers_yml_path, "w") as f:
             yaml.dump(raw, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-        # Invalidate cached settings so the next Settings() re-reads from disk
+        # Invalidate cached settings so the next read reloads from disk
         from seeker_os.config import invalidate_settings_cache
         invalidate_settings_cache()
 
     # Reload and return updated provider
-    settings = Settings()
+    settings = get_settings()
     router_client = __import__("seeker_os.llm.router", fromlist=["ModelRouter"]).ModelRouter(settings)
     router_client._init_providers()
 
@@ -386,9 +410,9 @@ def _validate_provider_model(provider: str, model: str | None) -> None:
     mid-generation, so it's rejected here. Model lists can be auto-fetched and
     may lag config, so an unknown model is only logged.
     """
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     providers = settings.providers.providers if settings.providers else []
     pc = next((p for p in providers if p.id == provider), None)
     if pc is None:
@@ -415,6 +439,8 @@ def _write_providers_yml(raw: dict) -> None:
     providers_yml_path = CONFIG_DIR / "providers.yml"
     with open(providers_yml_path, "w") as f:
         yaml.dump(raw, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    from seeker_os.config import invalidate_settings_cache
+    invalidate_settings_cache()
 
 
 def _read_providers_yml() -> dict:

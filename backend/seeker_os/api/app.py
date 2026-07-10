@@ -13,6 +13,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from seeker_os.api.demo_guard import DemoGuardMiddleware
 from seeker_os.api.jobs import router as jobs_router
@@ -31,6 +32,26 @@ from seeker_os.config import is_demo_mode
 from seeker_os.database import run_migrations
 
 logger = logging.getLogger(__name__)
+
+
+class RootResponse(BaseModel):
+    name: str
+    version: str
+    docs: str
+
+
+class HealthResponse(BaseModel):
+    status: str
+
+
+class DemoModeResponse(BaseModel):
+    demo_mode: bool
+
+
+class LogsResponse(BaseModel):
+    lines: list[str] = Field(default_factory=list)
+    path: str | None = None
+    note: str | None = None
 
 # ---------------------------------------------------------------------------
 # Logging — write to data/backend.log so the UI can retrieve recent lines in
@@ -165,23 +186,23 @@ app.include_router(jd_analysis_router)
 app.include_router(backup_router)
 
 
-@app.get("/")
+@app.get("/", response_model=RootResponse)
 def root():
     return {"name": "Seeker OS API", "version": "0.1.0", "docs": "/docs"}
 
 
-@app.get("/api/health")
+@app.get("/api/health", response_model=HealthResponse)
 def health():
     return {"status": "ok"}
 
 
-@app.get("/api/demo-mode")
+@app.get("/api/demo-mode", response_model=DemoModeResponse)
 def demo_mode_status():
     """Return whether the backend is running in read-only demo mode."""
     return {"demo_mode": is_demo_mode()}
 
 
-@app.get("/api/logs")
+@app.get("/api/logs", response_model=LogsResponse)
 def get_logs(tail: int = 80):
     """Return the last *tail* lines of the backend log file for UI display."""
     if is_demo_mode():

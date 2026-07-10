@@ -15,7 +15,6 @@ import {
   Upload,
   Mail,
   Inbox,
-  RotateCcw,
   Clock,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -120,7 +119,7 @@ export function EventTimeline({
   isStale: boolean;
   daysSinceLastActivity: number | null;
 }) {
-  const [events, setEvents] = useState<ApplicationEvent[]>(initialEvents);
+  const [events] = useState<ApplicationEvent[]>(initialEvents);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
@@ -197,6 +196,8 @@ export function EventTimeline({
   const isEngaged = currentStatus === "engaged";
   const isPreApply = !isPostApply && currentStatus !== "rejected" && currentStatus !== "skipped" && currentStatus !== "capped";
 
+  // Reserved for the follow-up event workflow; kept local until it is wired into the timeline.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function EventDialog({
     dialogKey,
     title,

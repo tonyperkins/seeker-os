@@ -90,6 +90,45 @@ class TestJobs:
         scores = [(j.get("net_score") or j.get("score") or 0) for j in jobs]
         assert scores == sorted(scores, reverse=True)
 
+    @pytest.mark.parametrize(
+        ("sort_by", "value"),
+        [
+            ("status", lambda job: job["status"].lower()),
+            ("run_id", lambda job: (job["run_id"] or "").lower()),
+            ("title", lambda job: job["title"].lower()),
+            ("company", lambda job: job["company"].lower()),
+            ("comp", lambda job: job["comp_min"] if job["comp_min"] is not None else job["comp_max"]),
+            ("location", lambda job: (job["location"] or "").lower()),
+            ("ats", lambda job: (job["ats_source"] or "").lower()),
+        ],
+    )
+    def test_list_jobs_supports_every_table_sort(self, client, sort_by, value):
+        response = client.get(f"/api/jobs?sort_by={sort_by}&order=asc&limit=500")
+        assert response.status_code == 200
+        values = [value(job) for job in response.json()["jobs"]]
+        comparable = [item for item in values if item is not None]
+        assert comparable == sorted(comparable)
+
+    def test_list_jobs_sort_is_global_and_stable_across_pages(self, client):
+        first = client.get("/api/jobs?sort_by=company&order=asc&limit=3&offset=0")
+        second = client.get("/api/jobs?sort_by=company&order=asc&limit=3&offset=3")
+        repeated = client.get("/api/jobs?sort_by=company&order=asc&limit=3&offset=0")
+
+        assert first.status_code == second.status_code == repeated.status_code == 200
+        combined = first.json()["jobs"] + second.json()["jobs"]
+        companies = [job["company"].lower() for job in combined]
+        assert companies == sorted(companies)
+        assert [job["id"] for job in first.json()["jobs"]] == [
+            job["id"] for job in repeated.json()["jobs"]
+        ]
+        assert {job["id"] for job in first.json()["jobs"]}.isdisjoint(
+            job["id"] for job in second.json()["jobs"]
+        )
+
+    def test_list_jobs_rejects_unknown_sort_fields(self, client):
+        response = client.get("/api/jobs?sort_by=drop_table&order=sideways")
+        assert response.status_code == 422
+
     def test_get_job_not_found(self, client):
         r = client.get("/api/jobs/99999")
         assert r.status_code == 404

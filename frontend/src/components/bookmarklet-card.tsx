@@ -12,6 +12,8 @@ export function BookmarkletCard() {
 
   useEffect(() => {
     const o = window.location.origin;
+    // Browser origin is unavailable during SSR and must be synchronized after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrigin(o);
     const target = `${o}/jobs/new`;
     // Bookmarklet that extracts job metadata from the page DOM before navigating

@@ -150,8 +150,8 @@ def _apply_research_adjustment(db, job_id: int, dossier: CompanyResearchResult) 
     base_modifiers: dict[str, float] = json.loads(job["score_modifiers"]) if job["score_modifiers"] else {}
 
     try:
-        from seeker_os.config import Settings
-        settings = Settings()
+        from seeker_os.config import get_settings
+        settings = get_settings()
         scoring = settings.scoring
     except Exception:
         return None
@@ -336,8 +336,8 @@ def run_company_research(job_id: int, force_refresh: bool = False):
         # Check for fresh cached dossier by company_norm (unless force_refresh)
         ttl_days = 30
         try:
-            from seeker_os.config import Settings
-            settings = Settings()
+            from seeker_os.config import get_settings
+            settings = get_settings()
             if settings.company_research:
                 ttl_days = settings.company_research.research_ttl_days
         except Exception:
@@ -349,8 +349,8 @@ def run_company_research(job_id: int, force_refresh: bool = False):
                 # Compute and persist research-adjusted score from cached dossier
                 confidence_floor = 0.3
                 try:
-                    from seeker_os.config import Settings
-                    s = Settings()
+                    from seeker_os.config import get_settings
+                    s = get_settings()
                     if s.company_research:
                         confidence_floor = s.company_research.confidence_floor
                 except Exception:
