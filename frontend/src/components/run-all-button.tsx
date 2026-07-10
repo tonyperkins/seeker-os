@@ -5,6 +5,7 @@ import { Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function RunAllButton({ jobId }: { jobId: number }) {
+  void jobId;
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState("");
   const analysisDoneRef = useRef(false);

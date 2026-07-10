@@ -1,6 +1,7 @@
 /** API client for Seeker OS backend. */
 
 import { trackActivity } from "@/lib/activity-store";
+import type { components as ApiComponents } from "@/lib/api-schema";
 
 // Server-side renders (SSR) run inside the container — use the Docker service name.
 // Client-side fetches use relative URLs so they work behind any reverse proxy
@@ -92,6 +93,13 @@ export interface JobSummary {
   has_recruiter: boolean;
   recruiter_source: string | null;
 }
+
+export type JobSortKey = "score" | "net_score" | "status" | "run_id" | "title" | "company" | "comp" | "location" | "ats";
+export type SortOrder = "asc" | "desc";
+
+export type PaginatedJobsResponse = Omit<ApiComponents["schemas"]["PaginatedJobsResponse"], "jobs"> & {
+  jobs: JobSummary[];
+};
 
 export interface RecruiterContact {
   id: number;
@@ -337,6 +345,8 @@ export interface SignalQualityReport {
   false_positive_pct: number;
   false_negative_pct: number;
   calibration_available: boolean;
+  partial?: boolean;
+  warnings?: string[];
 }
 
 export interface SpendByTask {
@@ -380,6 +390,8 @@ export interface SpendReport {
   pricing_stale: boolean;
   pricing_stale_after_days: number;
   route_pricing: PricingRouteComparison[];
+  partial?: boolean;
+  warnings?: string[];
 }
 
 export interface SkipReasonOption {
@@ -534,6 +546,8 @@ export interface ModelInfoResponse {
   tags: string[];
   source: string;
   available: boolean;
+  input_price_per_mtok: number | null;
+  output_price_per_mtok: number | null;
 }
 
 export interface ProviderInfoResponse {
@@ -564,6 +578,8 @@ export interface ProvidersConfigResponse {
   providers: ProviderInfoResponse[];
   tiers: Record<string, TierMappingResponse>;
   tasks: Record<string, TaskOverrideResponse>;
+  partial?: boolean;
+  warnings?: string[];
 }
 
 export interface MasterResumeInfo {
@@ -586,7 +602,10 @@ export const api = {
 
   // Jobs
   jobs: {
-    list: (params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; sort_by?: "net_score" | "score"; limit?: number; offset?: number }) => {
+    list: (
+      params?: { status?: string; min_score?: number; min_tier?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; sort_by?: JobSortKey; order?: SortOrder; limit?: number; offset?: number },
+      options?: { signal?: AbortSignal },
+    ) => {
       const search = new URLSearchParams();
       if (params?.status) search.set("status", params.status);
       if (params?.min_tier) search.set("min_tier", String(params.min_tier));
@@ -598,10 +617,11 @@ export const api = {
       if (params?.verdict) search.set("verdict", params.verdict);
       if (params?.exclude_status) search.set("exclude_status", params.exclude_status);
       if (params?.sort_by) search.set("sort_by", params.sort_by);
+      if (params?.order) search.set("order", params.order);
       if (params?.limit) search.set("limit", String(params.limit));
       if (params?.offset) search.set("offset", String(params.offset));
       const qs = search.toString();
-      return fetchAPI<{ jobs: JobSummary[]; total: number }>(`/api/jobs${qs ? `?${qs}` : ""}`);
+      return fetchAPI<PaginatedJobsResponse>(`/api/jobs${qs ? `?${qs}` : ""}`, options);
     },
     get: (id: number) => fetchAPI<JobDetail>(`/api/jobs/${id}`),
     create: (data: JobCreateRequest) =>

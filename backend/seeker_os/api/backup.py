@@ -55,6 +55,16 @@ class BackupManifest(BaseModel):
     timestamp: str
 
 
+class BackupRestoreResponse(BaseModel):
+    message: str
+    restored: list[str]
+    skipped: list[str]
+
+
+class DatabaseRestoreResponse(BaseModel):
+    message: str
+
+
 def _collect_backup_files(include_secrets: bool = False) -> list[Path]:
     """Gather all non-DB config files that should be included in the backup.
 
@@ -82,7 +92,7 @@ def _collect_backup_files(include_secrets: bool = False) -> list[Path]:
     return files
 
 
-@router.get("")
+@router.get("", response_class=StreamingResponse)
 def download_backup(include_secrets: bool = False):
     """Download a zip of all non-DB configuration files.
 
@@ -114,7 +124,7 @@ def download_backup(include_secrets: bool = False):
     )
 
 
-@router.post("/restore")
+@router.post("/restore", response_model=BackupRestoreResponse)
 async def restore_backup(file: UploadFile = File(...)):
     """Upload a backup zip and restore all config files.
 
@@ -253,7 +263,7 @@ def _cleanup_old_snapshots() -> None:
                 p.unlink()
                 logger.info("Deleted expired pre-restore snapshot %s", p.name)
 
-@router.get("/db")
+@router.get("/db", response_class=StreamingResponse)
 def download_db_backup():
     """Download a consistent snapshot of the SQLite database.
 
@@ -286,7 +296,7 @@ def download_db_backup():
     )
 
 
-@router.post("/db/restore")
+@router.post("/db/restore", response_model=DatabaseRestoreResponse)
 async def restore_db_backup(file: UploadFile = File(...)):
     """Upload a .db file and restore it into the live database.
 

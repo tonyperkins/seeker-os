@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { CollapsibleCard } from "@/components/collapsible-card";
 import { formatDateTime } from "@/lib/date";
-import type { MovementEvent, MovementReport } from "@/lib/api";
+import type { MovementEvent } from "@/lib/api";
 
 const EVENT_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
   applied: { label: "Applied", icon: Mail, color: "text-violet-500" },

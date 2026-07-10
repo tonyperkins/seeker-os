@@ -189,7 +189,7 @@ class ModelRouter:
         "application_answer_generation": 2000,
         "application_answer_critique": 2000,
         "accuracy_validation": 16000,
-        "metadata_extraction": 1000,
+        "metadata_extraction": 16000,
         "resume_parsing": 2000,
         "company_dossier_generation": 16000,
         "onboarding_interview": 4096,
@@ -324,10 +324,13 @@ class ModelRouter:
 
         results: list[ModelInfo] = []
 
-        providers_to_query = (
-            {provider_id: self._providers[provider_id]} if provider_id
-            else self._providers
-        )
+        if provider_id:
+            provider = self._providers.get(provider_id)
+            if not provider:
+                return []
+            providers_to_query = {provider_id: provider}
+        else:
+            providers_to_query = self._providers
 
         for pid, provider in providers_to_query.items():
             pc = self._provider_configs.get(pid)

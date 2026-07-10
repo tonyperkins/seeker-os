@@ -67,6 +67,13 @@ class JobSummary(BaseModel):
         return int(round(float(v)))
 
 
+class PaginatedJobsResponse(BaseModel):
+    """A stable, typed page of jobs returned by ``GET /api/jobs``."""
+
+    jobs: list[JobSummary]
+    total: int
+
+
 class JobDetail(BaseModel):
     """Full job detail."""
     id: int
@@ -740,6 +747,8 @@ class SignalQualityReport(BaseModel):
     false_positive_pct: float = 0.0
     false_negative_pct: float = 0.0
     calibration_available: bool = False
+    partial: bool = False
+    warnings: list[str] = Field(default_factory=list)
 
 
 class SpendByTask(BaseModel):
@@ -787,6 +796,8 @@ class SpendReport(BaseModel):
     pricing_stale: bool = False  # true if any auto-fetched pricing is older than threshold
     pricing_stale_after_days: int = 30  # configured threshold
     route_pricing: list[PricingRouteComparison] = []  # cross-route price differences
+    partial: bool = False
+    warnings: list[str] = Field(default_factory=list)
 
 
 class AnalysisBackfillRequest(BaseModel):

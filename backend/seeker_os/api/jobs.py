@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from seeker_os.api.schemas import (
-    JobSummary, JobDetail, JobUpdate, JobReject, JobSkip, JobCreate, JobCreateResponse,
+    JobSummary, PaginatedJobsResponse, JobDetail, JobUpdate, JobReject, JobSkip, JobCreate, JobCreateResponse,
     JobOverride, MessageResponse, ApplicationEvent, ApplicationEventCreate,
     PostApplyTransition, EngagedEventCreate, CleanStartCreate,
     RefilterRescoreRequest, RefilterRescoreResult,
@@ -117,8 +118,8 @@ def _try_apply_research_adjustment(db, job_id: int, company: str) -> None:
         return
 
     try:
-        from seeker_os.config import Settings
-        settings = Settings()
+        from seeker_os.config import get_settings
+        settings = get_settings()
         if not settings.scoring or not settings.scoring.research_modifiers:
             return
         ttl_days = settings.company_research.research_ttl_days if settings.company_research else 30
@@ -365,7 +366,20 @@ def _row_to_detail(row, db=None) -> JobDetail:
     )
 
 
-@router.get("")
+_JOB_SORT_EXPRESSIONS = {
+    "score": "COALESCE(net_score, score)",
+    "net_score": "COALESCE(net_score, score)",
+    "status": "LOWER(COALESCE(status, ''))",
+    "run_id": "LOWER(COALESCE(run_id, ''))",
+    "title": "LOWER(COALESCE(title, ''))",
+    "company": "LOWER(COALESCE(company, ''))",
+    "comp": "COALESCE(comp_min, comp_max)",
+    "location": "LOWER(COALESCE(location, ''))",
+    "ats": "LOWER(COALESCE(ats_source, ''))",
+}
+
+
+@router.get("", response_model=PaginatedJobsResponse)
 def list_jobs(
     status: str | None = Query(None, description="Filter by status"),
     min_score: float | None = Query(None, description="Minimum score"),
@@ -378,7 +392,11 @@ def list_jobs(
     exclude_status: str | None = Query(None, description="Comma-separated statuses to exclude (e.g. 'rejected,skipped')"),
     recruiter_source: str | None = Query(None, description="Filter by recruiter contact source (e.g. 'LinkedIn', 'email')"),
     has_recruiter: bool | None = Query(None, description="Filter to jobs with (true) or without (false) recruiter contacts"),
-    sort_by: str | None = Query(None, description="Sort field: 'net_score' or 'score'. Defaults to net_score for ready jobs, score otherwise."),
+    sort_by: Literal["score", "net_score", "status", "run_id", "title", "company", "comp", "location", "ats"] | None = Query(
+        None,
+        description="Sort field. Defaults to net_score for ready jobs and score otherwise.",
+    ),
+    order: Literal["asc", "desc"] = Query("desc", description="Sort direction."),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -438,17 +456,12 @@ def list_jobs(
         count_query = query.replace("SELECT *", "SELECT COUNT(*) as total", 1)
         total = db.execute(count_query, params).fetchone()["total"]
 
-        query += " ORDER BY"
-        # Determine sort column: explicit sort_by param, then default by status
-        effective_sort = sort_by
-        if effective_sort is None:
-            effective_sort = "net_score" if status == "ready" else "score"
-        if effective_sort == "net_score":
-            # COALESCE falls back to score when net_score is NULL (pre-analysis jobs)
-            query += " COALESCE(net_score, score) DESC,"
-        else:
-            query += " score DESC,"
-        query += " discovered_at DESC LIMIT ? OFFSET ?"
+        # Ordering is applied to the full filtered result before pagination.
+        # SQL fragments come only from the whitelist above; values remain bound.
+        effective_sort = sort_by or ("net_score" if status == "ready" else "score")
+        sort_expression = _JOB_SORT_EXPRESSIONS[effective_sort]
+        direction = "ASC" if order == "asc" else "DESC"
+        query += f" ORDER BY {sort_expression} {direction}, discovered_at DESC, id DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         rows = db.execute(query, params).fetchall()
@@ -513,7 +526,7 @@ def list_jobs(
             )
             for r in rows
         ]
-        return {"jobs": jobs, "total": total}
+        return PaginatedJobsResponse(jobs=jobs, total=total)
     finally:
         db.close()
 
@@ -541,7 +554,7 @@ def create_job(body: JobCreate):
     from seeker_os.filtering.hard_filters import apply_filters
     from seeker_os.scoring.engine import score_job
     from seeker_os.models import JobCard
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
     # When no URL is provided (JD-only path), generate a synthetic URL for
     # dedup and storage purposes. Uses a hash of the JD text so the same JD
@@ -577,7 +590,7 @@ def create_job(body: JobCreate):
             jd_text = body.jd_text.strip()
         else:
             # Attempt fetch from URL
-            settings = Settings()
+            settings = get_settings()
             user_agent = "Mozilla/5.0"
             if settings.sources:
                 for src in settings.sources.sources:
@@ -686,7 +699,7 @@ def create_job(body: JobCreate):
         now = datetime.now(timezone.utc).isoformat()
         source_job_id = f"manual___{uh[:12]}"
 
-        settings = Settings()
+        settings = get_settings()
         source_map = {}
         if settings.sources:
             for src in settings.sources.sources:
@@ -722,6 +735,10 @@ def create_job(body: JobCreate):
             gh_commitment = extracted.commitment
             gh_countries = extracted.countries or []
             gh_company = extracted.company
+            gh_title = gh_title or extracted.title
+            gh_location = gh_location or extracted.location
+            if extracted.jd_text and len(extracted.jd_text) >= 200:
+                jd_text = extracted.jd_text
         else:
             body_seniority_extracted = None
             gh_role_type = None
@@ -1517,7 +1534,7 @@ def delete_job(job_id: int):
 @router.get("/{job_id}/cross-ref", response_model=dict)
 def check_cross_ref(job_id: int):
     """Check a job against the job-search repo."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.crossref.jobsearch_repo import check_cross_reference
 
     db = get_connection()
@@ -1526,7 +1543,7 @@ def check_cross_ref(job_id: int):
         if not row:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        settings = Settings()
+        settings = get_settings()
         if not settings.profile:
             raise HTTPException(status_code=400, detail="Profile config not loaded")
 
@@ -2002,9 +2019,9 @@ def refilter_rescore(body: RefilterRescoreRequest):
     rescored, not refiltered — user decisions are preserved regardless of score
     movement.  System statuses (ready, rejected) are re-evaluated.
     """
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.profile or not settings.scoring or not settings.filters:
         raise HTTPException(status_code=500, detail="Config not loaded")
 

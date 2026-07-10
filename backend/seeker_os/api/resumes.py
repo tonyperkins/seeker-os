@@ -34,12 +34,20 @@ class MasterResumeInfo(BaseModel):
     text_preview: str = ""  # first 500 chars
 
 
+class MasterResumeContentResponse(BaseModel):
+    content: str
+
+
+class PendingReviewCountResponse(BaseModel):
+    count: int
+
+
 @router.get("/master", response_model=MasterResumeInfo)
 def get_master_resume_info():
     """Get info about the configured master resume file."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.profile or not settings.profile.resume:
         raise HTTPException(status_code=404, detail="No resume config in profile.yml")
 
@@ -59,8 +67,8 @@ def get_master_resume_info():
         try:
             text = master_path.read_text(encoding="utf-8")
             preview = text[:500]
-        except Exception:
-            pass
+        except (OSError, UnicodeError):
+            logger.warning("Could not read markdown master-resume preview", exc_info=True)
 
     return MasterResumeInfo(
         path=str(master_path),
@@ -78,9 +86,9 @@ async def upload_master_resume(file: UploadFile = File(...)):
     Saves the file to the configured master_path in profile.yml.
     If the path has no extension, the uploaded file's extension is appended.
     """
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.profile or not settings.profile.resume:
         raise HTTPException(status_code=404, detail="No resume config in profile.yml")
 
@@ -110,8 +118,8 @@ async def upload_master_resume(file: UploadFile = File(...)):
     if fmt == "md":
         try:
             preview = content.decode("utf-8")[:500]
-        except Exception:
-            pass
+        except UnicodeError:
+            logger.warning("Uploaded markdown resume is not valid UTF-8", exc_info=True)
 
     return MasterResumeInfo(
         path=str(master_path),
@@ -122,12 +130,12 @@ async def upload_master_resume(file: UploadFile = File(...)):
     )
 
 
-@router.get("/master/content")
+@router.get("/master/content", response_model=MasterResumeContentResponse)
 def get_master_resume_content():
     """Get the full text content of the master resume (markdown only)."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.profile or not settings.profile.resume:
         raise HTTPException(status_code=404, detail="No resume config in profile.yml")
 
@@ -149,9 +157,9 @@ class MasterResumeContentUpdate(BaseModel):
 @router.put("/master/content", response_model=MessageResponse)
 def update_master_resume_content(body: MasterResumeContentUpdate):
     """Update the full text content of the master resume (markdown only)."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.profile or not settings.profile.resume:
         raise HTTPException(status_code=404, detail="No resume config in profile.yml")
 
@@ -173,9 +181,9 @@ def parse_master_resume():
     Extracts: contact info, experience years, current title, key skills,
     suggested filter parameters (title patterns, comp floor), and a summary.
     """
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.profile or not settings.profile.resume:
         raise HTTPException(status_code=404, detail="No resume config in profile.yml")
 
@@ -366,7 +374,7 @@ class ResumeDetail(BaseModel):
     docx_path: str | None = None
 
 
-@router.get("/pending-count")
+@router.get("/pending-count", response_model=PendingReviewCountResponse)
 def pending_review_count():
     """Count of resumes with validation_passed = false (docs to review)."""
     from seeker_os.database import get_connection
@@ -476,10 +484,10 @@ def delete_resume(resume_id: int):
 @router.post("/generate", response_model=dict)
 def generate_resume(body: ResumeGenerateRequest):
     """Generate a tailored resume for a job."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.resume.generator import generate_resume as _generate
 
-    settings = Settings()
+    settings = get_settings()
     try:
         result = _generate(
             settings=settings,
@@ -501,10 +509,10 @@ def generate_resume(body: ResumeGenerateRequest):
 @router.post("/manual", response_model=dict)
 def create_manual_resume_route(body: ResumeManualCreate):
     """Save a hand-built (user-pasted) markdown resume for a job."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.resume.generator import create_manual_resume
 
-    settings = Settings()
+    settings = get_settings()
     try:
         result = create_manual_resume(settings, job_id=body.job_id, resume_text=body.resume_text)
         return result
@@ -522,10 +530,10 @@ def generate_resume_stream(body: ResumeGenerateRequest):
     Returns a text/event-stream with progress events as they occur,
     followed by a final 'done' event with the resume result.
     """
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.resume.generator import generate_resume as _generate
 
-    settings = Settings()
+    settings = get_settings()
     event_queue: queue.Queue = queue.Queue()
 
     def progress_cb(step: str, step_label: str, status: str, detail: str):
@@ -587,10 +595,10 @@ def generate_resume_stream(body: ResumeGenerateRequest):
 @router.post("/{resume_id}/validate", response_model=dict)
 def revalidate_resume(resume_id: int):
     """Re-run accuracy validation on a stored resume."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.validation import AccuracyValidator
 
-    settings = Settings()
+    settings = get_settings()
     validator = AccuracyValidator(settings)
     try:
         result = validator.revalidate(resume_id)

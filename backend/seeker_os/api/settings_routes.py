@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from seeker_os.api.schemas import SettingsResponse, SettingUpdate, MessageResponse, SkipReasonOption
-from seeker_os.config import Settings
+from seeker_os.config import get_settings as get_cached_settings
 from seeker_os.database import get_connection
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 @router.get("", response_model=SettingsResponse)
 def get_settings():
     """Get all configuration (sanitized — no API keys)."""
-    settings = Settings()
+    settings = get_cached_settings()
 
     filters_data = None
     scoring_data = None
@@ -95,7 +95,7 @@ def update_setting(key: str, body: SettingUpdate):
 def reload_config():
     """Reload all configuration from YAML files without restart.
 
-    Invalidates the settings cache so the next Settings() call re-reads all
+    Invalidates the settings cache so the next cached read reloads all
     YAML files from disk. Also syncs queries from queries.yml into the
     search_queries table (inserts new, updates existing, deletes stale).
     """

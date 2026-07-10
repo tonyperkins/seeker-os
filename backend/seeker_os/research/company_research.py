@@ -307,12 +307,12 @@ def fetch_llm_dossier(
     """
     try:
         from seeker_os.llm.router import ModelRouter
-        from seeker_os.config import Settings
+        from seeker_os.config import get_settings
     except ImportError:
         return None
 
     try:
-        settings = Settings()
+        settings = get_settings()
         if not settings.providers or not settings.providers.providers:
             return None
         router = ModelRouter(settings)
@@ -935,8 +935,8 @@ def research_company(
     cr_config = None
     retrieval_adapter = None
     try:
-        from seeker_os.config import Settings
-        settings = Settings()
+        from seeker_os.config import get_settings
+        settings = get_settings()
         cr_config = settings.company_research
     except Exception as e:
         logger.error(

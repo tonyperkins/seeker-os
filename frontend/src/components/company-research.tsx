@@ -93,6 +93,8 @@ function ResearchProgress({ done }: { done: boolean }) {
   useEffect(() => {
     if (done) {
       if (timerRef.current) clearTimeout(timerRef.current);
+      // Completion is an external workflow transition reflected in progress state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentStep(RESEARCH_STEPS.length);
       return;
     }
@@ -229,7 +231,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
-  async function loadResearch() {
+  const loadResearch = useCallback(async () => {
     setLoading(true);
     setError(null);
     setNotFound(false);
@@ -246,7 +248,7 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [jobId]);
 
   const runResearch = useCallback(async () => {
     setRunning(true);
@@ -272,8 +274,10 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
   }, [jobId, data]);
 
   useEffect(() => {
+    // Load the resource whenever the route job changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadResearch();
-  }, [jobId]);
+  }, [loadResearch]);
 
   useEffect(() => {
     function onRunResearch() {
@@ -424,6 +428,8 @@ export function CompanyResearch({ jobId }: { jobId: number }) {
                   About
                 </div>
                 {data.wikipedia.thumbnail && (
+                  // Remote Wikipedia thumbnails are dynamic and not configured for Next image optimization.
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={data.wikipedia.thumbnail}
                     alt={data.wikipedia.title}

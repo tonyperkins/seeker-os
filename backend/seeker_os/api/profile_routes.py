@@ -14,7 +14,7 @@ from seeker_os.api.schemas import (
     AccuracyRulesResponse, AccuracyRulesUpdate, AccuracyRule,
     MessageResponse,
 )
-from seeker_os.config import Settings, ProfileConfig, FiltersConfig, FilterConfig, TitleFilters, CONFIG_DIR
+from seeker_os.config import get_settings, ProfileConfig, FiltersConfig, FilterConfig, TitleFilters, CONFIG_DIR
 from seeker_os.config_writer import write_profile, write_filters, write_accuracy_rules
 from seeker_os.validation import KNOWN_RULE_TYPES
 
@@ -31,7 +31,7 @@ _PROMPTS_DIR = Path(__file__).parent / "prompts"
 @router.get("/profile", response_model=ProfileResponse)
 def get_profile():
     """Get the full profile configuration."""
-    settings = Settings()
+    settings = get_settings()
     if not settings.profile:
         raise HTTPException(status_code=404, detail="No profile.yml loaded")
     p = settings.profile
@@ -53,7 +53,7 @@ def get_profile():
 @router.put("/profile", response_model=MessageResponse)
 def update_profile(body: ProfileUpdate):
     """Update profile configuration. Writes back to profile.yml."""
-    settings = Settings()
+    settings = get_settings()
     if not settings.profile:
         raise HTTPException(status_code=404, detail="No profile.yml loaded")
 
@@ -100,7 +100,7 @@ def update_profile(body: ProfileUpdate):
 @router.get("/filters", response_model=FiltersResponse)
 def get_filters():
     """Get filter configuration + title filters."""
-    settings = Settings()
+    settings = get_settings()
     if not settings.filters:
         raise HTTPException(status_code=404, detail="No filters.yml loaded")
     return FiltersResponse(
@@ -112,7 +112,7 @@ def get_filters():
 @router.put("/filters", response_model=MessageResponse)
 def update_filters(body: FiltersUpdate):
     """Update filter configuration. Writes back to filters.yml."""
-    settings = Settings()
+    settings = get_settings()
     if not settings.filters:
         raise HTTPException(status_code=404, detail="No filters.yml loaded")
 
@@ -217,7 +217,7 @@ def ai_generate_rules(body: AIGenerateRulesRequest):
     The user describes what they want in plain English, and the LLM converts
     that into structured accuracy rules.
     """
-    settings = Settings()
+    settings = get_settings()
     if not settings.providers:
         raise HTTPException(status_code=400, detail="No LLM providers configured")
 

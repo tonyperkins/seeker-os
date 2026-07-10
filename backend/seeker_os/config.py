@@ -400,6 +400,8 @@ class FilterConfig(BaseModel):
     commitment_required: str = "Full Time"
     # NEW: locations to exclude even if us_only passes (states or cities)
     location_exclude: list[str] = []
+    # NEW: cities where hybrid jobs are allowed even when remote_only=true
+    hybrid_accepted_cities: list[str] = []
     # NEW: if True, only pass jobs that offer visa sponsorship
     visa_sponsorship_required: bool = False
     # Junior-level title patterns for title-based fallback when seniority_level
@@ -807,6 +809,7 @@ class Settings:
 # ---------------------------------------------------------------------------
 
 _settings_cache: Settings | None = None
+_settings_cache_key: tuple[object, Path] | None = None
 _settings_lock = threading.Lock()
 
 
@@ -819,13 +822,25 @@ def get_settings(config_dir: Path | None = None) -> Settings:
     Use invalidate_settings_cache() after writing config files (e.g. via
     config_writer) so the next call re-reads from disk.
     """
-    global _settings_cache
-    if _settings_cache is not None and config_dir is None:
+    global _settings_cache, _settings_cache_key
+    effective_config_dir = Path(
+        config_dir
+        if config_dir is not None
+        else DEMO_CONFIG_DIR if is_demo_mode()
+        else CONFIG_DIR
+    )
+    # Include the constructor identity so tests or embedders that replace the
+    # Settings factory do not receive an instance created by the old factory.
+    cache_key = (Settings, effective_config_dir)
+    if _settings_cache is not None and _settings_cache_key == cache_key:
         return _settings_cache
     with _settings_lock:
-        if _settings_cache is not None and config_dir is None:
+        if _settings_cache is not None and _settings_cache_key == cache_key:
             return _settings_cache
-        _settings_cache = Settings(config_dir=config_dir)
+        # Preserve the no-argument construction path for callers/tests that
+        # provide a Settings-compatible factory without a config_dir keyword.
+        _settings_cache = Settings() if config_dir is None else Settings(config_dir=config_dir)
+        _settings_cache_key = cache_key
         return _settings_cache
 
 
@@ -836,6 +851,7 @@ def invalidate_settings_cache() -> None:
     api/models.py provider updates, api/company_research_settings.py key
     rotation) so the next get_settings() call re-reads from disk.
     """
-    global _settings_cache
+    global _settings_cache, _settings_cache_key
     with _settings_lock:
         _settings_cache = None
+        _settings_cache_key = None

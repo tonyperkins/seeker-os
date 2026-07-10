@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Loader2, Pin, Brain, Building2, FileText, CheckSquare, Square, ChevronDown, ChevronLeft, ChevronRight, CheckCircle2, XCircle, MinusCircle, Send, CircleDashed, Filter, FileSearch, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, UserX, RefreshCw, Users } from "lucide-react";
 import {
@@ -20,7 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { api, type JobSummary } from "@/lib/api";
+import { api, type JobSortKey, type JobSummary } from "@/lib/api";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { AddJobDialog } from "@/components/add-job-dialog";
 import { BulkAnnotateSkips } from "@/components/bulk-annotate-skips";
 import { usePersistentState } from "@/lib/use-persistent-state";
@@ -128,54 +129,65 @@ function JobsPageInner() {
   const [source, setSource] = usePersistentState<string>("jobs:filter:source", searchParams.get("source") ?? "", !clearFilters && !searchParams.get("source"));
   const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "", !clearFilters && !searchParams.get("run_id"));
   const [verdict, setVerdict] = usePersistentState<string>("jobs:filter:verdict", searchParams.get("verdict") ?? "", !clearFilters && !searchParams.get("verdict"));
-  const [hideRejected, setHideRejected] = usePersistentState<boolean>("jobs:filter:hideRejected", false);
-  const [hideSkipped, setHideSkipped] = usePersistentState<boolean>("jobs:filter:hideSkipped", false);
-  const [sortKey, setSortKey] = usePersistentState<string>("jobs:sort:key", "score");
-  const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("jobs:sort:dir", "desc");
+  const [hideRejected, setHideRejected] = usePersistentState<boolean>("jobs:filter:hideRejected", searchParams.get("hide_rejected") === "1", !clearFilters && !searchParams.has("hide_rejected"));
+  const [hideSkipped, setHideSkipped] = usePersistentState<boolean>("jobs:filter:hideSkipped", searchParams.get("hide_skipped") === "1", !clearFilters && !searchParams.has("hide_skipped"));
+  const [sortKey, setSortKey] = usePersistentState<JobSortKey>("jobs:sort:key", (searchParams.get("sort_by") as JobSortKey | null) ?? "score", !clearFilters && !searchParams.has("sort_by"));
+  const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("jobs:sort:dir", searchParams.get("order") === "asc" ? "asc" : "desc", !clearFilters && !searchParams.has("order"));
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = usePersistentState<number>("jobs:page", 1);
+  const urlPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
+  const [page, setPage] = usePersistentState<number>("jobs:page", Number.isFinite(urlPage) && urlPage > 0 ? urlPage : 1, !clearFilters && !searchParams.has("page"));
   const PAGE_SIZE = 50;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hydrated, setHydrated] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selection, setSelection] = useState<{ scope: string; ids: Set<number> }>({ scope: "", ids: new Set() });
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; action: string } | null>(null);
 
-  const fetchJobs = useCallback(async () => {
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const debouncedCompany = useDebouncedValue(company, 300);
+  const debouncedRunId = useDebouncedValue(runId, 300);
+
+  const fetchJobs = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const params: { status?: string; min_score?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; limit?: number; offset?: number } = {
+      const params: { status?: string; min_score?: number; company?: string; search?: string; source?: string; run_id?: string; verdict?: string; exclude_status?: string; sort_by: JobSortKey; order: "asc" | "desc"; limit?: number; offset?: number } = {
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
+        sort_by: sortKey,
+        order: sortDir,
       };
       if (status) params.status = status;
       const ms = parseFloat(minScore);
       if (!isNaN(ms)) params.min_score = ms;
-      if (company.trim()) params.company = company.trim();
-      if (search.trim()) params.search = search.trim();
+      if (debouncedCompany.trim()) params.company = debouncedCompany.trim();
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
       if (source) params.source = source;
-      if (runId.trim()) params.run_id = runId.trim();
+      if (debouncedRunId.trim()) params.run_id = debouncedRunId.trim();
       if (verdict) params.verdict = verdict;
       const excluded: string[] = [];
       if (hideRejected) excluded.push("rejected");
       if (hideSkipped) excluded.push("skipped");
       if (excluded.length > 0) params.exclude_status = excluded.join(",");
-      const data = await api.jobs.list(params);
+      const data = await api.jobs.list(params, { signal });
+      if (signal?.aborted) return;
       setJobs(data.jobs);
       setTotal(data.total);
     } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       setError(err instanceof Error ? err.message : "Failed to load jobs");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }, [status, minScore, company, search, source, runId, verdict, hideRejected, hideSkipped, page]);
+  }, [status, minScore, debouncedCompany, debouncedSearch, source, debouncedRunId, verdict, hideRejected, hideSkipped, page, sortKey, sortDir]);
 
   // Mark hydration complete after usePersistentState effects have run
   useEffect(() => {
+    // This flag coordinates browser-only localStorage hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHydrated(true);
   }, []);
 
@@ -183,9 +195,11 @@ function JobsPageInner() {
     // Skip the first fetch — usePersistentState hasn't hydrated from localStorage yet.
     // After hydration, filters will have correct values and this effect re-fires.
     if (!hydrated) return;
-    // Fetch on mount and when filters change — legitimate data-fetching effect.
+    const controller = new AbortController();
+    // Network synchronization intentionally owns the query result state.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchJobs();
+    void fetchJobs(controller.signal);
+    return () => controller.abort();
   }, [fetchJobs, hydrated]);
 
   // Reset to page 1 when filters change (but not when page itself changes)
@@ -212,49 +226,18 @@ function JobsPageInner() {
     if (verdict) params.set("verdict", verdict);
     if (hideRejected) params.set("hide_rejected", "1");
     if (hideSkipped) params.set("hide_skipped", "1");
+    params.set("sort_by", sortKey);
+    params.set("order", sortDir);
+    if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
-  }, [status, minScore, company, search, source, runId, verdict, hideRejected, hideSkipped, router, hydrated]);
+  }, [status, minScore, company, search, source, runId, verdict, hideRejected, hideSkipped, sortKey, sortDir, page, router, hydrated]);
 
-  const sortedJobs = useMemo(() => {
-    if (!jobs) return [];
-    const sorted = [...jobs];
-    sorted.sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case "score":
-          cmp = (a.net_score ?? a.score ?? -1) - (b.net_score ?? b.score ?? -1);
-          break;
-        case "status":
-          cmp = a.status.localeCompare(b.status);
-          break;
-        case "run_id":
-          cmp = (a.run_id ?? "").localeCompare(b.run_id ?? "", undefined, { numeric: true });
-          break;
-        case "title":
-          cmp = a.title.localeCompare(b.title);
-          break;
-        case "company":
-          cmp = a.company.localeCompare(b.company);
-          break;
-        case "comp":
-          cmp = (a.comp_min ?? 0) - (b.comp_min ?? 0);
-          break;
-        case "location":
-          cmp = (a.location || "").localeCompare(b.location || "");
-          break;
-        case "ats":
-          cmp = (a.ats_source ?? "").localeCompare(b.ats_source ?? "");
-          break;
-        default:
-          cmp = 0;
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return sorted;
-  }, [jobs, sortKey, sortDir]);
+  const displayedJobs = jobs ?? [];
+  const selectionScope = `${filterKey}|${page}|${sortKey}|${sortDir}`;
+  const selectedIds = selection.scope === selectionScope ? selection.ids : new Set<number>();
 
-  function toggleSort(key: string) {
+  function toggleSort(key: JobSortKey) {
     if (sortKey === key) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
     } else {
@@ -263,7 +246,7 @@ function JobsPageInner() {
     }
   }
 
-  function sortIcon(key: string) {
+  function sortIcon(key: JobSortKey) {
     if (sortKey !== key) return <ArrowUpDown className="size-3 text-muted-foreground/50" />;
     return sortDir === "asc" ? <ArrowUp className="size-3 text-primary" /> : <ArrowDown className="size-3 text-primary" />;
   }
@@ -281,23 +264,23 @@ function JobsPageInner() {
     setPage(1);
   }
 
-  const allSelected = sortedJobs.length > 0 && sortedJobs.every((j) => selectedIds.has(j.id));
+  const allSelected = displayedJobs.length > 0 && displayedJobs.every((j) => selectedIds.has(j.id));
   const someSelected = selectedIds.size > 0;
 
   function toggleJob(id: number) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
+    setSelection((previous) => {
+      const next = new Set(previous.scope === selectionScope ? previous.ids : []);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      return next;
+      return { scope: selectionScope, ids: next };
     });
   }
 
   function toggleAll() {
     if (allSelected) {
-      setSelectedIds(new Set());
+      setSelection({ scope: selectionScope, ids: new Set() });
     } else {
-      setSelectedIds(new Set(sortedJobs.map((j) => j.id)));
+      setSelection({ scope: selectionScope, ids: new Set(displayedJobs.map((j) => j.id)) });
     }
   }
 
@@ -319,6 +302,7 @@ function JobsPageInner() {
     }
     setBulkLoading(false);
     setBulkProgress(null);
+    setSelection({ scope: selectionScope, ids: new Set() });
     if (errors.length > 0) {
       setBulkError(`${action}: ${errors.length}/${ids.length} failed — ${errors.slice(0, 3).join("; ")}${errors.length > 3 ? "…" : ""}`);
     } else {
@@ -335,7 +319,7 @@ function JobsPageInner() {
         </div>
         <div className="flex items-center gap-2">
           <BulkAnnotateSkips />
-          <AddJobDialog onCreated={fetchJobs} />
+          <AddJobDialog onCreated={() => void fetchJobs()} />
         </div>
       </div>
 
@@ -533,7 +517,7 @@ function JobsPageInner() {
               </div>
             </div>
 
-            <Button size="sm" onClick={fetchJobs} disabled={loading}>
+            <Button size="sm" onClick={() => void fetchJobs()} disabled={loading}>
               {loading ? <Loader2 className="animate-spin" /> : <Search className="size-4" />}
               Refresh
             </Button>
@@ -545,7 +529,7 @@ function JobsPageInner() {
       {someSelected && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5">
           <span className="text-sm font-medium">
-            {selectedIds.size} selected
+            {selectedIds.size} selected on this page
           </span>
           {bulkError && (
             <span className="text-xs text-destructive">{bulkError}</span>
@@ -640,7 +624,7 @@ function JobsPageInner() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setSelectedIds(new Set())}
+            onClick={() => setSelection({ scope: selectionScope, ids: new Set() })}
           >
             Clear
           </Button>
@@ -659,17 +643,17 @@ function JobsPageInner() {
               <Loader2 className="animate-spin" />
               Loading jobs…
             </div>
-          ) : sortedJobs.length === 0 ? (
+          ) : displayedJobs.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               No jobs match these filters.
             </p>
           ) : (
-            <div className={`overflow-x-auto transition-opacity ${loading ? "opacity-50" : ""}`}>
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10 shrink-0">
-                      <button onClick={toggleAll} className="flex items-center">
+                      <button onClick={toggleAll} className="flex items-center" aria-label="Select all jobs on this page">
                         {allSelected ? (
                           <CheckSquare className="size-4 text-primary" />
                         ) : (
@@ -720,14 +704,18 @@ function JobsPageInner() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedJobs.map((job) => (
+                  {displayedJobs.map((job) => (
                     <TableRow
                       key={job.id}
                       className={`cursor-pointer ${statusRowClass(job.status)}`}
                       onClick={() => router.push(`/jobs/${job.id}`)}
                     >
                       <TableCell className="w-10 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => toggleJob(job.id)} className="flex items-center">
+                        <button
+                          onClick={() => toggleJob(job.id)}
+                          className="flex items-center"
+                          aria-label={`Select ${job.title} at ${job.company}`}
+                        >
                           {selectedIds.has(job.id) ? (
                             <CheckSquare className="size-4 text-primary" />
                           ) : (
@@ -805,10 +793,10 @@ function JobsPageInner() {
         </CardContent>
       </Card>
 
-      {sortedJobs.length > 0 && (
+      {displayedJobs.length > 0 && (
         <div className="flex items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
-            Showing {(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + sortedJobs.length} of {total} job{total !== 1 ? "s" : ""}.
+            Showing {(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + displayedJobs.length} of {total} job{total !== 1 ? "s" : ""}.
           </p>
           {total > PAGE_SIZE && (
             <div className="flex items-center gap-2">

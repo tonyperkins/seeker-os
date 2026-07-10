@@ -63,6 +63,77 @@ def _strip_html(html: str) -> str:
     return "\n".join(ln for ln in lines if ln)
 
 
+# Markers that appear AFTER the JD content on job board pages.
+# When found in the stripped text, everything from the marker onward is discarded.
+_BOILERPLATE_MARKERS = [
+    "Report this job",
+    "Similar jobs",
+    "People also viewed",
+    "People who viewed",
+    "Show more jobs like this",
+    "Show fewer jobs like this",
+    "More searches",
+    "Explore top content",
+    "Referrals increase your chances",
+    "See who you know",
+    "Get notified about new",
+    "Sign in to create job alert",
+    "Jobs you might like",
+    "Recommended jobs",
+    "More jobs like this",
+]
+
+
+def _extract_jd_from_html(html: str) -> str:
+    """Extract job description text from an HTML page.
+
+    Tries to find the JD content container first (LinkedIn, Greenhouse, Lever,
+    Ashby, generic). Falls back to full-page strip with boilerplate truncation.
+    """
+    if not html:
+        return ""
+
+    # Try to extract content from known JD container elements.
+    # These are common selectors used by job boards and ATSs.
+    container_patterns = [
+        # LinkedIn
+        r'(?s)<div[^>]*class="[^"]*description__text[^"]*"[^>]*>(.*?)</div>\s*(?:<div[^>]*class="[^"]*(?:seniority|employment|job-function|industries))',
+        r'(?s)<div[^>]*class="[^"]*jobs-description__content[^"]*"[^>]*>(.*?)</div>',
+        r'(?s)<div[^>]*class="[^"]*jobs-box__html-content[^"]*"[^>]*>(.*?)</div>',
+        # Greenhouse / Lever / Ashby (job boards)
+        r'(?s)<div[^>]*id="content"[^>]*>(.*?)</div>\s*</div>',
+        r'(?s)<section[^>]*class="[^"]*job-post[^"]*"[^>]*>(.*?)</section>',
+        r'(?s)<div[^>]*class="[^"]*job-description[^"]*"[^>]*>(.*?)</div>',
+        # Generic: <main> or <article>
+        r'(?s)<main[^>]*>(.*?)</main>',
+        r'(?s)<article[^>]*>(.*?)</article>',
+    ]
+
+    for pattern in container_patterns:
+        match = re.search(pattern, html, re.IGNORECASE)
+        if match:
+            extracted = _strip_html(match.group(1))
+            if len(extracted) >= 200:
+                return extracted
+
+    # Fallback: strip full page, then truncate at boilerplate markers
+    full_text = _strip_html(html)
+    if not full_text:
+        return ""
+
+    # Find the earliest boilerplate marker and truncate
+    earliest = len(full_text)
+    for marker in _BOILERPLATE_MARKERS:
+        idx = full_text.find(marker)
+        if idx != -1 and idx < earliest:
+            earliest = idx
+
+    if earliest < len(full_text):
+        full_text = full_text[:earliest].rstrip()
+
+    return full_text
+
+
 def _fetch_url(url: str, user_agent: str, timeout: int = 15) -> str:
     """Fetch a URL and return the response text.
 
@@ -199,7 +270,7 @@ def fetch_jd(
     # Try apply_url (original ATS posting)
     try:
         html = _fetch_url(apply_url, user_agent)
-        jd_text = _strip_html(html)
+        jd_text = _extract_jd_from_html(html)
         if jd_text and len(jd_text) >= 100:
             return JDFetchResult(
                 job_id=job_id, jd_text=jd_text, status="fetched",

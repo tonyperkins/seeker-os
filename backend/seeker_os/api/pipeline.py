@@ -8,6 +8,7 @@ import queue as queue_module
 import threading
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from seeker_os.api.schemas import (
     PipelineRunRequest, PipelineRunSummary, PipelineRunRecord,
 )
@@ -24,7 +25,11 @@ _run_lock = threading.Lock()
 _RUN_IN_PROGRESS = "A pipeline run is already in progress"
 
 
-@router.get("/running")
+class PipelineRunningResponse(BaseModel):
+    running: bool
+
+
+@router.get("/running", response_model=PipelineRunningResponse)
 def pipeline_running():
     """Report whether a pipeline run is currently active (for the UI run state)."""
     return {"running": _run_lock.locked()}
@@ -33,13 +38,13 @@ def pipeline_running():
 @router.post("/run", response_model=PipelineRunSummary)
 def run_pipeline(body: PipelineRunRequest):
     """Trigger a full pipeline run (or specific tiers/queries)."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.pipeline.runner import run_pipeline as _run
 
     if not _run_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail=_RUN_IN_PROGRESS)
     try:
-        settings = Settings()
+        settings = get_settings()
         result = _run(
             settings,
             queries=body.queries,
@@ -59,14 +64,14 @@ def run_pipeline_stream(body: PipelineRunRequest):
     Returns a text/event-stream with PipelineProgressEvent objects as they occur,
     followed by a final 'done' event with the PipelineRunSummary.
     """
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.pipeline.runner import run_pipeline as _run
 
     if not _run_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail=_RUN_IN_PROGRESS)
 
     try:
-        settings = Settings()
+        settings = get_settings()
         event_queue: queue.Queue = queue.Queue()
 
         def progress_cb(event):
@@ -121,7 +126,7 @@ def run_pipeline_stream(body: PipelineRunRequest):
 @router.post("/run/tier/{tier}", response_model=PipelineRunSummary)
 def run_tier(tier: int):
     """Run a specific tier only."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.pipeline.runner import run_pipeline as _run
 
     if tier < 1 or tier > 5:
@@ -130,7 +135,7 @@ def run_tier(tier: int):
     if not _run_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail=_RUN_IN_PROGRESS)
     try:
-        settings = Settings()
+        settings = get_settings()
         result = _run(settings, tiers=[tier])
         return result.model_dump()
     finally:

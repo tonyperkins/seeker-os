@@ -195,7 +195,7 @@ async function setCollapsibleState(page, expand) {
   await page.waitForTimeout(300);
 }
 
-async function checkServer(url, label) {
+async function checkServer(url) {
   try {
     const res = await fetch(url);
     return res.ok;
@@ -237,9 +237,6 @@ async function main() {
   // Launch browser
   const browser = await chromium.launch({ headless: true });
 
-  let captured = 0;
-  let skipped = 0;
-
   for (const theme of ["light", "dark"]) {
     console.log(`\n--- ${theme.toUpperCase()} theme ---`);
 
@@ -257,10 +254,7 @@ async function main() {
     const page = await context.newPage();
 
     for (const target of targets) {
-      const before = captured;
       await captureTarget(page, target, theme, OUTPUT_DIR);
-      // Track counts (simplified — captureTarget logs skip/ok)
-      if (target.name) captured++;
     }
 
     await page.close();

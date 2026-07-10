@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Loader2, Brain, Building2, FileText, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import { subscribe, type Activity } from "@/lib/activity-store";
-import { cn } from "@/lib/utils";
 
 const TYPE_ICONS: Record<Activity["type"], typeof Brain> = {
   analysis: Brain,

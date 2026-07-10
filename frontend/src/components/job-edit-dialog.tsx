@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Loader2, Save, Plus, Trash2, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,8 +52,8 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
   const [showAddRecruiter, setShowAddRecruiter] = useState(false);
   const [editingRecruiterId, setEditingRecruiterId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (open) {
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
       setTitle(job.title);
       setCompany(job.company);
       setLocation(job.location);
@@ -72,7 +72,8 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
       setEditingRecruiterId(null);
       setError(null);
     }
-  }, [open, job]);
+    setOpen(nextOpen);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -122,7 +123,7 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
           <Button variant="outline" size="sm" disabled={demoMode}>

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from rich.console import Console
 from rich.table import Table
 
-from seeker_os.config import Settings
+from seeker_os.config import get_settings
 from seeker_os.database import get_connection, run_migrations
 from seeker_os.pipeline.runner import run_pipeline
 
@@ -26,7 +26,7 @@ console = Console(width=120)
 
 def cmd_run(args: argparse.Namespace) -> None:
     """Run the pipeline."""
-    settings = Settings()
+    settings = get_settings()
     tiers = [int(t) for t in args.tiers.split(",")] if args.tiers else None
     queries = args.queries.split(",") if args.queries else None
 
@@ -162,7 +162,7 @@ def cmd_dedup_check(args: argparse.Namespace) -> None:
 def cmd_sync_config(args: argparse.Namespace) -> None:
     """Sync YAML config files to DB."""
     console.print("\n[bold cyan]Syncing config to DB...[/bold cyan]")
-    settings = Settings()
+    settings = get_settings()
 
     db = get_connection()
     now = datetime.now(timezone.utc).isoformat()
@@ -198,11 +198,11 @@ def cmd_sync_config(args: argparse.Namespace) -> None:
 
 def cmd_models(args: argparse.Namespace) -> None:
     """LLM model management commands."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
     from seeker_os.llm.router import ModelRouter
     from seeker_os.llm.cache import save_cached_models
 
-    settings = Settings()
+    settings = get_settings()
 
     if not settings.providers:
         console.print("[red]No providers configured (config/providers.yml missing)[/red]")
@@ -300,9 +300,9 @@ def cmd_models(args: argparse.Namespace) -> None:
 
 def cmd_resume(args: argparse.Namespace) -> None:
     """Resume generation commands."""
-    from seeker_os.config import Settings
+    from seeker_os.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
 
     if args.resume_command == "generate":
         from seeker_os.resume.generator import generate_resume
