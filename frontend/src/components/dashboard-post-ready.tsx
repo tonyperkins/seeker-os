@@ -162,7 +162,7 @@ export function ActiveApplications({ jobs, byStatus }: { jobs: JobSummary[]; byS
       description="Applied jobs and post-ready pipeline"
       storageKey="dash-active-applications"
       action={
-        <Link href="/jobs?status=applied,engaged,offer_accepted,offer_declined" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <Link href="/jobs?status=applied,engaged,offer_accepted,offer_declined&clear_filters=1" className={buttonVariants({ variant: "ghost", size: "sm" })}>
           View all
           <ArrowRight />
         </Link>
@@ -190,7 +190,7 @@ export function Considering({ jobs }: { jobs: JobSummary[] }) {
       description="Jobs in reviewing or interested — not yet applied"
       storageKey="dash-considering"
       action={
-        <Link href="/jobs?status=reviewing,interested" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <Link href="/jobs?status=reviewing,interested&clear_filters=1" className={buttonVariants({ variant: "ghost", size: "sm" })}>
           View all
           <ArrowRight />
         </Link>

@@ -26,7 +26,7 @@ export function ActionQueue({ jobs }: { jobs: JobSummary[] }) {
       description="Ready jobs ranked by capped score"
       storageKey="dash-action-queue"
       action={
-        <Link href="/jobs?status=ready" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <Link href="/jobs?status=ready&clear_filters=1" className={buttonVariants({ variant: "ghost", size: "sm" })}>
           View all
           <ArrowRight />
         </Link>
