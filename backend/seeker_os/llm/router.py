@@ -167,7 +167,7 @@ class ModelRouter:
             return "heavy"
         if "validation" in task or "extraction" in task or "check" in task:
             return "light"
-        if "critique" in task or "analysis" in task:
+        if "critique" in task or "analysis" in task or "interview" in task:
             return "moderate"
         logger.warning(
             "Task '%s' has no explicit tier mapping and no keyword matched in _infer_tier — "
