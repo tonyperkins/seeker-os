@@ -799,6 +799,61 @@ class SpendReport(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ObservabilityOperation(BaseModel):
+    operation_id: str
+    started_at: str
+    completed_at: str | None = None
+    status: str
+    calls: int = 0
+    estimated_cost: float = 0.0
+    validation_passed: bool | None = None
+    artifact_id: int | None = None
+
+
+class ObservabilitySummary(BaseModel):
+    total_calls: int = 0
+    total_estimated_cost: float = 0.0
+    failed_calls: int = 0
+    truncated_calls: int = 0
+    validation_pass_rate: float | None = None
+    unsupported_claims: int = 0
+    overstated_claims: int = 0
+    cost_per_passing_resume: float | None = None
+    historical_data_incomplete: bool = True
+    recent_operations: list[ObservabilityOperation] = Field(default_factory=list)
+
+
+class ObservabilityCall(BaseModel):
+    call_id: str
+    parent_call_id: str | None = None
+    task: str
+    provider: str | None = None
+    model: str | None = None
+    status: str
+    error_type: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+    estimated_cost: float = 0.0
+    started_at: str
+
+
+class ObservabilityEvaluation(BaseModel):
+    evaluation_id: str
+    evaluator_name: str
+    metric_name: str
+    label: str | None = None
+    passed: bool | None = None
+    evaluated_at: str
+
+
+class ObservabilityOperationDetail(BaseModel):
+    operation_id: str
+    artifact_id: int | None = None
+    calls: list[ObservabilityCall] = Field(default_factory=list)
+    evaluations: list[ObservabilityEvaluation] = Field(default_factory=list)
+
+
 class AnalysisBackfillRequest(BaseModel):
     """POST /api/jobs/analysis/backfill body."""
     limit: int | None = Field(default=None, ge=1)  # None → auto_analysis.max_per_run

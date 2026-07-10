@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query
@@ -15,6 +14,11 @@ from seeker_os.api.schemas import (
     FunnelStats,
     MovementEvent,
     MovementReport,
+    ObservabilityCall,
+    ObservabilityEvaluation,
+    ObservabilityOperation,
+    ObservabilityOperationDetail,
+    ObservabilitySummary,
     PricingRouteComparison,
     ResponseRateStats,
     SignalQualityReport,
@@ -29,6 +33,113 @@ from seeker_os.scoring.calibration import build_calibration_report
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/llm-observability", response_model=ObservabilitySummary)
+def get_llm_observability():
+    """Privacy-safe LLM reliability, cost, and quality summary."""
+    db = get_connection()
+    try:
+        calls = db.execute(
+            """SELECT COUNT(*) AS total,
+                      COALESCE(SUM(estimated_cost), 0) AS cost,
+                      SUM(CASE WHEN status IN ('failed', 'empty') THEN 1 ELSE 0 END) AS failed,
+                      SUM(CASE WHEN error_type = 'truncated' THEN 1 ELSE 0 END) AS truncated
+               FROM llm_calls"""
+        ).fetchone()
+        validations = db.execute(
+            """SELECT COUNT(*) AS total,
+                      SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) AS passed
+               FROM llm_evaluations WHERE metric_name = 'accuracy_validation'"""
+        ).fetchone()
+        claim_counts = db.execute(
+            """SELECT
+                 SUM(CASE WHEN label = 'unsupported' THEN 1 ELSE 0 END) AS unsupported,
+                 SUM(CASE WHEN label = 'overstated' THEN 1 ELSE 0 END) AS overstated
+               FROM llm_evaluations WHERE metric_name = 'claim_traceability'"""
+        ).fetchone()
+        passing = validations["passed"] or 0
+        operation_cost = db.execute(
+            """SELECT COALESCE(SUM(c.estimated_cost), 0) AS cost
+               FROM llm_calls c
+               WHERE c.operation_id IN (
+                   SELECT operation_id FROM llm_evaluations
+                   WHERE metric_name = 'accuracy_validation' AND passed = 1
+               )"""
+        ).fetchone()["cost"]
+        operation_rows = db.execute(
+            """SELECT operation_id, MIN(started_at) AS started_at,
+                      MAX(completed_at) AS completed_at, COUNT(*) AS calls,
+                      SUM(estimated_cost) AS cost,
+                      CASE WHEN SUM(CASE WHEN status IN ('failed', 'empty') THEN 1 ELSE 0 END) > 0
+                           THEN 'failed' ELSE 'succeeded' END AS status,
+                      MAX(artifact_id) AS artifact_id
+               FROM llm_calls WHERE operation_id IS NOT NULL
+               GROUP BY operation_id ORDER BY started_at DESC LIMIT 20"""
+        ).fetchall()
+        recent = []
+        for row in operation_rows:
+            validation = db.execute(
+                """SELECT passed FROM llm_evaluations
+                   WHERE operation_id = ? AND metric_name = 'accuracy_validation'
+                   ORDER BY evaluated_at DESC LIMIT 1""",
+                (row["operation_id"],),
+            ).fetchone()
+            recent.append(ObservabilityOperation(
+                operation_id=row["operation_id"], started_at=row["started_at"],
+                completed_at=row["completed_at"], status=row["status"], calls=row["calls"],
+                estimated_cost=round(row["cost"] or 0, 6),
+                validation_passed=bool(validation["passed"]) if validation else None,
+                artifact_id=row["artifact_id"],
+            ))
+        validation_rate = round(passing / validations["total"] * 100, 1) if validations["total"] else None
+        return ObservabilitySummary(
+            total_calls=calls["total"], total_estimated_cost=round(calls["cost"], 6),
+            failed_calls=calls["failed"] or 0, truncated_calls=calls["truncated"] or 0,
+            validation_pass_rate=validation_rate,
+            unsupported_claims=claim_counts["unsupported"] or 0,
+            overstated_claims=claim_counts["overstated"] or 0,
+            cost_per_passing_resume=round(operation_cost / passing, 6) if passing else None,
+            recent_operations=recent,
+        )
+    finally:
+        db.close()
+
+
+@router.get("/llm-observability/operations/{operation_id}", response_model=ObservabilityOperationDetail)
+def get_llm_operation(operation_id: str):
+    """Return safe lineage for one correlated LLM workflow."""
+    db = get_connection()
+    try:
+        call_rows = db.execute(
+            "SELECT * FROM llm_calls WHERE operation_id = ? ORDER BY started_at", (operation_id,)
+        ).fetchall()
+        if not call_rows:
+            raise HTTPException(status_code=404, detail="LLM operation not found")
+        evaluation_rows = db.execute(
+            "SELECT * FROM llm_evaluations WHERE operation_id = ? ORDER BY evaluated_at",
+            (operation_id,),
+        ).fetchall()
+        return ObservabilityOperationDetail(
+            operation_id=operation_id,
+            artifact_id=next((r["artifact_id"] for r in call_rows if r["artifact_id"]), None),
+            calls=[ObservabilityCall(
+                call_id=r["call_id"], parent_call_id=r["parent_call_id"], task=r["task"],
+                provider=r["actual_provider"] or r["requested_provider"],
+                model=r["actual_model"] or r["requested_model"], status=r["status"],
+                error_type=r["error_type"], input_tokens=r["input_tokens"],
+                output_tokens=r["output_tokens"], latency_ms=r["latency_ms"],
+                estimated_cost=r["estimated_cost"], started_at=r["started_at"],
+            ) for r in call_rows],
+            evaluations=[ObservabilityEvaluation(
+                evaluation_id=r["evaluation_id"], evaluator_name=r["evaluator_name"],
+                metric_name=r["metric_name"], label=r["label"],
+                passed=bool(r["passed"]) if r["passed"] is not None else None,
+                evaluated_at=r["evaluated_at"],
+            ) for r in evaluation_rows],
+        )
+    finally:
+        db.close()
 
 
 @router.get("/funnel", response_model=FunnelStats)
@@ -478,70 +589,19 @@ def get_spend():
 
     db = get_connection()
     try:
-        # Aggregate from job_analyses
-        analysis_rows = db.execute(
+        ledger_rows = db.execute(
             """
-            SELECT provider, model, task,
-                   COUNT(*) as calls,
-                   SUM(input_tokens) as in_tok,
-                   SUM(output_tokens) as out_tok
-            FROM job_analyses
-            GROUP BY provider, model, task
-            """,
-        ).fetchall()
-
-        # Aggregate from resumes
-        resume_rows = db.execute(
+            SELECT COALESCE(actual_provider, requested_provider) AS provider,
+                   COALESCE(actual_model, requested_model) AS model,
+                   task, COUNT(*) AS calls,
+                   SUM(input_tokens) AS in_tok,
+                   SUM(output_tokens) AS out_tok,
+                   SUM(estimated_cost) AS ledger_cost
+            FROM llm_calls
+            GROUP BY COALESCE(actual_provider, requested_provider),
+                     COALESCE(actual_model, requested_model), task
             """
-            SELECT provider, model, task,
-                   COUNT(*) as calls,
-                   SUM(input_tokens) as in_tok,
-                   SUM(output_tokens) as out_tok
-            FROM resumes
-            WHERE provider IS NOT NULL AND provider != ''
-            GROUP BY provider, model, task
-            """,
         ).fetchall()
-
-        # Aggregate from cover_letters (if table exists — dropped in v28)
-        cover_letter_rows = []
-        try:
-            cover_letter_rows = db.execute(
-                """
-                SELECT provider, model, task,
-                       COUNT(*) as calls,
-                       SUM(input_tokens) as in_tok,
-                       SUM(output_tokens) as out_tok
-                FROM cover_letters
-                WHERE provider IS NOT NULL AND provider != ''
-                GROUP BY provider, model, task
-                """,
-            ).fetchall()
-        except sqlite3.OperationalError as exc:
-            if "no such table" not in str(exc).lower():
-                logger.exception("Failed to aggregate cover-letter spend")
-                raise
-            logger.debug("Cover-letter spend table is not present")
-
-        # Aggregate from application_answers (if table exists — dropped in v28)
-        answer_rows = []
-        try:
-            answer_rows = db.execute(
-                """
-                SELECT provider, model, task,
-                       COUNT(*) as calls,
-                       SUM(input_tokens) as in_tok,
-                       SUM(output_tokens) as out_tok
-                FROM application_answers
-                WHERE provider IS NOT NULL AND provider != ''
-                GROUP BY provider, model, task
-                """,
-            ).fetchall()
-        except sqlite3.OperationalError as exc:
-            if "no such table" not in str(exc).lower():
-                logger.exception("Failed to aggregate application-answer spend")
-                raise
-            logger.debug("Application-answer spend table is not present")
 
         # Combine
         by_task: dict[str, dict] = {}
@@ -551,14 +611,14 @@ def get_spend():
         total_out = 0
         total_cost = 0.0
 
-        for r in [*analysis_rows, *resume_rows, *cover_letter_rows, *answer_rows]:
-            provider = r["provider"] or "unknown"
-            model = r["model"] or "unknown"
+        for r in ledger_rows:
+            provider_id = r["provider"] or "unknown"
+            model_id = r["model"] or "unknown"
             task = r["task"] or "unknown"
             calls = r["calls"] or 0
             in_tok = r["in_tok"] or 0
             out_tok = r["out_tok"] or 0
-            cost = _estimate_cost(provider, model, in_tok, out_tok)
+            cost = r["ledger_cost"] or 0.0
 
             total_calls += calls
             total_in += in_tok
@@ -574,9 +634,9 @@ def get_spend():
             by_task[task]["cost"] += cost
 
             # By model
-            key = (provider, model)
+            key = (provider_id, model_id)
             if key not in by_model:
-                by_model[key] = {"provider": provider, "model": model, "calls": 0, "in": 0, "out": 0, "cost": 0.0}
+                by_model[key] = {"provider": provider_id, "model": model_id, "calls": 0, "in": 0, "out": 0, "cost": 0.0}
             by_model[key]["calls"] += calls
             by_model[key]["in"] += in_tok
             by_model[key]["out"] += out_tok
@@ -706,6 +766,8 @@ def get_spend():
             pricing_stale=pricing_stale,
             pricing_stale_after_days=stale_threshold_days,
             route_pricing=route_pricing,
+            partial=True,
+            warnings=["Usage before the LLM ledger migration is not included."],
         )
     finally:
         db.close()

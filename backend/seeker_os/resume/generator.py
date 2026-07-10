@@ -8,6 +8,7 @@ and stores the result.
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from seeker_os.config import Settings
 from seeker_os.database import get_connection, json_decode
 from seeker_os.events import Actor, EventType, JobStatus, record_event, transition_status
 from seeker_os.llm.router import ModelRouter
+from seeker_os.observability.llm_ledger import attach_artifact, digest, fingerprint, record_evaluation
 from seeker_os.validation import AccuracyValidator
 from seeker_os.validation.traceability import TraceabilityChecker
 
@@ -183,6 +185,8 @@ def generate_resume(
     Returns:
         Dict with resume metadata and validation results.
     """
+    operation_id = str(uuid.uuid4())
+
     def _emit(step: str, label: str, status: str, detail: str = ""):
         if progress_cb:
             progress_cb(step, label, status, detail)
@@ -279,6 +283,10 @@ def generate_resume(
         user_prompt=user_prompt,
         temperature=temperature,
         max_tokens=max_tokens,
+        operation_id=operation_id,
+        prompt_name="resume_generation",
+        prompt_version="1",
+        prompt_template=_USER_PROMPT_TEMPLATE,
     )
     _emit("llm_generation", "Generating resume with LLM", "completed", f"{response.output_tokens} tokens in {response.latency_ms}ms")
 
@@ -291,10 +299,50 @@ def generate_resume(
     traceability = TraceabilityChecker(settings)
     if traceability.enabled:
         _emit("traceability", "Verifying claim traceability", "started")
-        trace_result = traceability.check(response.text, master_resume, artifact_type="resume")
+        trace_result = traceability.check(
+            response.text, master_resume, artifact_type="resume",
+            operation_id=operation_id, parent_call_id=response.call_id,
+        )
         trace_result.merge_into(validation)
         _emit("traceability", "Verifying claim traceability", "completed", f"{len(trace_result.violations)} violations")
     _emit("validation", "Running accuracy validation", "completed", f"{'passed' if validation.passed else 'violations found'}")
+
+    try:
+        record_evaluation(
+            operation_id=operation_id,
+            call_id=response.call_id or None,
+            evaluator_name="accuracy_validator",
+            evaluator_type="deterministic",
+            metric_name="accuracy_validation",
+            passed=validation.passed,
+            label="passed" if validation.passed else "failed",
+            details={"violation_count": len(validation.violations)},
+            rubric_digest=digest(accuracy_rules_text),
+        )
+        if traceability.enabled:
+            for claim in trace_result.claims:
+                record_evaluation(
+                    operation_id=operation_id,
+                    call_id=response.call_id or None,
+                    judge_call_id=trace_result.judge_call_id or None,
+                    evaluator_name="claim_traceability",
+                    evaluator_type="model",
+                    metric_name="claim_traceability",
+                    passed=claim.verdict == "supported",
+                    label=claim.verdict,
+                    details={
+                        "claim_fingerprint": fingerprint(claim.claim),
+                        "offending_text_fingerprint": fingerprint(claim.offending_text) if claim.offending_text else None,
+                        "explanation_fingerprint": fingerprint(claim.explanation) if claim.explanation else None,
+                        "master_resume_digest": digest(master_resume),
+                    },
+                    rubric_digest=digest(_USER_PROMPT_TEMPLATE),
+                )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "llm_evaluation_write_failed", extra={"operation_id": operation_id}
+        )
 
     # 6. Save to DB
     _emit("saving", "Saving resume", "started")
@@ -329,6 +377,8 @@ def generate_resume(
         ),
     )
     resume_id = cursor.lastrowid
+    if resume_id is None:
+        raise RuntimeError("Resume insert did not return an artifact ID")
 
     # Promote job status to 'interested' (resume generated = moving forward),
     # but only from non-decision states (ready, reviewing, etc.).  Never
@@ -345,6 +395,13 @@ def generate_resume(
         )
     db.commit()
     db.close()
+    try:
+        attach_artifact(operation_id, "resume", int(resume_id))
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "llm_artifact_link_failed", extra={"operation_id": operation_id}
+        )
     _emit("saving", "Saving resume", "completed", f"Resume #{resume_id}")
 
     return {
@@ -360,6 +417,7 @@ def generate_resume(
         "validation_violations": validation.violations,
         "markdown_path": str(md_path),
         "generated_at": now,
+        "operation_id": operation_id,
     }
 
 

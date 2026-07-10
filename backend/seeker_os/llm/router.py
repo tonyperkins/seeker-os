@@ -277,6 +277,11 @@ class ModelRouter:
         user_prompt: str,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        operation_id: str | None = None,
+        parent_call_id: str | None = None,
+        prompt_name: str | None = None,
+        prompt_version: str | None = None,
+        prompt_template: str | None = None,
     ) -> LLMResponse:
         """Generate a response for a given task.
 
@@ -285,7 +290,30 @@ class ModelRouter:
         model's max_output ceiling — raises ValueError if explicitly exceeded,
         caps silently if resolved from defaults.
         """
-        provider, model = self.resolve(task)
+        from seeker_os.observability.llm_ledger import finish_call, start_call
+
+        call_id = ""
+        import time
+        started = time.monotonic()
+        try:
+            call_id, started = start_call(
+                settings=self.settings, task=task, system_prompt=system_prompt, user_prompt=user_prompt,
+                temperature=temperature, max_tokens=max_tokens, operation_id=operation_id,
+                parent_call_id=parent_call_id, prompt_name=prompt_name, prompt_version=prompt_version,
+                prompt_template=prompt_template,
+            )
+        except Exception:
+            logger.exception("llm_telemetry_start_failed")
+
+        try:
+            provider, model = self.resolve(task)
+        except Exception as exc:
+            try:
+                if call_id:
+                    finish_call(call_id, settings=self.settings, started_monotonic=started, error=exc)
+            except Exception:
+                logger.exception("llm_telemetry_write_failed", extra={"call_id": call_id})
+            raise
 
         # Track whether max_tokens was explicitly provided by the caller
         explicitly_requested = max_tokens is not None
@@ -310,7 +338,31 @@ class ModelRouter:
             task=task,
         )
 
-        return provider.generate(request)
+        try:
+            response = provider.generate(request)
+        except Exception as exc:
+            try:
+                if call_id:
+                    finish_call(
+                        call_id, settings=self.settings, started_monotonic=started, error=exc,
+                        requested_provider=provider.id, requested_model=model,
+                        route_reason="task_or_tier_resolution",
+                    )
+            except Exception:
+                logger.exception("llm_telemetry_write_failed", extra={"call_id": call_id})
+            raise
+
+        response.call_id = call_id
+        try:
+            if call_id:
+                finish_call(
+                    call_id, settings=self.settings, started_monotonic=started, response=response,
+                    requested_provider=provider.id, requested_model=model,
+                    route_reason="task_or_tier_resolution",
+                )
+        except Exception:
+            logger.exception("llm_telemetry_write_failed", extra={"call_id": call_id})
+        return response
 
     def list_all_models(self, provider_id: str | None = None) -> list[ModelInfo]:
         """List models from all providers or a specific one.
