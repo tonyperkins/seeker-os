@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, Briefcase, Kanban, Search, FileText, Cpu, Settings, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ActivityIndicator } from "@/components/activity-indicator";
 import { usePersistentState } from "@/lib/use-persistent-state";
 
 const navItems = [
@@ -57,6 +58,7 @@ export function Sidebar() {
             );
           })}
         </nav>
+        <ActivityIndicator />
         <div className="p-1.5 border-t border-border flex justify-center">
           <ThemeToggle />
         </div>
@@ -100,6 +102,7 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <ActivityIndicator />
       <div className="p-1.5 border-t border-border">
         <ThemeToggle />
       </div>

@@ -43,6 +43,7 @@ import { CopyButton } from "@/components/copy-button";
 import { RunAllButton } from "@/components/run-all-button";
 import { CopyAllButton } from "@/components/copy-all-button";
 import { RefilterRescoreButton } from "@/components/refilter-rescore-button";
+import { JobStatusBanner } from "@/components/job-status-banner";
 import { api, type JobDetail } from "@/lib/api";
 import { formatDate } from "@/lib/date";
 
@@ -161,6 +162,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
         <Link href="/jobs" className={buttonVariants({ variant: "ghost", size: "sm" }) + " w-fit"}>
           <ArrowLeft /> Back to jobs
         </Link>
+        <JobStatusBanner initialJob={job} />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
