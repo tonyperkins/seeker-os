@@ -57,6 +57,7 @@ class LLMResponse:
     latency_ms: int = 0
     task: str = ""
     stop_reason: str = ""  # "stop", "length", "max_tokens", etc.
+    call_id: str = ""
 
 
 @dataclass

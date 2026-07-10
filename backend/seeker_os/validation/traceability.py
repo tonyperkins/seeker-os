@@ -45,6 +45,7 @@ class TraceabilityResult(BaseModel):
     claims: list[ClaimJudgment] = Field(default_factory=list)
     violations: list[Violation] = Field(default_factory=list)
     checked_at: str = ""
+    judge_call_id: str = ""
 
     def merge_into(self, result: ValidationResult) -> None:
         """Merge traceability violations into a ValidationResult."""
@@ -165,6 +166,8 @@ class TraceabilityChecker:
         artifact_text: str,
         master_resume: str,
         artifact_type: str = "resume",
+        operation_id: str | None = None,
+        parent_call_id: str | None = None,
     ) -> TraceabilityResult:
         """Run the traceability check on the generated artifact.
 
@@ -204,6 +207,11 @@ class TraceabilityChecker:
                 system_prompt=JUDGE_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
                 temperature=0.0,
+                operation_id=operation_id,
+                parent_call_id=parent_call_id,
+                prompt_name="traceability_judge",
+                prompt_version="1",
+                prompt_template=_JUDGE_USER_TEMPLATE,
             )
         except TruncationError as e:
             logger.error("Traceability judge was truncated: %s", e)
@@ -271,4 +279,5 @@ class TraceabilityChecker:
             claims=claims,
             violations=violations,
             checked_at=datetime.now(UTC).isoformat(),
+            judge_call_id=response.call_id if isinstance(getattr(response, "call_id", None), str) else "",
         )

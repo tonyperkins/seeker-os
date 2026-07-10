@@ -786,6 +786,73 @@ MIGRATIONS: list[str | callable] = [
     DROP TABLE IF EXISTS cover_letters;
     DROP TABLE IF EXISTS application_answers;
     """,
+    # Migration 30: Metadata-only LLM execution and evaluation ledger.
+    """
+    CREATE TABLE llm_calls (
+        call_id TEXT PRIMARY KEY,
+        operation_id TEXT,
+        parent_call_id TEXT REFERENCES llm_calls(call_id) ON DELETE SET NULL,
+        task TEXT NOT NULL,
+        requested_provider TEXT,
+        requested_model TEXT,
+        actual_provider TEXT,
+        actual_model TEXT,
+        route_reason TEXT,
+        temperature REAL,
+        max_tokens INTEGER,
+        status TEXT NOT NULL,
+        error_type TEXT,
+        stop_reason TEXT,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        latency_ms INTEGER NOT NULL DEFAULT 0,
+        input_price_per_mtok REAL,
+        output_price_per_mtok REAL,
+        estimated_cost REAL NOT NULL DEFAULT 0,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        prompt_name TEXT,
+        prompt_version TEXT,
+        prompt_template_digest TEXT,
+        system_prompt_hmac TEXT,
+        user_prompt_hmac TEXT,
+        system_prompt_bytes INTEGER NOT NULL DEFAULT 0,
+        user_prompt_bytes INTEGER NOT NULL DEFAULT 0,
+        artifact_type TEXT,
+        artifact_id INTEGER,
+        content_capture_level TEXT NOT NULL DEFAULT 'metadata_only',
+        telemetry_schema_version TEXT NOT NULL DEFAULT '1',
+        started_at TEXT NOT NULL,
+        completed_at TEXT
+    );
+    CREATE INDEX idx_llm_calls_operation ON llm_calls(operation_id);
+    CREATE INDEX idx_llm_calls_task_started ON llm_calls(task, started_at);
+    CREATE INDEX idx_llm_calls_status ON llm_calls(status);
+    CREATE INDEX idx_llm_calls_artifact ON llm_calls(artifact_type, artifact_id);
+
+    CREATE TABLE llm_evaluations (
+        evaluation_id TEXT PRIMARY KEY,
+        operation_id TEXT,
+        call_id TEXT REFERENCES llm_calls(call_id) ON DELETE SET NULL,
+        judge_call_id TEXT REFERENCES llm_calls(call_id) ON DELETE SET NULL,
+        artifact_type TEXT,
+        artifact_id INTEGER,
+        evaluator_name TEXT NOT NULL,
+        evaluator_type TEXT NOT NULL,
+        evaluator_version TEXT NOT NULL,
+        metric_name TEXT NOT NULL,
+        score REAL,
+        label TEXT,
+        passed BOOLEAN,
+        explanation_redacted TEXT,
+        details_json TEXT,
+        rubric_digest TEXT,
+        evaluated_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_llm_evaluations_operation ON llm_evaluations(operation_id);
+    CREATE INDEX idx_llm_evaluations_call ON llm_evaluations(call_id);
+    CREATE INDEX idx_llm_evaluations_artifact ON llm_evaluations(artifact_type, artifact_id);
+    CREATE INDEX idx_llm_evaluations_metric ON llm_evaluations(metric_name, evaluated_at);
+    """,
 ]
 
 def _split_sql_statements(script: str) -> list[str]:

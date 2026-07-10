@@ -350,6 +350,61 @@ export interface SpendReport {
   warnings?: string[];
 }
 
+export interface ObservabilityOperation {
+  operation_id: string;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  calls: number;
+  estimated_cost: number;
+  validation_passed: boolean | null;
+  artifact_id: number | null;
+}
+
+export interface ObservabilitySummary {
+  total_calls: number;
+  total_estimated_cost: number;
+  failed_calls: number;
+  truncated_calls: number;
+  validation_pass_rate: number | null;
+  unsupported_claims: number;
+  overstated_claims: number;
+  cost_per_passing_resume: number | null;
+  historical_data_incomplete: boolean;
+  recent_operations: ObservabilityOperation[];
+}
+
+export interface ObservabilityCall {
+  call_id: string;
+  parent_call_id: string | null;
+  task: string;
+  provider: string | null;
+  model: string | null;
+  status: string;
+  error_type: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  latency_ms: number;
+  estimated_cost: number;
+  started_at: string;
+}
+
+export interface ObservabilityEvaluation {
+  evaluation_id: string;
+  evaluator_name: string;
+  metric_name: string;
+  label: string | null;
+  passed: boolean | null;
+  evaluated_at: string;
+}
+
+export interface ObservabilityOperationDetail {
+  operation_id: string;
+  artifact_id: number | null;
+  calls: ObservabilityCall[];
+  evaluations: ObservabilityEvaluation[];
+}
+
 export interface SkipReasonOption {
   key: string;
   label: string;

@@ -33,6 +33,11 @@ export type {
   SpendByModel,
   PricingRouteComparison,
   SpendReport,
+  ObservabilityOperation,
+  ObservabilitySummary,
+  ObservabilityCall,
+  ObservabilityEvaluation,
+  ObservabilityOperationDetail,
   SkipReasonOption,
   NoReasonSkip,
   SettingsResponse,
@@ -260,6 +265,9 @@ export const api = {
     aging: () => fetchAPI<T.AgingReport>("/api/analytics/aging"),
     signalQuality: () => fetchAPI<T.SignalQualityReport>("/api/analytics/signal-quality"),
     spend: () => fetchAPI<T.SpendReport>("/api/analytics/spend"),
+    llmObservability: () => fetchAPI<T.ObservabilitySummary>("/api/analytics/llm-observability"),
+    llmOperation: (operationId: string) =>
+      fetchAPI<T.ObservabilityOperationDetail>(`/api/analytics/llm-observability/operations/${operationId}`),
   },
 
   // Resumes
