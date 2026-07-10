@@ -58,19 +58,19 @@ function taskSortKey(task: string): number {
   return idx >= 0 ? idx : 99;
 }
 
-function shortenModel(provider: string, model: string): string {
-  // Strip the provider namespace prefix from the model id if present
-  // e.g. "anthropic/claude-sonnet-4-6" → "claude-sonnet-4-6"
+function splitModelId(provider: string, model: string): { prefix: string | null; base: string } {
+  // Split the model id into upstream prefix and base name
+  // e.g. "anthropic/claude-sonnet-4-6" → { prefix: "anthropic", base: "claude-sonnet-4-6" }
+  // Only treat the prefix as an upstream qualifier if it differs from the provider id
   const slashIdx = model.indexOf("/");
   if (slashIdx >= 0) {
     const prefix = model.slice(0, slashIdx);
     const rest = model.slice(slashIdx + 1);
-    // Only strip if the prefix looks like a provider namespace (not a version path segment)
     if (prefix !== provider && !prefix.match(/^\d/)) {
-      return rest;
+      return { prefix, base: rest };
     }
   }
-  return model;
+  return { prefix: null, base: model };
 }
 
 export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
@@ -181,12 +181,18 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
               <div className="flex flex-col gap-1.5 overflow-y-auto max-h-48 min-h-0 pr-1">
                 {report.by_model.map((m) => {
                   const noPricing = m.input_price_per_mtok == null && m.output_price_per_mtok == null;
+                  const { prefix, base } = splitModelId(m.provider, m.model);
                   return (
                     <div key={`${m.provider}/${m.model}`} className="grid grid-cols-[1fr_auto] items-baseline gap-2 text-sm">
                       <div className="min-w-0 flex flex-col gap-0.5">
                         <span className="flex items-center gap-1.5">
+                          {prefix && (
+                            <span className="shrink-0 text-muted-foreground/50 text-xs">
+                              {prefix}/
+                            </span>
+                          )}
                           <span className="truncate text-muted-foreground">
-                            {shortenModel(m.provider, m.model)}
+                            {base}
                           </span>
                           {m.pricing_source && (
                             <span className="shrink-0 rounded bg-muted/50 px-1 py-0 text-[10px] font-medium text-muted-foreground/60">
