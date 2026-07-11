@@ -51,7 +51,7 @@ export default function ObservabilityPage() {
       </div>
       {summary.historical_data_incomplete && (
         <DismissibleBanner
-          noticeId="observability:ledger-incomplete"
+          noticeId="ledger-incomplete"
           className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
         >
           Usage before ledger activation is not included.

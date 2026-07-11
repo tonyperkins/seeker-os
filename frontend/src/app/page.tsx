@@ -122,7 +122,7 @@ export default async function DashboardPage() {
 
       {(providers?.partial || signalQuality?.partial || spend?.partial) && (
         <DismissibleBanner
-          noticeId="dashboard:partial-warnings"
+          noticeId="ledger-incomplete"
           className="border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200"
         >
           {[...(providers?.warnings ?? []), ...(signalQuality?.warnings ?? []), ...(spend?.warnings ?? [])].join(" ")}
