@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDuration, formatTokens } from "@/lib/format";
+import { DismissibleBanner } from "@/components/dismissible-banner";
 
 function money(value: number | null) {
   return value == null ? "Unavailable" : formatCurrency(value);
@@ -47,7 +48,12 @@ export default function ObservabilityPage() {
         <p className="text-sm text-muted-foreground">Metadata-only cost, reliability, and quality lineage.</p>
       </div>
       {summary.historical_data_incomplete && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">Usage before ledger activation is not included.</div>
+        <DismissibleBanner
+          noticeId="observability:ledger-incomplete"
+          className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+        >
+          Usage before ledger activation is not included.
+        </DismissibleBanner>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(([label, value, Icon]) => (
