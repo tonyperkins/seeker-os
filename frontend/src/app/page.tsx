@@ -8,6 +8,7 @@ import { SignalQualityContent } from "@/components/signal-quality-card";
 import { CollapsibleCard } from "@/components/collapsible-card";
 import { SpendBreakdownCard } from "@/components/spend-breakdown-card";
 import { DismissibleBanner } from "@/components/dismissible-banner";
+import { PageHeader } from "@/components/page-header";
 import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport } from "@/lib/api";
 import { isFreeTierOnly } from "@/lib/format";
 
@@ -109,9 +110,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-      </div>
+      <PageHeader title="Dashboard" />
 
       {unavailable.length > 0 && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">

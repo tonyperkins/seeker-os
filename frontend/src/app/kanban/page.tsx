@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api, type JobSummary } from "@/lib/api";
 import { AddJobDialog } from "@/components/add-job-dialog";
+import { PageHeader } from "@/components/page-header";
 import { usePersistentState } from "@/lib/use-persistent-state";
 
 const PRE_APPLY_COLUMNS = [
@@ -170,7 +171,7 @@ export default function KanbanPage() {
   if (error && !jobs) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Kanban</h1>
+        <PageHeader title="Kanban" />
         <Card>
           <CardContent className="flex items-center gap-2 py-10 text-destructive">
             <AlertCircle className="size-4" />
@@ -183,10 +184,7 @@ export default function KanbanPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Kanban</h1>
-        </div>
+      <PageHeader title="Kanban" actions={
         <div className="flex items-center gap-3">
           {error && (
             <span className="text-xs text-destructive">{error}</span>
@@ -211,7 +209,7 @@ export default function KanbanPage() {
           </div>
           <AddJobDialog onCreated={fetchJobs} />
         </div>
-      </div>
+      } />
 
       <div className={`grid grid-cols-1 gap-4 ${boardView === "pre-apply" ? "md:grid-cols-3 lg:grid-cols-5" : "md:grid-cols-3 lg:grid-cols-6"}`}>
         {columns.map((col) => {
@@ -271,7 +269,7 @@ export default function KanbanPage() {
                             className="text-sm font-medium leading-snug hover:underline"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {job.title}
+                            {job.title || <span className="text-muted-foreground/60 italic">Title pending</span>}
                           </Link>
                         </div>
                         <CardDescription className="pl-5">

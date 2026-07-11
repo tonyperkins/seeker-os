@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { api, type QuerySummary } from "@/lib/api";
 import { ErrorBanner } from "@/components/error-banner";
+import { PageHeader } from "@/components/page-header";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "never";
@@ -180,10 +181,7 @@ export default function QueriesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Queries</h1>
-        </div>
+      <PageHeader title="Queries" actions={
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger render={<Button><Plus /> Add query</Button>} />
           <DialogContent>
@@ -264,7 +262,7 @@ export default function QueriesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      } />
 
       {error && (
         <ErrorBanner message={error} />
@@ -343,9 +341,11 @@ export default function QueriesPage() {
                               className="h-7"
                             />
                           ) : (
-                            <span className="font-mono text-xs text-muted-foreground break-words line-clamp-2">
-                              {q.search_query || "—"}
-                            </span>
+                            q.search_query && (
+                              <span className="font-mono text-xs text-muted-foreground break-words line-clamp-2">
+                                {q.search_query}
+                              </span>
+                            )
                           )}
                         </div>
                       </TableCell>

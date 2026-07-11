@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDuration, formatTokens, isFreeTierOnly } from "@/lib/format";
 import { DismissibleBanner } from "@/components/dismissible-banner";
+import { PageHeader } from "@/components/page-header";
 
 function money(value: number | null) {
   return value == null ? "Unavailable" : formatCurrency(value);
@@ -45,10 +46,7 @@ export default function ObservabilityPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">LLM Observability</h1>
-        <p className="text-sm text-muted-foreground">Metadata-only cost, reliability, and quality lineage.</p>
-      </div>
+      <PageHeader title="LLM Observability" description="Metadata-only cost, reliability, and quality lineage." />
       {summary.historical_data_incomplete && (
         <DismissibleBanner
           noticeId="ledger-incomplete"

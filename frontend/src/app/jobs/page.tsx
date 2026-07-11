@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { AddJobDialog } from "@/components/add-job-dialog";
 import { BulkAnnotateSkips } from "@/components/bulk-annotate-skips";
+import { PageHeader } from "@/components/page-header";
 import type { JobSortKey } from "@/lib/api";
 import { useJobsQuery } from "./use-jobs-query";
 import { useBulkActions } from "./use-bulk-actions";
@@ -95,15 +96,7 @@ function JobsPageInner() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Jobs</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <BulkAnnotateSkips />
-          <AddJobDialog onCreated={() => refetch()} />
-        </div>
-      </div>
+      <PageHeader title="Jobs" actions={<><BulkAnnotateSkips /><AddJobDialog onCreated={() => refetch()} /></>} />
 
       <JobsFilters
         status={state.status}

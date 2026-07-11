@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { ActivityIndicator } from "@/components/activity-indicator";
 import { usePersistentState, useHydrated } from "@/lib/use-persistent-state";
 
-const navItems = [
+const primaryNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/kanban", label: "Kanban", icon: Kanban },
@@ -17,6 +17,9 @@ const navItems = [
   { href: "/resumes", label: "Resumes", icon: FileText },
   { href: "/models", label: "Models", icon: Cpu },
   { href: "/observability", label: "Observability", icon: Activity },
+];
+
+const bottomNavItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -32,30 +35,56 @@ export function Sidebar() {
     pathname === href || (href !== "/" && pathname.startsWith(href));
 
   const navContent = (iconOnly: boolean) => (
-    <nav className="flex-1 p-1.5 space-y-0.5">
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        const active = isActive(item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            title={iconOnly ? item.label : undefined}
-            onClick={() => setMobileOpen(false)}
-            className={cn(
-              "flex items-center rounded-md text-sm font-medium transition-colors",
-              iconOnly ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5",
-              active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent/50"
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {!iconOnly && item.label}
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      <nav className="flex-1 p-1.5 space-y-0.5">
+        {primaryNavItems.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={iconOnly ? item.label : undefined}
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex items-center rounded-md text-sm font-medium transition-colors",
+                iconOnly ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5",
+                active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {!iconOnly && item.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <div className="mt-auto border-t border-border p-1.5 space-y-0.5">
+        {bottomNavItems.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={iconOnly ? item.label : undefined}
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex items-center rounded-md text-sm font-medium transition-colors",
+                iconOnly ? "justify-center p-2" : "gap-2.5 px-2.5 py-1.5",
+                active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {!iconOnly && item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </>
   );
 
   return (

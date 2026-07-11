@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { PageHeader } from "@/components/page-header";
 import {
   Loader2,
   AlertCircle,
@@ -148,12 +149,7 @@ export default function NewJobPage() {
 
   return (
     <div className="mx-auto max-w-2xl p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Add Job</h1>
-        <Link href="/jobs">
-          <Button variant="ghost" size="sm">Back to Jobs</Button>
-        </Link>
-      </div>
+      <PageHeader title="Add Job" actions={<Link href="/jobs"><Button variant="ghost" size="sm">Back to Jobs</Button></Link>} />
 
       {/* Loading */}
       {(phase === "idle" || phase === "fetching") && (

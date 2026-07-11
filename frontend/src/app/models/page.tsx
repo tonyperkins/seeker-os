@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EditProviderDialog } from "@/components/edit-provider-dialog";
+import { PageHeader } from "@/components/page-header";
 import {
   api,
   type ProvidersConfigResponse,
@@ -1233,10 +1234,7 @@ export default function ModelsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Models &amp; Providers</h1>
-        </div>
+      <PageHeader title="Models & Providers" actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => loadConfig()}>
             <RefreshCw className="h-3.5 w-3.5" />
@@ -1251,7 +1249,7 @@ export default function ModelsPage() {
             Test All
           </Button>
         </div>
-      </div>
+      } />
 
       {allResults && (
         <Card>
