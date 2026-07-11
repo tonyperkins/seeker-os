@@ -4,6 +4,7 @@ import * as React from "react";
 import { ChevronDown } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useHydrated } from "@/lib/use-persistent-state";
 
 export function CollapsibleCard({
   title,
@@ -29,8 +30,11 @@ export function CollapsibleCard({
   children: React.ReactNode;
 }) {
   const [stateOpen, setStateOpen] = React.useState(defaultOpen);
+  const hydrated = useHydrated();
 
   // When storageKey is provided, use localStorage persistence instead of React state.
+  // Before hydration, default to open so the server snapshot matches the most common
+  // localStorage state (expanded), preventing a flash from collapsed→expanded.
   const persisted = React.useSyncExternalStore(
     (cb) => {
       if (!storageKey) return () => {};
@@ -41,10 +45,10 @@ export function CollapsibleCard({
       return () => window.removeEventListener("storage", handler);
     },
     () => (storageKey ? localStorage.getItem(storageKey) !== "collapsed" : false),
-    () => false,
+    () => true,
   );
 
-  const open = storageKey ? persisted : stateOpen;
+  const open = storageKey ? (hydrated ? persisted : true) : stateOpen;
   const toggle = () => {
     if (storageKey) {
       const next = !open;

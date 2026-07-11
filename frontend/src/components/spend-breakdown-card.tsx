@@ -3,19 +3,8 @@
 import { DollarSign, Cpu, TrendingDown, AlertTriangle } from "lucide-react";
 import { CollapsibleCard } from "@/components/collapsible-card";
 import { formatDate } from "@/lib/date";
+import { formatCurrency, formatTokens } from "@/lib/format";
 import type { SpendReport } from "@/lib/api";
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
-function formatCost(n: number): string {
-  if (n === 0) return "$0.00";
-  if (n < 0.01) return "<$0.01";
-  return `$${n.toFixed(2)}`;
-}
 
 function formatPrice(n: number | null): string {
   if (n === null) return "—";
@@ -73,7 +62,7 @@ function splitModelId(provider: string, model: string): { prefix: string | null;
   return { prefix: null, base: model };
 }
 
-export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
+export function SpendBreakdownCard({ report, freeTierOnly }: { report: SpendReport | null; freeTierOnly?: boolean }) {
   if (!report || report.total_calls === 0) {
     return (
       <CollapsibleCard
@@ -104,14 +93,14 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
         <DollarSign className="size-4 text-violet-500" />
         <span className="text-muted-foreground">Est. cost</span>
         <span className="font-mono font-semibold text-foreground">
-          {hasPricing ? formatCost(report.total_estimated_cost) : "—"}
+          {hasPricing ? formatCurrency(report.total_estimated_cost) : "—"}
         </span>
       </div>
       <div className="flex items-center gap-1.5">
         <TrendingDown className="size-4 text-sky-500" />
         <span className="text-muted-foreground">Per applied</span>
         <span className="font-mono font-semibold text-foreground">
-          {report.cost_per_applied != null ? `$${report.cost_per_applied.toFixed(2)}` : "—"}
+          {formatCurrency(report.cost_per_applied)}
         </span>
       </div>
       {hasPricing && report.pricing_fetched_at && (
@@ -182,7 +171,7 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
                           {t.calls}&thinsp;·&thinsp;{formatTokens(t.input_tokens + t.output_tokens)}
                         </span>
                         <span className="w-14 text-right font-mono text-xs font-semibold text-foreground">
-                          {hasPricing ? formatCost(t.estimated_cost) : ""}
+                          {hasPricing ? formatCurrency(t.estimated_cost) : ""}
                         </span>
                       </div>
                     </div>
@@ -231,7 +220,7 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
                           <span className="font-mono text-xs text-muted-foreground/50 italic">no pricing</span>
                         ) : (
                           <span className="font-mono text-sm font-semibold text-foreground">
-                            {formatCost(m.estimated_cost)}
+                            {formatCurrency(m.estimated_cost)}
                           </span>
                         )}
                         <span className="font-mono text-[11px] text-muted-foreground/50">
@@ -247,9 +236,15 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
         </div>
       )}
 
-      {!hasPricing && (
+      {!hasPricing && !freeTierOnly && (
         <div className="border-t border-border pt-2 text-xs text-muted-foreground">
           Add <code className="font-mono">input_price_per_mtok</code> / <code className="font-mono">output_price_per_mtok</code> to models in providers.yml for cost estimates
+        </div>
+      )}
+
+      {freeTierOnly && (
+        <div className="border-t border-border pt-2 text-xs text-muted-foreground">
+          Running on free-tier models — metered cost is $0. Cost plumbing is live and will populate when a paid model is used.
         </div>
       )}
     </CollapsibleCard>

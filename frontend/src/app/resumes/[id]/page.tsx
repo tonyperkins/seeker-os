@@ -32,6 +32,7 @@ import { DeleteResumeButton } from "@/components/delete-resume-button";
 import { ClearExportsButton } from "@/components/clear-exports-button";
 import { api, type ResumeDetail } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
+import { formatCurrency, formatDuration, formatTokens } from "@/lib/format";
 
 function severityVariant(severity: string) {
   switch (severity.toLowerCase()) {
@@ -158,10 +159,10 @@ export default async function ResumeDetailPage(props: PageProps<"/resumes/[id]">
               <InfoRow icon={Cpu} label="Provider" value={resume.provider} />
               <InfoRow icon={Cpu} label="Model" value={resume.model} />
               <Separator />
-              <InfoRow icon={Clock} label="Latency" value={`${resume.latency_ms} ms`} />
-              <InfoRow icon={Cpu} label="Input tokens" value={resume.input_tokens.toLocaleString()} />
-              <InfoRow icon={Cpu} label="Output tokens" value={resume.output_tokens.toLocaleString()} />
-              <InfoRow icon={Cpu} label="Total tokens" value={totalTokens.toLocaleString()} />
+              <InfoRow icon={Clock} label="Latency" value={formatDuration(resume.latency_ms)} />
+              <InfoRow icon={Cpu} label="Input tokens" value={formatTokens(resume.input_tokens)} />
+              <InfoRow icon={Cpu} label="Output tokens" value={formatTokens(resume.output_tokens)} />
+              <InfoRow icon={Cpu} label="Total tokens" value={formatTokens(totalTokens)} />
               <Separator />
               <InfoRow icon={Calendar} label="Generated" value={formatDateTime(resume.generated_at)} />
             </CardContent>

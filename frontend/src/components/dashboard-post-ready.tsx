@@ -126,6 +126,9 @@ export function ActiveApplicationsContent({ jobs }: { jobs: JobSummary[] }) {
                   <span className="block truncate font-medium">{job.title}</span>
                   <span className="block truncate text-muted-foreground">{job.company}</span>
                 </div>
+                <div className="flex w-16 shrink-0 justify-end">
+                  <StaleBadge days={days} />
+                </div>
                 <div className="flex flex-col items-end gap-1">
                   <Badge variant="secondary" className="text-xs">
                     {STATUS_LABELS[job.status] ?? job.status}
@@ -134,7 +137,6 @@ export function ActiveApplicationsContent({ jobs }: { jobs: JobSummary[] }) {
                     {days === 0 ? "today" : `${days}d ago`}
                   </span>
                 </div>
-                <StaleBadge days={days} />
                 <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
               </Link>
             );
@@ -270,12 +272,12 @@ export function StaleAlerts({ jobs, threshold = 14 }: { jobs: JobSummary[]; thre
                   <span className="block truncate font-medium">{job.title}</span>
                   <span className="block truncate text-muted-foreground">{job.company}</span>
                 </div>
+                <span className={`w-10 shrink-0 text-right font-mono text-xs font-semibold ${isCritical ? "text-red-500" : "text-amber-500"}`}>
+                  {days}d
+                </span>
                 <Badge variant="secondary" className="text-xs">
                   {STATUS_LABELS[job.status] ?? job.status}
                 </Badge>
-                <span className={`font-mono text-xs font-semibold ${isCritical ? "text-red-500" : "text-amber-500"}`}>
-                  {days}d
-                </span>
                 <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
               </Link>
             );

@@ -3,6 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
+ * Returns false during SSR and the first client render, then true after
+ * hydration completes. Use to suppress persisted-state-dependent UI that
+ * would otherwise flash from its default to its stored value.
+ */
+export function useHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+  return hydrated;
+}
+
+/**
  * Like useState, but persists the value to localStorage so it survives reloads.
  *
  * Initializes with `initial` on both server and first client render to avoid

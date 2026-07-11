@@ -27,6 +27,7 @@ import { CopyResumeButton } from "@/components/copy-resume-button";
 import { api, type ResumeSummary } from "@/lib/api";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { formatDate } from "@/lib/date";
+import { formatCurrency, formatTokens } from "@/lib/format";
 
 type ResumeSortKey = "id" | "job_company" | "provider" | "model" | "tokens" | "latency_ms" | "generated_at";
 
@@ -233,12 +234,10 @@ function ResumesContent() {
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {(resume.input_tokens + resume.output_tokens).toLocaleString()}
+                      {formatTokens(resume.input_tokens + resume.output_tokens)}
                     </TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">
-                      {resume.estimated_cost != null
-                        ? `$${resume.estimated_cost.toFixed(4)}`
-                        : "—"}
+                      {formatCurrency(resume.estimated_cost)}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(resume.generated_at)}

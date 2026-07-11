@@ -7,7 +7,9 @@ import { MovementFeedContent } from "@/components/movement-feed";
 import { SignalQualityContent } from "@/components/signal-quality-card";
 import { CollapsibleCard } from "@/components/collapsible-card";
 import { SpendBreakdownCard } from "@/components/spend-breakdown-card";
+import { DismissibleBanner } from "@/components/dismissible-banner";
 import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport } from "@/lib/api";
+import { isFreeTierOnly } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -119,9 +121,12 @@ export default async function DashboardPage() {
       )}
 
       {(providers?.partial || signalQuality?.partial || spend?.partial) && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+        <DismissibleBanner
+          noticeId="ledger-incomplete"
+          className="border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+        >
           {[...(providers?.warnings ?? []), ...(signalQuality?.warnings ?? []), ...(spend?.warnings ?? [])].join(" ")}
-        </div>
+        </DismissibleBanner>
       )}
 
       {/* ZONE 1 — Ops strip (with expandable run history + funnel) */}
@@ -202,7 +207,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ZONE 7 — LLM Spend */}
-      <SpendBreakdownCard report={spend} />
+      <SpendBreakdownCard report={spend} freeTierOnly={isFreeTierOnly(providers?.providers ?? [], providers?.tiers ?? {})} />
     </div>
   );
 }

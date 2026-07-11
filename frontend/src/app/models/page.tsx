@@ -55,6 +55,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { usePersistentState } from "@/lib/use-persistent-state";
+import { formatDuration } from "@/lib/format";
 
 interface HealthResult {
   provider_id: string;
@@ -366,7 +367,7 @@ function ProviderCard({
                   {testResult.healthy ? "Healthy" : "Unhealthy"}
                 </span>
                 {" · "}
-                {testResult.latency_ms}ms — {testResult.message}
+                {formatDuration(testResult.latency_ms)} — {testResult.message}
               </div>
             )}
             {provider.health_message && !testResult && (
@@ -1285,7 +1286,7 @@ export default function ModelsPage() {
                     </Badge>
                   </div>
                   <p className="text-muted-foreground mt-1">
-                    {r.latency_ms}ms — {r.message}
+                    {formatDuration(r.latency_ms)} — {r.message}
                   </p>
                 </div>
               ))}

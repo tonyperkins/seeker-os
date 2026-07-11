@@ -553,33 +553,47 @@ def get_spend():
             )
 
     # 2. Auto-fetched pricing from model cache (Kilo, OpenRouter, etc.)
-    from seeker_os.llm.cache import get_cached_models
+    from seeker_os.llm.cache import get_cached_pricing
 
     # Track fetched_at per provider for staleness detection
     pricing_fetched_at: dict[str, str | None] = {}
 
     for prov in (settings.providers.providers if settings.providers else []):
-        cached = get_cached_models(prov.id)
-        if cached is None:
+        cached = get_cached_pricing(prov.id)
+        if not cached:
             continue
-        # Record the fetched_at timestamp (all models share the same fetch time)
-        if cached and cached[0].fetched_at:
-            pricing_fetched_at[prov.id] = cached[0].fetched_at
-        for m in cached:
-            key = (prov.id, m.id)
+        # Read fetched_at from the raw cache file for staleness tracking
+        import json as _json
+        from seeker_os.llm.cache import _cache_path
+        try:
+            cache_data = _json.loads(_cache_path(prov.id).read_text())
+            pricing_fetched_at[prov.id] = cache_data.get("fetched_at")
+        except Exception:
+            pass
+        for model_id, (auto_in, auto_out) in cached.items():
+            key = (prov.id, model_id)
             yaml_in, yaml_out = pricing.get(key, (None, None))
             # Fill in missing pricing from auto-fetched data
-            in_price = yaml_in if yaml_in is not None else m.input_price_per_mtok
-            out_price = yaml_out if yaml_out is not None else m.output_price_per_mtok
+            in_price = yaml_in if yaml_in is not None else auto_in
+            out_price = yaml_out if yaml_out is not None else auto_out
             if in_price is not None or out_price is not None:
                 pricing_configured = True
-                if m.input_price_per_mtok is not None or m.output_price_per_mtok is not None:
+                if auto_in is not None or auto_out is not None:
                     auto_priced.add(key)
             pricing[key] = (in_price, out_price)
 
     def _estimate_cost(provider: str, model: str, in_tok: int, out_tok: int) -> float:
         key = (provider, model)
         in_price, out_price = pricing.get(key, (None, None))
+        # Fuzzy match: handle version-pinned IDs like 'qwen/qwen3.7-max-20260520'
+        # where the cache has the base ID 'qwen/qwen3.7-max'
+        if in_price is None and out_price is None:
+            for (p, m), (pin, pout) in pricing.items():
+                if p != provider:
+                    continue
+                if model.startswith(m + "-") or m.startswith(model + "-"):
+                    in_price, out_price = pin, pout
+                    break
         cost = 0.0
         if in_price is not None:
             cost += in_tok / 1_000_000 * in_price
@@ -767,7 +781,7 @@ def get_spend():
             pricing_stale_after_days=stale_threshold_days,
             route_pricing=route_pricing,
             partial=True,
-            warnings=["Usage before the LLM ledger migration is not included."],
+            warnings=["Usage before the LLM ledger activation is not included."],
         )
     finally:
         db.close()

@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { api, type JobAnalysisResult, type NamedGap } from "@/lib/api";
 import { ErrorBanner } from "@/components/error-banner";
+import { formatDuration, formatTokens } from "@/lib/format";
 
 const VERDICT_STYLES: Record<string, { color: string; label: string }> = {
   APPLY: { color: "text-emerald-600", label: "APPLY" },
@@ -476,8 +477,8 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
               <Badge variant="outline" className="text-xs">
                 {data.provider} / {data.model}
               </Badge>
-              <span>{data.input_tokens + data.output_tokens} tokens</span>
-              <span>· {(data.latency_ms / 1000).toFixed(1)}s</span>
+              <span>{formatTokens(data.input_tokens + data.output_tokens)} tokens</span>
+              <span>· {formatDuration(data.latency_ms)}</span>
             </div>
           </>
         )}
