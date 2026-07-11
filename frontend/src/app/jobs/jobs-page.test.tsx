@@ -15,6 +15,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/use-persistent-state", () => ({
   usePersistentState: <T,>(_key: string, initial: T) => useState(initial),
+  useHydrated: () => true,
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/api")>();

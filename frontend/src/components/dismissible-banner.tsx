@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { usePersistentState } from "@/lib/use-persistent-state";
+import { useHydrated, usePersistentState } from "@/lib/use-persistent-state";
 import { cn } from "@/lib/utils";
 
 interface DismissibleBannerProps {
@@ -19,12 +19,13 @@ interface DismissibleBannerProps {
  * so it stays dismissed across page reloads.
  */
 export function DismissibleBanner({ noticeId, children, className }: DismissibleBannerProps) {
+  const hydrated = useHydrated();
   const [dismissed, setDismissed] = usePersistentState<boolean>(
     `notice:dismissed:${noticeId}`,
     false,
   );
 
-  if (dismissed) return null;
+  if (!hydrated || dismissed) return null;
 
   return (
     <div

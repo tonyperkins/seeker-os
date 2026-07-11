@@ -7,7 +7,7 @@ import { LayoutDashboard, Briefcase, Kanban, Search, FileText, Cpu, Settings, Pa
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ActivityIndicator } from "@/components/activity-indicator";
-import { usePersistentState } from "@/lib/use-persistent-state";
+import { usePersistentState, useHydrated } from "@/lib/use-persistent-state";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -22,6 +22,7 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const hydrated = useHydrated();
   const [collapsed, setCollapsed] = usePersistentState<boolean>("sidebar:collapsed", false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -101,8 +102,13 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Desktop collapsed */}
-      {collapsed && (
+      {/* Desktop sidebar — placeholder until hydrated to avoid flash */}
+      {!hydrated && (
+        <div className="hidden md:block w-48 border-r border-border bg-sidebar shrink-0" />
+      )}
+
+      {/* Desktop sidebar — suppressed until hydrated to avoid flash */}
+      {hydrated && collapsed && (
         <aside className="hidden md:flex w-12 border-r border-border bg-sidebar flex-col h-screen sticky top-0 shrink-0">
           <div className="flex items-center justify-center p-2 border-b border-border h-14">
             <button
@@ -122,7 +128,7 @@ export function Sidebar() {
       )}
 
       {/* Desktop expanded */}
-      {!collapsed && (
+      {hydrated && !collapsed && (
         <aside className="hidden md:flex w-48 border-r border-border bg-sidebar flex-col h-screen sticky top-0 shrink-0">
           <div className="flex items-center justify-between p-3 border-b border-border h-14">
             <div>
