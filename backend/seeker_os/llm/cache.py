@@ -53,6 +53,26 @@ def get_cached_models(provider_id: str) -> list[ModelInfo] | None:
         return None
 
 
+def get_cached_pricing(provider_id: str) -> dict[str, tuple[float | None, float | None]]:
+    """Get pricing for all cached models for a provider, ignoring TTL staleness.
+
+    Pricing data doesn't go stale the way model availability does, so this is
+    safe to use for cost estimation even when the model list cache is stale.
+    Returns a dict mapping model_id → (input_price_per_mtok, output_price_per_mtok).
+    """
+    path = _cache_path(provider_id)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        return {
+            m["id"]: (m.get("input_price_per_mtok"), m.get("output_price_per_mtok"))
+            for m in data["models"]
+        }
+    except (json.JSONDecodeError, KeyError, ValueError):
+        return {}
+
+
 def save_cached_models(provider_id: str, models: list[ModelInfo]) -> None:
     """Save models to cache."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)

@@ -68,12 +68,25 @@ def classify_error(exc: BaseException) -> str:
 def _pricing(settings: Any, provider: str | None, model: str | None) -> tuple[float | None, float | None]:
     if not provider or not model or not settings.providers:
         return None, None
+    # 1. Check static providers config (providers.yml)
     for item in settings.providers.providers:
         if item.id != provider:
             continue
         for configured_model in item.models:
             if configured_model.id == model:
                 return configured_model.input_price_per_mtok, configured_model.output_price_per_mtok
+    # 2. Check auto-fetched model cache (data/cache/models/{provider}.json)
+    #    Uses get_cached_pricing which ignores TTL staleness — pricing doesn't
+    #    go stale the way model availability does.
+    from seeker_os.llm.cache import get_cached_pricing
+    cached = get_cached_pricing(provider)
+    if model in cached:
+        return cached[model]
+    # Fuzzy match: handle version-pinned IDs like 'qwen/qwen3.7-max-20260520'
+    # where the cache has the base ID 'qwen/qwen3.7-max'
+    for cached_model, (pin, pout) in cached.items():
+        if model.startswith(cached_model + "-") or cached_model.startswith(model + "-"):
+            return pin, pout
     return None, None
 
 
