@@ -102,11 +102,6 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Desktop sidebar — placeholder until hydrated to avoid flash */}
-      {!hydrated && (
-        <div className="hidden md:block w-48 border-r border-border bg-sidebar shrink-0" />
-      )}
-
       {/* Desktop sidebar — suppressed until hydrated to avoid flash */}
       {hydrated && collapsed && (
         <aside className="hidden md:flex w-12 border-r border-border bg-sidebar flex-col h-screen sticky top-0 shrink-0">
