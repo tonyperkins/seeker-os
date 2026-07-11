@@ -398,7 +398,7 @@ def _build_pricing_map() -> dict[tuple[str, str], tuple[float | None, float | No
     logic in the spend analytics endpoint.
     """
     from seeker_os.config import get_settings
-    from seeker_os.llm.cache import get_cached_models
+    from seeker_os.llm.cache import get_cached_pricing
 
     settings = get_settings()
     pricing: dict[tuple[str, str], tuple[float | None, float | None]] = {}
@@ -413,16 +413,16 @@ def _build_pricing_map() -> dict[tuple[str, str], tuple[float | None, float | No
                 )
 
     # 2. Auto-fetched pricing from model cache (fills in missing prices)
+    #    Uses get_cached_pricing which ignores TTL staleness — pricing doesn't
+    #    go stale the way model availability does.
     if settings.providers:
         for prov in settings.providers.providers:
-            cached = get_cached_models(prov.id)
-            if cached is None:
-                continue
-            for m in cached:
-                key = (prov.id, m.id)
+            cached = get_cached_pricing(prov.id)
+            for model_id, (auto_in, auto_out) in cached.items():
+                key = (prov.id, model_id)
                 yaml_in, yaml_out = pricing.get(key, (None, None))
-                in_price = yaml_in if yaml_in is not None else m.input_price_per_mtok
-                out_price = yaml_out if yaml_out is not None else m.output_price_per_mtok
+                in_price = yaml_in if yaml_in is not None else auto_in
+                out_price = yaml_out if yaml_out is not None else auto_out
                 pricing[key] = (in_price, out_price)
 
     return pricing
@@ -437,6 +437,15 @@ def _estimate_cost(
 ) -> float | None:
     """Estimate cost from token counts and pricing map. Returns None if no pricing."""
     in_price, out_price = pricing.get((provider, model), (None, None))
+    # Fuzzy match: handle version-pinned IDs like 'qwen/qwen3.7-max-20260520'
+    # where the cache has the base ID 'qwen/qwen3.7-max'
+    if in_price is None and out_price is None:
+        for (p, m), (pin, pout) in pricing.items():
+            if p != provider:
+                continue
+            if model.startswith(m + "-") or m.startswith(model + "-"):
+                in_price, out_price = pin, pout
+                break
     if in_price is None and out_price is None:
         return None
     cost = 0.0
