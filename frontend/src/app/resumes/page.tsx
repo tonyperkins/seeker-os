@@ -28,6 +28,7 @@ import { api, type ResumeSummary } from "@/lib/api";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { formatDate } from "@/lib/date";
 import { formatCurrency, formatTokens } from "@/lib/format";
+import { PageHeader } from "@/components/page-header";
 
 type ResumeSortKey = "id" | "job_company" | "provider" | "model" | "tokens" | "latency_ms" | "generated_at";
 
@@ -96,28 +97,20 @@ function ResumesContent() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Resumes</h1>
-          {jobId && (
-            <div className="mt-2 flex items-center gap-2">
+      <PageHeader
+        title="Resumes"
+        actions={
+          <div className="flex items-center gap-3">
+            {jobId && (
               <Badge variant="secondary">Filtered by job #{jobId}</Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/resumes")}
-                className="h-6 px-2 text-xs"
-              >
-                <X className="size-3" /> Clear
-              </Button>
-            </div>
-          )}
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchResumes} disabled={loading}>
-          {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-          Refresh
-        </Button>
-      </div>
+            )}
+            <Button variant="outline" size="sm" onClick={fetchResumes} disabled={loading}>
+              {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              Refresh
+            </Button>
+          </div>
+        }
+      />
 
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-md">
