@@ -45,20 +45,30 @@ export function formatTokens(n: number | null | undefined): string {
 }
 
 /**
- * Check if all models across all providers are free-tier (both input and
- * output $/Mtok are 0). A model with null pricing is not considered free
+ * Check if all tier-mapped models are free-tier (both input and output
+ * $/Mtok are 0). A model with null pricing is not considered free
  * (it's unconfigured, not free).
  */
 export function isFreeTierOnly(
-  providers: { models: { input_price_per_mtok: number | null; output_price_per_mtok: number | null }[] }[],
+  providers: { id: string; models: { id: string; input_price_per_mtok: number | null; output_price_per_mtok: number | null }[] }[],
+  tiers: Record<string, { provider: string; model: string }>,
 ): boolean {
-  const allModels = providers.flatMap((p) => p.models);
-  if (allModels.length === 0) return false;
-  return allModels.every(
-    (m) =>
-      m.input_price_per_mtok != null &&
-      m.input_price_per_mtok === 0 &&
-      m.output_price_per_mtok != null &&
-      m.output_price_per_mtok === 0,
-  );
+  const tierEntries = Object.values(tiers);
+  if (tierEntries.length === 0) return false;
+
+  for (const tier of tierEntries) {
+    const provider = providers.find((p) => p.id === tier.provider);
+    if (!provider) return false;
+    const model = provider.models.find((m) => m.id === tier.model);
+    if (!model) return false;
+    if (
+      model.input_price_per_mtok == null ||
+      model.input_price_per_mtok !== 0 ||
+      model.output_price_per_mtok == null ||
+      model.output_price_per_mtok !== 0
+    ) {
+      return false;
+    }
+  }
+  return true;
 }

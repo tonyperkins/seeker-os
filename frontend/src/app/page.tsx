@@ -207,7 +207,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ZONE 7 — LLM Spend */}
-      <SpendBreakdownCard report={spend} freeTierOnly={isFreeTierOnly(providers?.providers ?? [])} />
+      <SpendBreakdownCard report={spend} freeTierOnly={isFreeTierOnly(providers?.providers ?? [], providers?.tiers ?? {})} />
     </div>
   );
 }

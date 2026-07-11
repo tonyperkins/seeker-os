@@ -57,7 +57,7 @@ export default function ObservabilityPage() {
           Usage before ledger activation is not included.
         </DismissibleBanner>
       )}
-      {isFreeTierOnly(providers?.providers ?? []) && (
+      {isFreeTierOnly(providers?.providers ?? [], providers?.tiers ?? {}) && (
         <p className="text-xs text-muted-foreground">
           Running on free-tier models — metered cost is $0. Cost plumbing is live and will populate when a paid model is used.
         </p>
