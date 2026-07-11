@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
@@ -461,6 +462,17 @@ def run_company_research(job_id: int, force_refresh: bool = False):
             research_id = cursor.lastrowid
 
         db.commit()
+
+        # Link LLM calls to the company_research record for observability
+        dossier_op_id = getattr(result, "_dossier_operation_id", None)
+        if dossier_op_id:
+            try:
+                from seeker_os.observability.llm_ledger import attach_artifact
+                attach_artifact(dossier_op_id, "company_research", int(research_id))
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "llm_artifact_link_failed", extra={"operation_id": dossier_op_id}
+                )
 
         row = db.execute(
             "SELECT * FROM company_research WHERE id = ?", (research_id,)

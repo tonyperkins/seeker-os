@@ -358,7 +358,16 @@ export interface ObservabilityOperation {
   calls: number;
   estimated_cost: number;
   validation_passed: boolean | null;
+  artifact_type: string | null;
   artifact_id: number | null;
+  job_id: number | null;
+  job_title: string | null;
+  company: string | null;
+  task: string;
+  grouped: boolean;
+  model: string | null;
+  total_tokens: number;
+  latency_ms: number;
 }
 
 export interface ObservabilitySummary {
@@ -371,7 +380,23 @@ export interface ObservabilitySummary {
   overstated_claims: number;
   cost_per_passing_resume: number | null;
   historical_data_incomplete: boolean;
+  available_tasks: string[];
   recent_operations: ObservabilityOperation[];
+}
+
+export interface ObservabilityTaskSummary {
+  task: string;
+  calls: number;
+  estimated_cost: number;
+  failed_calls: number;
+  truncated_calls: number;
+  avg_latency_ms: number;
+  total_tokens: number;
+  models_used: string[];
+  validation_pass_rate: number | null;
+  unsupported_claims: number;
+  overstated_claims: number;
+  cost_per_passing_resume: number | null;
 }
 
 export interface ObservabilityCall {
@@ -382,6 +407,12 @@ export interface ObservabilityCall {
   model: string | null;
   status: string;
   error_type: string | null;
+  stop_reason: string | null;
+  temperature: number | null;
+  max_tokens: number | null;
+  prompt_name: string | null;
+  prompt_version: string | null;
+  route_reason: string | null;
   input_tokens: number;
   output_tokens: number;
   latency_ms: number;
@@ -392,7 +423,10 @@ export interface ObservabilityCall {
 export interface ObservabilityEvaluation {
   evaluation_id: string;
   evaluator_name: string;
+  evaluator_type: string;
+  evaluator_version: string;
   metric_name: string;
+  score: number | null;
   label: string | null;
   passed: boolean | null;
   evaluated_at: string;
@@ -400,7 +434,11 @@ export interface ObservabilityEvaluation {
 
 export interface ObservabilityOperationDetail {
   operation_id: string;
+  artifact_type: string | null;
   artifact_id: number | null;
+  job_id: number | null;
+  job_title: string | null;
+  company: string | null;
   calls: ObservabilityCall[];
   evaluations: ObservabilityEvaluation[];
 }

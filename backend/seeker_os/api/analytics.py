@@ -19,6 +19,7 @@ from seeker_os.api.schemas import (
     ObservabilityOperation,
     ObservabilityOperationDetail,
     ObservabilitySummary,
+    ObservabilityTaskSummary,
     PricingRouteComparison,
     ResponseRateStats,
     SignalQualityReport,
@@ -33,6 +34,87 @@ from seeker_os.scoring.calibration import build_calibration_report
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 logger = logging.getLogger(__name__)
+
+
+def _resolve_artifact_jobs(db, operations: list[ObservabilityOperation]) -> None:
+    """Populate job_id, job_title, company on operations with artifacts."""
+    # Resume artifacts: resumes.artifact_id → resumes.job_id → jobs
+    resume_ids = [
+        op.artifact_id for op in operations
+        if op.artifact_type == "resume" and op.artifact_id is not None
+    ]
+    if resume_ids:
+        placeholders = ",".join("?" * len(resume_ids))
+        rows = db.execute(
+            f"""SELECT r.id AS resume_id, r.job_id, j.title, j.company
+                FROM resumes r JOIN jobs j ON j.id = r.job_id
+                WHERE r.id IN ({placeholders})""",
+            resume_ids,
+        ).fetchall()
+        for row in rows:
+            for op in operations:
+                if op.artifact_type == "resume" and op.artifact_id == row["resume_id"]:
+                    op.job_id = row["job_id"]
+                    op.job_title = row["title"] or ""
+                    op.company = row["company"] or ""
+
+    # Job analysis artifacts: job_analyses.id → job_analyses.job_id → jobs
+    analysis_ids = [
+        op.artifact_id for op in operations
+        if op.artifact_type == "job_analysis" and op.artifact_id is not None
+    ]
+    if analysis_ids:
+        placeholders = ",".join("?" * len(analysis_ids))
+        rows = db.execute(
+            f"""SELECT ja.id AS analysis_id, ja.job_id, j.title, j.company
+                FROM job_analyses ja JOIN jobs j ON j.id = ja.job_id
+                WHERE ja.id IN ({placeholders})""",
+            analysis_ids,
+        ).fetchall()
+        for row in rows:
+            for op in operations:
+                if op.artifact_type == "job_analysis" and op.artifact_id == row["analysis_id"]:
+                    op.job_id = row["job_id"]
+                    op.job_title = row["title"] or ""
+                    op.company = row["company"] or ""
+
+    # Company research artifacts: company_research.id → triggered_by_job_id → jobs
+    research_ids = [
+        op.artifact_id for op in operations
+        if op.artifact_type == "company_research" and op.artifact_id is not None
+    ]
+    if research_ids:
+        placeholders = ",".join("?" * len(research_ids))
+        rows = db.execute(
+            f"""SELECT cr.id AS research_id, cr.triggered_by_job_id, j.title, j.company
+                FROM company_research cr JOIN jobs j ON j.id = cr.triggered_by_job_id
+                WHERE cr.id IN ({placeholders})""",
+            research_ids,
+        ).fetchall()
+        for row in rows:
+            for op in operations:
+                if op.artifact_type == "company_research" and op.artifact_id == row["research_id"]:
+                    op.job_id = row["triggered_by_job_id"]
+                    op.job_title = row["title"] or ""
+                    op.company = row["company"] or ""
+
+    # Job artifacts: artifact_id IS the job_id
+    job_ids = [
+        op.artifact_id for op in operations
+        if op.artifact_type == "job" and op.artifact_id is not None
+    ]
+    if job_ids:
+        placeholders = ",".join("?" * len(job_ids))
+        rows = db.execute(
+            f"""SELECT id, title, company FROM jobs WHERE id IN ({placeholders})""",
+            job_ids,
+        ).fetchall()
+        for row in rows:
+            for op in operations:
+                if op.artifact_type == "job" and op.artifact_id == row["id"]:
+                    op.job_id = row["id"]
+                    op.job_title = row["title"] or ""
+                    op.company = row["company"] or ""
 
 
 @router.get("/llm-observability", response_model=ObservabilitySummary)
@@ -73,7 +155,8 @@ def get_llm_observability():
                       SUM(estimated_cost) AS cost,
                       CASE WHEN SUM(CASE WHEN status IN ('failed', 'empty') THEN 1 ELSE 0 END) > 0
                            THEN 'failed' ELSE 'succeeded' END AS status,
-                      MAX(artifact_id) AS artifact_id
+                      MAX(artifact_id) AS artifact_id,
+                      MAX(artifact_type) AS artifact_type
                FROM llm_calls WHERE operation_id IS NOT NULL
                GROUP BY operation_id ORDER BY started_at DESC LIMIT 20"""
         ).fetchall()
@@ -90,9 +173,24 @@ def get_llm_observability():
                 completed_at=row["completed_at"], status=row["status"], calls=row["calls"],
                 estimated_cost=round(row["cost"] or 0, 6),
                 validation_passed=bool(validation["passed"]) if validation else None,
+                artifact_type=row["artifact_type"],
                 artifact_id=row["artifact_id"],
             ))
         validation_rate = round(passing / validations["total"] * 100, 1) if validations["total"] else None
+        task_rows = db.execute(
+            "SELECT DISTINCT task FROM llm_calls WHERE task IS NOT NULL ORDER BY task"
+        ).fetchall()
+        raw_tasks = [r["task"] for r in task_rows]
+        available_tasks: list[str] = []
+        seen_resume = False
+        for t in raw_tasks:
+            if t.startswith("resume_generation"):
+                if not seen_resume:
+                    available_tasks.append("resume_generation")
+                    seen_resume = True
+            else:
+                available_tasks.append(t)
+        _resolve_artifact_jobs(db, recent)
         return ObservabilitySummary(
             total_calls=calls["total"], total_estimated_cost=round(calls["cost"], 6),
             failed_calls=calls["failed"] or 0, truncated_calls=calls["truncated"] or 0,
@@ -100,7 +198,199 @@ def get_llm_observability():
             unsupported_claims=claim_counts["unsupported"] or 0,
             overstated_claims=claim_counts["overstated"] or 0,
             cost_per_passing_resume=round(operation_cost / passing, 6) if passing else None,
+            available_tasks=available_tasks,
             recent_operations=recent,
+        )
+    finally:
+        db.close()
+
+
+@router.get("/llm-observability/task-operations", response_model=list[ObservabilityOperation])
+def get_task_operations(
+    task: str = Query(..., description="Task name to filter by. Use 'resume_generation' to match both standard and high_value variants."),
+    model: str | None = Query(None, description="Filter by specific model."),
+):
+    """Return recent operations for a specific LLM task.
+
+    For tasks with operation_id (e.g. resume generation), groups calls by
+    operation_id. For tasks without operation_id, returns individual calls.
+    """
+    db = get_connection()
+    try:
+        if task == "resume_generation":
+            task_filter = "task LIKE 'resume_generation%'"
+            params: tuple = ()
+        else:
+            task_filter = "task = ?"
+            params = (task,)
+
+        model_filter = ""
+        if model:
+            model_filter = " AND actual_model = ?"
+            params = params + (model,)
+
+        # Grouped operations (have operation_id)
+        grouped_rows = db.execute(
+            f"""SELECT operation_id, MIN(started_at) AS started_at,
+                      MAX(completed_at) AS completed_at, COUNT(*) AS calls,
+                      SUM(estimated_cost) AS cost,
+                      CASE WHEN SUM(CASE WHEN status IN ('failed', 'empty') THEN 1 ELSE 0 END) > 0
+                           THEN 'failed' ELSE 'succeeded' END AS status,
+                      MAX(artifact_id) AS artifact_id,
+                      MAX(artifact_type) AS artifact_type,
+                      MAX(actual_model) AS model,
+                      SUM(input_tokens + output_tokens) AS total_tokens,
+                      CAST(SUM(latency_ms) AS INTEGER) AS latency_ms,
+                      MIN(task) AS task
+               FROM llm_calls WHERE operation_id IS NOT NULL AND {task_filter}{model_filter}
+               GROUP BY operation_id ORDER BY started_at DESC LIMIT 20""",
+            params,
+        ).fetchall()
+
+        operations: list[ObservabilityOperation] = []
+        for row in grouped_rows:
+            validation = db.execute(
+                """SELECT passed FROM llm_evaluations
+                   WHERE operation_id = ? AND metric_name = 'accuracy_validation'
+                   ORDER BY evaluated_at DESC LIMIT 1""",
+                (row["operation_id"],),
+            ).fetchone()
+            operations.append(ObservabilityOperation(
+                operation_id=row["operation_id"], started_at=row["started_at"],
+                completed_at=row["completed_at"], status=row["status"], calls=row["calls"],
+                estimated_cost=round(row["cost"] or 0, 6),
+                validation_passed=bool(validation["passed"]) if validation else None,
+                artifact_type=row["artifact_type"],
+                artifact_id=row["artifact_id"],
+                task=row["task"],
+                grouped=True,
+                model=row["model"],
+                total_tokens=row["total_tokens"] or 0,
+                latency_ms=row["latency_ms"] or 0,
+            ))
+
+        # Ungrouped calls (no operation_id)
+        ungrouped_rows = db.execute(
+            f"""SELECT call_id, started_at, completed_at, status,
+                      estimated_cost, artifact_id, artifact_type, task,
+                      actual_model AS model,
+                      input_tokens + output_tokens AS total_tokens,
+                      latency_ms
+               FROM llm_calls WHERE operation_id IS NULL AND {task_filter}{model_filter}
+               ORDER BY started_at DESC LIMIT 20""",
+            params,
+        ).fetchall()
+
+        for row in ungrouped_rows:
+            operations.append(ObservabilityOperation(
+                operation_id=row["call_id"], started_at=row["started_at"],
+                completed_at=row["completed_at"], status=row["status"], calls=1,
+                estimated_cost=round(row["estimated_cost"] or 0, 6),
+                validation_passed=None,
+                artifact_type=row["artifact_type"],
+                artifact_id=row["artifact_id"],
+                task=row["task"],
+                grouped=False,
+                model=row["model"],
+                total_tokens=row["total_tokens"] or 0,
+                latency_ms=row["latency_ms"] or 0,
+            ))
+
+        operations.sort(key=lambda op: op.started_at, reverse=True)
+        _resolve_artifact_jobs(db, operations)
+        return operations[:20]
+    finally:
+        db.close()
+
+
+@router.get("/llm-observability/task-summary", response_model=ObservabilityTaskSummary)
+def get_task_summary(
+    task: str = Query(..., description="Task name to summarize."),
+    model: str | None = Query(None, description="Filter by specific model."),
+):
+    """Return aggregate stats for a specific LLM task."""
+    db = get_connection()
+    try:
+        if task == "resume_generation":
+            task_filter = "task LIKE 'resume_generation%'"
+            params: tuple = ()
+        else:
+            task_filter = "task = ?"
+            params = (task,)
+
+        model_filter = ""
+        if model:
+            model_filter = " AND actual_model = ?"
+            params = params + (model,)
+
+        row = db.execute(
+            f"""SELECT COUNT(*) AS calls,
+                      COALESCE(SUM(estimated_cost), 0) AS cost,
+                      SUM(CASE WHEN status IN ('failed', 'empty') THEN 1 ELSE 0 END) AS failed,
+                      SUM(CASE WHEN error_type = 'truncated' THEN 1 ELSE 0 END) AS truncated,
+                      CAST(AVG(latency_ms) AS INTEGER) AS avg_latency,
+                      SUM(input_tokens + output_tokens) AS total_tokens
+               FROM llm_calls WHERE {task_filter}{model_filter}""",
+            params,
+        ).fetchone()
+
+        models = db.execute(
+            f"""SELECT DISTINCT actual_model FROM llm_calls
+               WHERE {task_filter} AND actual_model IS NOT NULL
+               ORDER BY actual_model""",
+            params[:1] if task != "resume_generation" else (),
+        ).fetchall()
+        models_used = [r["actual_model"] for r in models]
+
+        # Resume-specific metrics
+        validation_pass_rate: float | None = None
+        unsupported_claims = 0
+        overstated_claims = 0
+        cost_per_passing_resume: float | None = None
+
+        if task == "resume_generation":
+            validations = db.execute(
+                """SELECT COUNT(*) AS total,
+                          SUM(CASE WHEN passed = 1 THEN 1 ELSE 0 END) AS passed
+                   FROM llm_evaluations WHERE metric_name = 'accuracy_validation'"""
+            ).fetchone()
+            total_val = validations["total"] or 0
+            passing = validations["passed"] or 0
+            validation_pass_rate = round(passing / total_val * 100, 1) if total_val else None
+
+            claim_counts = db.execute(
+                """SELECT
+                     SUM(CASE WHEN label = 'unsupported' THEN 1 ELSE 0 END) AS unsupported,
+                     SUM(CASE WHEN label = 'overstated' THEN 1 ELSE 0 END) AS overstated
+                   FROM llm_evaluations WHERE metric_name = 'claim_traceability'"""
+            ).fetchone()
+            unsupported_claims = claim_counts["unsupported"] or 0
+            overstated_claims = claim_counts["overstated"] or 0
+
+            if passing:
+                op_cost = db.execute(
+                    """SELECT COALESCE(SUM(c.estimated_cost), 0) AS cost
+                       FROM llm_calls c
+                       WHERE c.operation_id IN (
+                           SELECT operation_id FROM llm_evaluations
+                           WHERE metric_name = 'accuracy_validation' AND passed = 1
+                       )"""
+                ).fetchone()["cost"]
+                cost_per_passing_resume = round(op_cost / passing, 6)
+
+        return ObservabilityTaskSummary(
+            task=task,
+            calls=row["calls"] or 0,
+            estimated_cost=round(row["cost"] or 0, 6),
+            failed_calls=row["failed"] or 0,
+            truncated_calls=row["truncated"] or 0,
+            avg_latency_ms=row["avg_latency"] or 0,
+            total_tokens=row["total_tokens"] or 0,
+            models_used=models_used,
+            validation_pass_rate=validation_pass_rate,
+            unsupported_claims=unsupported_claims,
+            overstated_claims=overstated_claims,
+            cost_per_passing_resume=cost_per_passing_resume,
         )
     finally:
         db.close()
@@ -120,20 +410,69 @@ def get_llm_operation(operation_id: str):
             "SELECT * FROM llm_evaluations WHERE operation_id = ? ORDER BY evaluated_at",
             (operation_id,),
         ).fetchall()
+        artifact_type = next((r["artifact_type"] for r in call_rows if r["artifact_type"]), None)
+        artifact_id = next((r["artifact_id"] for r in call_rows if r["artifact_id"]), None)
+        job_id: int | None = None
+        job_title: str | None = None
+        company: str | None = None
+        if artifact_type and artifact_id is not None:
+            if artifact_type == "resume":
+                job_row = db.execute(
+                    """SELECT j.id, j.title, j.company
+                       FROM resumes r JOIN jobs j ON j.id = r.job_id
+                       WHERE r.id = ?""",
+                    (artifact_id,),
+                ).fetchone()
+            elif artifact_type == "job_analysis":
+                job_row = db.execute(
+                    """SELECT j.id, j.title, j.company
+                       FROM job_analyses ja JOIN jobs j ON j.id = ja.job_id
+                       WHERE ja.id = ?""",
+                    (artifact_id,),
+                ).fetchone()
+            elif artifact_type == "company_research":
+                job_row = db.execute(
+                    """SELECT j.id, j.title, j.company
+                       FROM company_research cr JOIN jobs j ON j.id = cr.triggered_by_job_id
+                       WHERE cr.id = ?""",
+                    (artifact_id,),
+                ).fetchone()
+            elif artifact_type == "job":
+                job_row = db.execute(
+                    "SELECT id, title, company FROM jobs WHERE id = ?",
+                    (artifact_id,),
+                ).fetchone()
+            else:
+                job_row = None
+            if job_row:
+                job_id = job_row["id"]
+                job_title = job_row["title"] or None
+                company = job_row["company"] or None
         return ObservabilityOperationDetail(
             operation_id=operation_id,
-            artifact_id=next((r["artifact_id"] for r in call_rows if r["artifact_id"]), None),
+            artifact_type=artifact_type,
+            artifact_id=artifact_id,
+            job_id=job_id,
+            job_title=job_title,
+            company=company,
             calls=[ObservabilityCall(
                 call_id=r["call_id"], parent_call_id=r["parent_call_id"], task=r["task"],
                 provider=r["actual_provider"] or r["requested_provider"],
                 model=r["actual_model"] or r["requested_model"], status=r["status"],
-                error_type=r["error_type"], input_tokens=r["input_tokens"],
+                error_type=r["error_type"], stop_reason=r["stop_reason"],
+                temperature=r["temperature"], max_tokens=r["max_tokens"],
+                prompt_name=r["prompt_name"], prompt_version=r["prompt_version"],
+                route_reason=r["route_reason"],
+                input_tokens=r["input_tokens"],
                 output_tokens=r["output_tokens"], latency_ms=r["latency_ms"],
                 estimated_cost=r["estimated_cost"], started_at=r["started_at"],
             ) for r in call_rows],
             evaluations=[ObservabilityEvaluation(
                 evaluation_id=r["evaluation_id"], evaluator_name=r["evaluator_name"],
-                metric_name=r["metric_name"], label=r["label"],
+                evaluator_type=r["evaluator_type"] or "",
+                evaluator_version=r["evaluator_version"] or "",
+                metric_name=r["metric_name"], score=r["score"],
+                label=r["label"],
                 passed=bool(r["passed"]) if r["passed"] is not None else None,
                 evaluated_at=r["evaluated_at"],
             ) for r in evaluation_rows],

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -854,6 +855,60 @@ MIGRATIONS: list[str | callable] = [
     CREATE INDEX idx_llm_evaluations_metric ON llm_evaluations(metric_name, evaluated_at);
     """,
 ]
+
+
+def _backfill_llm_artifacts(conn: sqlite3.Connection) -> None:
+    """Link existing jd_analysis and company_dossier_generation LLM calls to their artifacts."""
+    conn.row_factory = sqlite3.Row
+
+    # jd_analysis: exact match on model + input_tokens + output_tokens + latency_ms
+    rows = conn.execute(
+        """SELECT lc.call_id, ja.id AS analysis_id
+           FROM llm_calls lc
+           JOIN job_analyses ja
+             ON ja.model = lc.actual_model
+            AND ja.input_tokens = lc.input_tokens
+            AND ja.output_tokens = lc.output_tokens
+            AND ja.latency_ms = lc.latency_ms
+           WHERE lc.task = 'jd_analysis' AND lc.operation_id IS NULL"""
+    ).fetchall()
+    for row in rows:
+        op_id = str(uuid.uuid4())
+        conn.execute(
+            "UPDATE llm_calls SET operation_id = ?, artifact_type = 'job_analysis', artifact_id = ? WHERE call_id = ?",
+            (op_id, row["analysis_id"], row["call_id"]),
+        )
+
+    # company_dossier_generation: closest timestamp match within 120s
+    dossier_rows = conn.execute(
+        """SELECT lc.call_id, lc.started_at
+           FROM llm_calls lc
+           WHERE lc.task = 'company_dossier_generation' AND lc.operation_id IS NULL"""
+    ).fetchall()
+    cr_rows = conn.execute(
+        """SELECT id, triggered_by_job_id, researched_at
+           FROM company_research WHERE triggered_by_job_id IS NOT NULL
+           ORDER BY researched_at DESC"""
+    ).fetchall()
+    for dr in dossier_rows:
+        lc_time = datetime.fromisoformat(dr["started_at"])
+        best_cr_id = None
+        best_diff = 999.0
+        for cr in cr_rows:
+            cr_time = datetime.fromisoformat(cr["researched_at"])
+            diff = abs((lc_time - cr_time).total_seconds())
+            if diff < best_diff:
+                best_diff = diff
+                best_cr_id = cr["id"]
+        if best_cr_id is not None and best_diff < 120:
+            op_id = str(uuid.uuid4())
+            conn.execute(
+                "UPDATE llm_calls SET operation_id = ?, artifact_type = 'company_research', artifact_id = ? WHERE call_id = ?",
+                (op_id, best_cr_id, dr["call_id"]),
+            )
+
+
+MIGRATIONS.append(_backfill_llm_artifacts)
 
 def _split_sql_statements(script: str) -> list[str]:
     """Split a migration script into individual statements on ';'.

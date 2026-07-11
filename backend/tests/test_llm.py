@@ -440,10 +440,10 @@ class TestTaskMaxTokensConfig:
         router = ModelRouter(settings)
         router._initialized = True
 
-        assert router.get_task_max_tokens("jd_analysis") == 16000
-        assert router.get_task_max_tokens("resume_generation_standard") == 16000
+        assert router.get_task_max_tokens("jd_analysis") == 32000
+        assert router.get_task_max_tokens("resume_generation_standard") == 32000
         assert router.get_task_max_tokens("accuracy_validation") == 16000
-        assert router.get_task_max_tokens("metadata_extraction") == 1000
+        assert router.get_task_max_tokens("metadata_extraction") == 2000
 
     def test_unknown_task_returns_fallback(self):
         """An unknown task returns the fallback default."""
@@ -455,7 +455,7 @@ class TestTaskMaxTokensConfig:
         router = ModelRouter(settings)
         router._initialized = True
 
-        assert router.get_task_max_tokens("totally_unknown_task") == 4096
+        assert router.get_task_max_tokens("totally_unknown_task") == 8192
 
     def test_config_override_takes_priority(self):
         """A max_tokens set in providers.yml tasks overrides the built-in default."""

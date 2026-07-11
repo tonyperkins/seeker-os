@@ -807,7 +807,16 @@ class ObservabilityOperation(BaseModel):
     calls: int = 0
     estimated_cost: float = 0.0
     validation_passed: bool | None = None
+    artifact_type: str | None = None
     artifact_id: int | None = None
+    job_id: int | None = None
+    job_title: str | None = None
+    company: str | None = None
+    task: str = ""
+    grouped: bool = True
+    model: str | None = None
+    total_tokens: int = 0
+    latency_ms: int = 0
 
 
 class ObservabilitySummary(BaseModel):
@@ -820,7 +829,23 @@ class ObservabilitySummary(BaseModel):
     overstated_claims: int = 0
     cost_per_passing_resume: float | None = None
     historical_data_incomplete: bool = True
+    available_tasks: list[str] = Field(default_factory=list)
     recent_operations: list[ObservabilityOperation] = Field(default_factory=list)
+
+
+class ObservabilityTaskSummary(BaseModel):
+    task: str = ""
+    calls: int = 0
+    estimated_cost: float = 0.0
+    failed_calls: int = 0
+    truncated_calls: int = 0
+    avg_latency_ms: int = 0
+    total_tokens: int = 0
+    models_used: list[str] = Field(default_factory=list)
+    validation_pass_rate: float | None = None
+    unsupported_claims: int = 0
+    overstated_claims: int = 0
+    cost_per_passing_resume: float | None = None
 
 
 class ObservabilityCall(BaseModel):
@@ -831,6 +856,12 @@ class ObservabilityCall(BaseModel):
     model: str | None = None
     status: str
     error_type: str | None = None
+    stop_reason: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    prompt_name: str | None = None
+    prompt_version: str | None = None
+    route_reason: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
     latency_ms: int = 0
@@ -841,7 +872,10 @@ class ObservabilityCall(BaseModel):
 class ObservabilityEvaluation(BaseModel):
     evaluation_id: str
     evaluator_name: str
+    evaluator_type: str = ""
+    evaluator_version: str = ""
     metric_name: str
+    score: float | None = None
     label: str | None = None
     passed: bool | None = None
     evaluated_at: str
@@ -849,7 +883,11 @@ class ObservabilityEvaluation(BaseModel):
 
 class ObservabilityOperationDetail(BaseModel):
     operation_id: str
+    artifact_type: str | None = None
     artifact_id: int | None = None
+    job_id: int | None = None
+    job_title: str | None = None
+    company: str | None = None
     calls: list[ObservabilityCall] = Field(default_factory=list)
     evaluations: list[ObservabilityEvaluation] = Field(default_factory=list)
 
