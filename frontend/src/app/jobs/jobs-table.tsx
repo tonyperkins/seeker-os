@@ -149,9 +149,11 @@ export function JobsTable(props: JobsTableProps) {
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono font-medium">
                       <div className="flex flex-col items-center">
-                        <span>{job.score != null ? job.score : "—"}</span>
+                        <span title={job.net_score != null && job.net_score !== job.score ? `Base score ${job.score} → ${job.net_score.toFixed(1)} after company research` : undefined}>
+                          {job.score != null ? job.score : "—"}
+                        </span>
                         {job.net_score != null && job.net_score !== job.score && (
-                          <span className="text-xs text-muted-foreground" title="Net score (base + research, capped by AI verdict)">
+                          <span className="text-xs text-muted-foreground" title={`Base score ${job.score} → ${job.net_score.toFixed(1)} after company research`}>
                             → {job.net_score.toFixed(1)}
                           </span>
                         )}
@@ -160,22 +162,30 @@ export function JobsTable(props: JobsTableProps) {
                     <TableCell className="whitespace-nowrap">
                       <div className="flex items-center gap-1" title={job.reject_reason ? (job.reject_details ? `Manually rejected: ${job.reject_reason}` : job.reject_reason) : job.status}>
                         {statusIcon(job.status, !!job.reject_details)}
-                        <Brain className={`size-3.5 ${
-                          !job.has_analysis
-                            ? "text-muted-foreground/50"
-                            : job.analysis_verdict === "APPLY"
-                              ? "text-emerald-500"
-                              : job.analysis_verdict === "CONDITIONAL"
-                                ? "text-amber-500"
-                                : job.analysis_verdict === "MONITOR"
-                                  ? "text-sky-500"
-                                  : job.analysis_verdict === "SKIP"
-                                    ? "text-red-500"
-                                    : "text-primary"
-                        }`} aria-hidden={!job.has_analysis} role={job.has_analysis ? "img" : undefined} aria-label={job.has_analysis ? `Analysis: ${job.analysis_verdict ?? "done"}` : undefined} />
-                        <Building2 className={`size-3.5 ${job.has_research ? "text-primary" : "text-muted-foreground/50"}`} aria-hidden={!job.has_research} role={job.has_research ? "img" : undefined} aria-label={job.has_research ? "Research done" : undefined} />
-                        <FileText className={`size-3.5 ${job.has_resume ? "text-primary" : "text-muted-foreground/50"}`} aria-hidden={!job.has_resume} role={job.has_resume ? "img" : undefined} aria-label={job.has_resume ? "Resume generated" : undefined} />
-                        <Users className={`size-3.5 ${job.has_recruiter ? "text-primary" : "text-muted-foreground/50"}`} aria-hidden={!job.has_recruiter} role={job.has_recruiter ? "img" : undefined} aria-label={job.has_recruiter ? `Recruiter: ${job.recruiter_source ?? "contact"}` : undefined} />
+                        <span title={job.has_analysis ? `Analysis: ${job.analysis_verdict ?? "done"}` : "No analysis yet"} className="contents">
+                          <Brain className={`size-3.5 ${
+                            !job.has_analysis
+                              ? "text-muted-foreground/25"
+                              : job.analysis_verdict === "APPLY"
+                                ? "text-emerald-500"
+                                : job.analysis_verdict === "CONDITIONAL"
+                                  ? "text-amber-500"
+                                  : job.analysis_verdict === "MONITOR"
+                                    ? "text-sky-500"
+                                    : job.analysis_verdict === "SKIP"
+                                      ? "text-red-500"
+                                      : "text-primary"
+                          }`} aria-hidden={!job.has_analysis} role={job.has_analysis ? "img" : undefined} aria-label={job.has_analysis ? `Analysis: ${job.analysis_verdict ?? "done"}` : undefined} />
+                        </span>
+                        <span title={job.has_research ? "Company research done" : "No company research"} className="contents">
+                          <Building2 className={`size-3.5 ${job.has_research ? "text-primary" : "text-muted-foreground/25"}`} aria-hidden={!job.has_research} role={job.has_research ? "img" : undefined} aria-label={job.has_research ? "Research done" : undefined} />
+                        </span>
+                        <span title={job.has_resume ? "Resume generated" : "No resume yet"} className="contents">
+                          <FileText className={`size-3.5 ${job.has_resume ? "text-primary" : "text-muted-foreground/25"}`} aria-hidden={!job.has_resume} role={job.has_resume ? "img" : undefined} aria-label={job.has_resume ? "Resume generated" : undefined} />
+                        </span>
+                        <span title={job.has_recruiter ? `Recruiter: ${job.recruiter_source ?? "contact"}` : "No recruiter contact"} className="contents">
+                          <Users className={`size-3.5 ${job.has_recruiter ? "text-primary" : "text-muted-foreground/25"}`} aria-hidden={!job.has_recruiter} role={job.has_recruiter ? "img" : undefined} aria-label={job.has_recruiter ? `Recruiter: ${job.recruiter_source ?? "contact"}` : undefined} />
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
@@ -183,7 +193,7 @@ export function JobsTable(props: JobsTableProps) {
                     </TableCell>
                     <TableCell className="max-w-[260px]">
                       <div className="flex items-center gap-1.5">
-                        {job.is_pinned && <Pin className="size-3.5 shrink-0 text-amber-500" />}
+                        {job.is_pinned && <span title="Pinned" className="contents"><Pin className="size-3.5 shrink-0 text-amber-500" /></span>}
                         <span className="truncate font-medium">{job.title}</span>
                       </div>
                     </TableCell>
