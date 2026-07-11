@@ -767,7 +767,7 @@ def get_spend():
             pricing_stale_after_days=stale_threshold_days,
             route_pricing=route_pricing,
             partial=True,
-            warnings=["Usage before the LLM ledger migration is not included."],
+            warnings=["Usage before the LLM ledger activation is not included."],
         )
     finally:
         db.close()
