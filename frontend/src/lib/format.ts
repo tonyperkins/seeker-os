@@ -43,3 +43,22 @@ export function formatTokens(n: number | null | undefined): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
+
+/**
+ * Check if all models across all providers are free-tier (both input and
+ * output $/Mtok are 0). A model with null pricing is not considered free
+ * (it's unconfigured, not free).
+ */
+export function isFreeTierOnly(
+  providers: { models: { input_price_per_mtok: number | null; output_price_per_mtok: number | null }[] }[],
+): boolean {
+  const allModels = providers.flatMap((p) => p.models);
+  if (allModels.length === 0) return false;
+  return allModels.every(
+    (m) =>
+      m.input_price_per_mtok != null &&
+      m.input_price_per_mtok === 0 &&
+      m.output_price_per_mtok != null &&
+      m.output_price_per_mtok === 0,
+  );
+}

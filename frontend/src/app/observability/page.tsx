@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, BadgeCheck, Coins, Loader2 } from "lucide-react";
-import { api, type ObservabilityOperationDetail, type ObservabilitySummary } from "@/lib/api";
+import { api, type ObservabilityOperationDetail, type ObservabilitySummary, type ProvidersConfigResponse } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDuration, formatTokens } from "@/lib/format";
+import { formatCurrency, formatDuration, formatTokens, isFreeTierOnly } from "@/lib/format";
 import { DismissibleBanner } from "@/components/dismissible-banner";
 
 function money(value: number | null) {
@@ -15,11 +15,13 @@ function money(value: number | null) {
 
 export default function ObservabilityPage() {
   const [summary, setSummary] = useState<ObservabilitySummary | null>(null);
+  const [providers, setProviders] = useState<ProvidersConfigResponse | null>(null);
   const [detail, setDetail] = useState<ObservabilityOperationDetail | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     api.analytics.llmObservability().then(setSummary).catch((e) => setError(String(e)));
+    api.models.getConfig().then(setProviders).catch(() => {});
   }, []);
 
   async function inspect(operationId: string) {
@@ -54,6 +56,11 @@ export default function ObservabilityPage() {
         >
           Usage before ledger activation is not included.
         </DismissibleBanner>
+      )}
+      {isFreeTierOnly(providers?.providers ?? []) && (
+        <p className="text-xs text-muted-foreground">
+          Running on free-tier models — metered cost is $0. Cost plumbing is live and will populate when a paid model is used.
+        </p>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(([label, value, Icon]) => (

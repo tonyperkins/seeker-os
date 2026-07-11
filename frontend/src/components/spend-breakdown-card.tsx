@@ -62,7 +62,7 @@ function splitModelId(provider: string, model: string): { prefix: string | null;
   return { prefix: null, base: model };
 }
 
-export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
+export function SpendBreakdownCard({ report, freeTierOnly }: { report: SpendReport | null; freeTierOnly?: boolean }) {
   if (!report || report.total_calls === 0) {
     return (
       <CollapsibleCard
@@ -236,9 +236,15 @@ export function SpendBreakdownCard({ report }: { report: SpendReport | null }) {
         </div>
       )}
 
-      {!hasPricing && (
+      {!hasPricing && !freeTierOnly && (
         <div className="border-t border-border pt-2 text-xs text-muted-foreground">
           Add <code className="font-mono">input_price_per_mtok</code> / <code className="font-mono">output_price_per_mtok</code> to models in providers.yml for cost estimates
+        </div>
+      )}
+
+      {freeTierOnly && (
+        <div className="border-t border-border pt-2 text-xs text-muted-foreground">
+          Running on free-tier models — metered cost is $0. Cost plumbing is live and will populate when a paid model is used.
         </div>
       )}
     </CollapsibleCard>

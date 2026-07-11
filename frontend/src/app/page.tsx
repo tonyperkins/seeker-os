@@ -8,6 +8,7 @@ import { SignalQualityContent } from "@/components/signal-quality-card";
 import { CollapsibleCard } from "@/components/collapsible-card";
 import { SpendBreakdownCard } from "@/components/spend-breakdown-card";
 import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport } from "@/lib/api";
+import { isFreeTierOnly } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -202,7 +203,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ZONE 7 — LLM Spend */}
-      <SpendBreakdownCard report={spend} />
+      <SpendBreakdownCard report={spend} freeTierOnly={isFreeTierOnly(providers?.providers ?? [])} />
     </div>
   );
 }
