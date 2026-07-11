@@ -12,6 +12,8 @@ files — nothing is hardcoded.
 from __future__ import annotations
 
 import json
+import logging
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -368,6 +370,7 @@ def analyze_job(
     # 4. Call LLM
     router = ModelRouter(settings)
     from seeker_os.llm.models import TruncationError
+    operation_id = str(uuid.uuid4())
     try:
         response = router.generate(
             task=task,
@@ -375,6 +378,7 @@ def analyze_job(
             user_prompt=user_prompt,
             temperature=temperature,
             max_tokens=max_tokens,
+            operation_id=operation_id,
         )
     except TruncationError as e:
         db.close()
@@ -457,6 +461,14 @@ def analyze_job(
     db.commit()
     db.close()
 
+    try:
+        from seeker_os.observability.llm_ledger import attach_artifact
+        attach_artifact(operation_id, "job_analysis", int(analysis_id))
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "llm_artifact_link_failed", extra={"operation_id": operation_id}
+        )
+
     # 7. Return result
     result = dict(data)
     result["id"] = analysis_id
@@ -467,6 +479,7 @@ def analyze_job(
     result["input_tokens"] = response.input_tokens
     result["output_tokens"] = response.output_tokens
     result["latency_ms"] = response.latency_ms
+    result["operation_id"] = operation_id
     return result
 
 

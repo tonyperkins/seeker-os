@@ -291,6 +291,7 @@ def fetch_llm_dossier(
     jd_text: str = "",
     retrieval_snippets: list[RetrievalSnippet] | None = None,
     fit_preferences_text: str = "",
+    operation_id: str | None = None,
 ) -> CompanyResearchResult | None:
     """Generate a full company dossier using the configured LLM.
 
@@ -376,6 +377,7 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
             system_prompt=DOSSIER_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             temperature=0.3,
+            operation_id=operation_id,
         )
     except Exception:
         logger.exception("LLM dossier generation call failed for company='%s'", company)
@@ -1064,7 +1066,10 @@ def research_company(
                 break
 
     # 3. LLM dossier generation (comprehensive: funding + sentiment + fit)
+    dossier_operation_id: str | None = None
     if enable_llm:
+        import uuid as _uuid
+        dossier_operation_id = str(_uuid.uuid4())
         fit_prefs_text = _build_fit_preferences_text(cr_config)
         dossier = fetch_llm_dossier(
             company=company,
@@ -1075,6 +1080,7 @@ def research_company(
             jd_text=jd_text,
             retrieval_snippets=retrieval_snippets or None,
             fit_preferences_text=fit_prefs_text,
+            operation_id=dossier_operation_id,
         )
         if dossier:
             # Preserve Wikipedia info and merge sources (only if not discarded)
@@ -1152,4 +1158,5 @@ def research_company(
             )
 
     result.verification_state = verification_state
+    result._dossier_operation_id = dossier_operation_id  # type: ignore[attr-defined]
     return result

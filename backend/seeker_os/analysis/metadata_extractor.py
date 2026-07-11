@@ -98,6 +98,7 @@ def extract_metadata_from_jd(
     title: str = "",
     location: str = "",
     settings: Settings | None = None,
+    operation_id: str | None = None,
 ) -> ExtractedMetadata:
     """Use an LLM to extract structured metadata from JD text.
 
@@ -143,6 +144,7 @@ def extract_metadata_from_jd(
             system_prompt=_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             temperature=0.0,
+            operation_id=operation_id,
         )
     except Exception as e:
         from seeker_os.llm.models import TruncationError as _TE

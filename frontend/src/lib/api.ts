@@ -35,6 +35,7 @@ export type {
   SpendReport,
   ObservabilityOperation,
   ObservabilitySummary,
+  ObservabilityTaskSummary,
   ObservabilityCall,
   ObservabilityEvaluation,
   ObservabilityOperationDetail,
@@ -266,6 +267,10 @@ export const api = {
     signalQuality: () => fetchAPI<T.SignalQualityReport>("/api/analytics/signal-quality"),
     spend: () => fetchAPI<T.SpendReport>("/api/analytics/spend"),
     llmObservability: () => fetchAPI<T.ObservabilitySummary>("/api/analytics/llm-observability"),
+    llmTaskOperations: (task: string, model?: string) =>
+      fetchAPI<T.ObservabilityOperation[]>(`/api/analytics/llm-observability/task-operations?task=${encodeURIComponent(task)}${model ? `&model=${encodeURIComponent(model)}` : ""}`),
+    llmTaskSummary: (task: string, model?: string) =>
+      fetchAPI<T.ObservabilityTaskSummary>(`/api/analytics/llm-observability/task-summary?task=${encodeURIComponent(task)}${model ? `&model=${encodeURIComponent(model)}` : ""}`),
     llmOperation: (operationId: string) =>
       fetchAPI<T.ObservabilityOperationDetail>(`/api/analytics/llm-observability/operations/${operationId}`),
   },

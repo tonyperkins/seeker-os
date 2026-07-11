@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import uuid
 from datetime import UTC, datetime
 
 from seeker_os.api.jobs_repo import (
@@ -278,11 +280,13 @@ def create_job_service(body: JobCreate) -> JobCreateResponse:
 
         if settings.providers:
             from seeker_os.analysis.metadata_extractor import extract_metadata_from_jd
+            metadata_op_id = str(uuid.uuid4())
             extracted = extract_metadata_from_jd(
                 jd_text=jd_text,
                 title=body.title or gh_title or "",
                 location=body.location or gh_location or "",
                 settings=settings,
+                operation_id=metadata_op_id,
             )
             if not gh_workplace_type and not body.workplace_type:
                 gh_workplace_type = extracted.workplace_type
@@ -410,6 +414,16 @@ def create_job_service(body: JobCreate) -> JobCreateResponse:
             ),
         )
         job_id = cursor.lastrowid
+
+        # Link metadata extraction LLM calls to the job for observability
+        if settings.providers:
+            try:
+                from seeker_os.observability.llm_ledger import attach_artifact
+                attach_artifact(metadata_op_id, "job", int(job_id))
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "llm_artifact_link_failed", extra={"operation_id": metadata_op_id}
+                )
 
         db.execute(
             "UPDATE jobs SET title_norm=?, company_norm=? WHERE id=?",
