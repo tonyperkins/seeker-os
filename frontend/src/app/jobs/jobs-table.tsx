@@ -165,7 +165,7 @@ export function JobsTable(props: JobsTableProps) {
                         <span title={job.has_analysis ? `Analysis: ${job.analysis_verdict ?? "done"}` : "No analysis yet"} className="contents">
                           <Brain className={`size-3.5 ${
                             !job.has_analysis
-                              ? "text-muted-foreground/25"
+                              ? "text-muted-foreground/35"
                               : job.analysis_verdict === "APPLY"
                                 ? "text-emerald-500"
                                 : job.analysis_verdict === "CONDITIONAL"
@@ -178,13 +178,13 @@ export function JobsTable(props: JobsTableProps) {
                           }`} aria-hidden={!job.has_analysis} role={job.has_analysis ? "img" : undefined} aria-label={job.has_analysis ? `Analysis: ${job.analysis_verdict ?? "done"}` : undefined} />
                         </span>
                         <span title={job.has_research ? "Company research done" : "No company research"} className="contents">
-                          <Building2 className={`size-3.5 ${job.has_research ? "text-primary" : "text-muted-foreground/25"}`} aria-hidden={!job.has_research} role={job.has_research ? "img" : undefined} aria-label={job.has_research ? "Research done" : undefined} />
+                          <Building2 className={`size-3.5 ${job.has_research ? "text-primary" : "text-muted-foreground/35"}`} aria-hidden={!job.has_research} role={job.has_research ? "img" : undefined} aria-label={job.has_research ? "Research done" : undefined} />
                         </span>
                         <span title={job.has_resume ? "Resume generated" : "No resume yet"} className="contents">
-                          <FileText className={`size-3.5 ${job.has_resume ? "text-primary" : "text-muted-foreground/25"}`} aria-hidden={!job.has_resume} role={job.has_resume ? "img" : undefined} aria-label={job.has_resume ? "Resume generated" : undefined} />
+                          <FileText className={`size-3.5 ${job.has_resume ? "text-primary" : "text-muted-foreground/35"}`} aria-hidden={!job.has_resume} role={job.has_resume ? "img" : undefined} aria-label={job.has_resume ? "Resume generated" : undefined} />
                         </span>
                         <span title={job.has_recruiter ? `Recruiter: ${job.recruiter_source ?? "contact"}` : "No recruiter contact"} className="contents">
-                          <Users className={`size-3.5 ${job.has_recruiter ? "text-primary" : "text-muted-foreground/25"}`} aria-hidden={!job.has_recruiter} role={job.has_recruiter ? "img" : undefined} aria-label={job.has_recruiter ? `Recruiter: ${job.recruiter_source ?? "contact"}` : undefined} />
+                          <Users className={`size-3.5 ${job.has_recruiter ? "text-primary" : "text-muted-foreground/35"}`} aria-hidden={!job.has_recruiter} role={job.has_recruiter ? "img" : undefined} aria-label={job.has_recruiter ? `Recruiter: ${job.recruiter_source ?? "contact"}` : undefined} />
                         </span>
                       </div>
                     </TableCell>
