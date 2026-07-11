@@ -327,7 +327,13 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
               <CardDescription>Update job status</CardDescription>
             </CardHeader>
             <CardContent>
-              <JobActions jobId={job.id} currentStatus={job.status} />
+              <JobActions
+                jobId={job.id}
+                currentStatus={job.status}
+                hasResume={job.has_resume}
+                applyUrl={job.apply_url || undefined}
+                atsSource={job.ats_source}
+              />
             </CardContent>
           </Card>
 
@@ -342,15 +348,6 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             </CardContent>
           </Card>
           */}
-
-          {job.apply_url && (
-            <Button size="lg" nativeButton={false} render={
-              <a href={job.apply_url} target="_blank" rel="noopener noreferrer" />
-            }>
-              <ExternalLink />
-              Apply on {job.ats_source ?? "site"}
-            </Button>
-          )}
 
           <GenerateResumeButton jobId={job.id} />
 

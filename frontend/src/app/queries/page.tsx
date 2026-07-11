@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Plus,
   Loader2,
-  Trash2,
   Play,
   Pencil,
   Check,
@@ -39,6 +38,7 @@ import {
 import { api, type QuerySummary } from "@/lib/api";
 import { ErrorBanner } from "@/components/error-banner";
 import { PageHeader } from "@/components/page-header";
+import { DeleteButton } from "@/components/delete-button";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "never";
@@ -436,45 +436,15 @@ export default function QueriesPage() {
                               >
                                 <Pencil />
                               </Button>
-                              <Dialog>
-                                <DialogTrigger
-                                  render={
-                                    <Button
-                                      size="icon-sm"
-                                      variant="ghost"
-                                      disabled={q.id == null}
-                                      title="Delete"
-                                    >
-                                      <Trash2 className="text-destructive" />
-                                    </Button>
-                                  }
-                                />
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>Delete query?</DialogTitle>
-                                    <DialogDescription>
-                                      Remove &ldquo;{q.label}&rdquo; ({q.slug}). This cannot be undone.
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <DialogFooter>
-                                    <DialogClose render={<Button variant="outline" />}>
-                                      Cancel
-                                    </DialogClose>
-                                    <Button
-                                      variant="destructive"
-                                      disabled={q.id == null || deletingId === q.id}
-                                      onClick={() => q.id != null && handleDelete(q.id)}
-                                    >
-                                      {deletingId === q.id ? (
-                                        <Loader2 className="animate-spin" />
-                                      ) : (
-                                        <Trash2 />
-                                      )}
-                                      Delete
-                                    </Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
+                              <DeleteButton
+                                onDelete={async () => {
+                                  if (q.id != null) await handleDelete(q.id);
+                                }}
+                                itemName={`"${q.label}" (${q.slug})`}
+                                itemId={q.slug}
+                                size="icon-sm"
+                                variant="ghost"
+                              />
                             </>
                           )}
                         </div>

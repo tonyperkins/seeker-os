@@ -17,7 +17,7 @@ interface DeleteButtonProps {
   onDelete: () => Promise<void>;
   itemName: string;
   itemId?: string | number;
-  size?: "sm" | "default" | "icon";
+  size?: "sm" | "default" | "icon" | "icon-sm";
   variant?: "ghost" | "outline" | "destructive";
   label?: string;
   triggerClassName?: string;
@@ -65,7 +65,7 @@ export function DeleteButton({
               setOpen(true);
             }}
           >
-            <Trash2 className={size === "icon" ? "size-4" : "size-3.5"} />
+            <Trash2 className={size === "icon" || size === "icon-sm" ? "size-4" : "size-3.5"} />
             {label}
           </Button>
         }
