@@ -28,7 +28,15 @@ const STEPS = [
 
 type StepStatus = "pending" | "started" | "completed";
 
-export function GenerateResumeButton({ jobId }: { jobId: number }) {
+export function GenerateResumeButton({
+  jobId,
+  size,
+  variant,
+}: {
+  jobId: number;
+  size?: "default" | "sm" | "lg" | "icon" | "icon-sm";
+  variant?: "default" | "outline" | "ghost" | "destructive" | "link";
+}) {
   const { demoMode } = useDemoMode();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +176,7 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button disabled={busy || demoMode} title={demoMode ? "Resume generation is disabled in demo mode" : undefined}>
+          <Button size={size} variant={variant} disabled={busy || demoMode} title={demoMode ? "Resume generation is disabled in demo mode" : undefined}>
             {busy ? <Loader2 className="animate-spin" /> : <FileText />}
             {demoMode ? "Demo mode" : "Generate Resume"}
           </Button>

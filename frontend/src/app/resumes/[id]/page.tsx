@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   Card,
@@ -26,9 +27,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { RevalidateButton } from "@/components/revalidate-button";
 import { ResumeEditor } from "@/components/resume-editor";
-import { DeleteResumeButton } from "@/components/delete-resume-button";
+import { ResumeDeleteButton } from "@/components/resume-delete-button";
 import { ClearExportsButton } from "@/components/clear-exports-button";
 import { api, type ResumeDetail } from "@/lib/api";
 import { formatDateTime } from "@/lib/date";
@@ -138,10 +146,22 @@ export default async function ResumeDetailPage(props: PageProps<"/resumes/[id]">
                 <XCircle /> Validation failed
               </Badge>
             )}
-            <DeleteResumeButton
-              resumeId={resume.id}
-              resumeLabel={resume.job_title || `Resume #${resume.id}`}
-            />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="ghost" size="sm">
+                    <MoreHorizontal />
+                    More
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <ResumeDeleteButton
+                  resumeId={resume.id}
+                  resumeLabel={resume.job_title || `Resume #${resume.id}`}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
