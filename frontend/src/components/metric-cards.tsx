@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ClipboardCheck, FileText, Mail, DollarSign } from "lucide-react";
+import { formatCurrency } from "@/lib/format";
 
 interface MetricCardProps {
   label: string;
@@ -40,7 +41,7 @@ export interface MetricCardsData {
 
 export function MetricCards({ data }: { data: MetricCardsData }) {
   const costLabel = data.costPerReady != null
-    ? `$${data.costPerReady.toFixed(2)}`
+    ? formatCurrency(data.costPerReady)
     : data.pricingConfigured
       ? "$0.00"
       : "—";

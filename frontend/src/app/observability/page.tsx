@@ -6,9 +6,10 @@ import { api, type ObservabilityOperationDetail, type ObservabilitySummary } fro
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatCurrency, formatDuration, formatTokens } from "@/lib/format";
 
 function money(value: number | null) {
-  return value == null ? "Unavailable" : `$${value.toFixed(value < 0.01 ? 6 : 2)}`;
+  return value == null ? "Unavailable" : formatCurrency(value);
 }
 
 export default function ObservabilityPage() {
@@ -74,7 +75,7 @@ export default function ObservabilityPage() {
         <Card>
           <CardHeader><CardTitle>Operation detail</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <div><h3 className="mb-2 text-sm font-medium">Calls</h3>{detail.calls.map((call) => <div key={call.call_id} className="mb-2 rounded-md bg-muted p-3 text-sm"><div className="flex justify-between"><span className="font-medium">{call.task}</span><Badge variant="outline">{call.status}</Badge></div><p className="text-muted-foreground">{call.provider || "unrouted"} / {call.model || "unrouted"} · {call.latency_ms}ms · {call.input_tokens + call.output_tokens} tokens · {money(call.estimated_cost)}</p></div>)}</div>
+            <div><h3 className="mb-2 text-sm font-medium">Calls</h3>{detail.calls.map((call) => <div key={call.call_id} className="mb-2 rounded-md bg-muted p-3 text-sm"><div className="flex justify-between"><span className="font-medium">{call.task}</span><Badge variant="outline">{call.status}</Badge></div><p className="text-muted-foreground">{call.provider || "unrouted"} / {call.model || "unrouted"} · {formatDuration(call.latency_ms)} · {formatTokens(call.input_tokens + call.output_tokens)} tokens · {money(call.estimated_cost)}</p></div>)}</div>
             <div><h3 className="mb-2 text-sm font-medium">Evaluations</h3>{detail.evaluations.map((evaluation) => <div key={evaluation.evaluation_id} className="mb-2 flex items-center justify-between rounded-md border p-3 text-sm"><span>{evaluation.metric_name}</span><Badge variant={evaluation.passed ? "secondary" : "destructive"}>{evaluation.label || (evaluation.passed ? "passed" : "failed")}</Badge></div>)}</div>
           </CardContent>
         </Card>
