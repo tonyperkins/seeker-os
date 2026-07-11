@@ -518,7 +518,7 @@ class ModelPricingResponse(BaseModel):
     pricing_source: str = "manual"
 
 
-@router.put("/{provider_id}/models/{model_id}/pricing", response_model=ModelPricingResponse)
+@router.put("/{provider_id}/models/{model_id:path}/pricing", response_model=ModelPricingResponse)
 def update_model_pricing(provider_id: str, model_id: str, body: ModelPricingUpdateRequest):
     """Update a model's pricing in providers.yml.
 
@@ -562,7 +562,7 @@ def update_model_pricing(provider_id: str, model_id: str, body: ModelPricingUpda
     )
 
 
-@router.delete("/{provider_id}/models/{model_id}/pricing", response_model=ModelPricingResponse)
+@router.delete("/{provider_id}/models/{model_id:path}/pricing", response_model=ModelPricingResponse)
 def reset_model_pricing(provider_id: str, model_id: str):
     """Reset a model's manual pricing, allowing auto-fetched pricing to take over.
 

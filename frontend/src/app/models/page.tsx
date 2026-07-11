@@ -16,6 +16,9 @@ import {
   RotateCcw,
   Check,
   X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   Card,
@@ -236,6 +239,8 @@ function ProviderCard({
 }) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = usePersistentState(`models:provider:${provider.id}:expanded`, true);
+  const [sortKey, setSortKey] = useState<"id" | "label" | "tags" | "source" | "pricing" | "available">("id");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const filteredModels = useMemo(() => {
     if (!search.trim()) return provider.models;
@@ -244,6 +249,43 @@ function ProviderCard({
       (m) => m.id.toLowerCase().includes(q) || m.label.toLowerCase().includes(q),
     );
   }, [provider.models, search]);
+
+  const sortedModels = useMemo(() => {
+    const sorted = [...filteredModels];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "id":
+          cmp = a.id.localeCompare(b.id); break;
+        case "label":
+          cmp = a.label.localeCompare(b.label); break;
+        case "tags":
+          cmp = a.tags.join(",").localeCompare(b.tags.join(",")); break;
+        case "source":
+          cmp = (a.source || "").localeCompare(b.source || ""); break;
+        case "pricing":
+          cmp = (a.output_price_per_mtok ?? Infinity) - (b.output_price_per_mtok ?? Infinity); break;
+        case "available":
+          cmp = Number(b.available) - Number(a.available); break;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [filteredModels, sortKey, sortDir]);
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  function sortIcon(key: typeof sortKey) {
+    if (sortKey !== key) return <ArrowUpDown className="size-3 text-muted-foreground/50" />;
+    return sortDir === "asc" ? <ArrowUp className="size-3 text-primary" /> : <ArrowDown className="size-3 text-primary" />;
+  }
 
   const showSearch = provider.models.length > 12;
 
@@ -376,30 +418,54 @@ function ProviderCard({
                   )}
                 </div>
               )}
-              <div className="max-h-80 overflow-y-auto rounded-md border border-border">
+              <div className="max-h-80 overflow-auto rounded-md border border-border">
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
-                      <TableHead className="min-w-[120px]">ID</TableHead>
-                      <TableHead className="min-w-[100px]">Label</TableHead>
-                      <TableHead className="min-w-[80px]">Tags</TableHead>
-                      <TableHead className="w-20">Source</TableHead>
-                      <TableHead className="min-w-[200px]">Pricing ($/Mtok)</TableHead>
-                      <TableHead className="w-16 text-right">Avail</TableHead>
+                      <TableHead className="max-w-[180px]" aria-sort={sortKey === "id" ? (sortDir === "asc" ? "ascending" : "descending") : undefined}>
+                        <button type="button" onClick={() => toggleSort("id")} className="flex items-center gap-1 hover:text-foreground">
+                          ID {sortIcon("id")}
+                        </button>
+                      </TableHead>
+                      <TableHead className="max-w-[140px]" aria-sort={sortKey === "label" ? (sortDir === "asc" ? "ascending" : "descending") : undefined}>
+                        <button type="button" onClick={() => toggleSort("label")} className="flex items-center gap-1 hover:text-foreground">
+                          Label {sortIcon("label")}
+                        </button>
+                      </TableHead>
+                      <TableHead className="min-w-[80px]" aria-sort={sortKey === "tags" ? (sortDir === "asc" ? "ascending" : "descending") : undefined}>
+                        <button type="button" onClick={() => toggleSort("tags")} className="flex items-center gap-1 hover:text-foreground">
+                          Tags {sortIcon("tags")}
+                        </button>
+                      </TableHead>
+                      <TableHead className="w-20" aria-sort={sortKey === "source" ? (sortDir === "asc" ? "ascending" : "descending") : undefined}>
+                        <button type="button" onClick={() => toggleSort("source")} className="flex items-center gap-1 hover:text-foreground">
+                          Source {sortIcon("source")}
+                        </button>
+                      </TableHead>
+                      <TableHead className="whitespace-nowrap" aria-sort={sortKey === "pricing" ? (sortDir === "asc" ? "ascending" : "descending") : undefined}>
+                        <button type="button" onClick={() => toggleSort("pricing")} className="flex items-center gap-1 hover:text-foreground">
+                          Pricing ($/Mtok) {sortIcon("pricing")}
+                        </button>
+                      </TableHead>
+                      <TableHead className="w-16 text-right" aria-sort={sortKey === "available" ? (sortDir === "asc" ? "ascending" : "descending") : undefined}>
+                        <button type="button" onClick={() => toggleSort("available")} className="flex items-center gap-1 hover:text-foreground ml-auto">
+                          Avail {sortIcon("available")}
+                        </button>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredModels.length === 0 ? (
+                    {sortedModels.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
                           No models match &ldquo;{search}&rdquo;
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredModels.map((m: ModelInfoResponse) => (
+                      sortedModels.map((m: ModelInfoResponse) => (
                         <TableRow key={m.id}>
-                          <TableCell className="font-mono text-xs">{m.id}</TableCell>
-                          <TableCell className="text-sm">{m.label}</TableCell>
+                          <TableCell className="font-mono text-xs max-w-[180px] truncate" title={m.id}>{m.id}</TableCell>
+                          <TableCell className="text-sm max-w-[140px] truncate" title={m.label}>{m.label}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {m.tags.length === 0 ? (

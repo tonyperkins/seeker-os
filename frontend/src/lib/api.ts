@@ -398,7 +398,7 @@ export const api = {
       outputPricePerMtok: number | null,
     ) =>
       fetchAPI<Record<string, unknown>>(
-        `/api/models/${providerId}/models/${encodeURIComponent(modelId)}/pricing`,
+        `/api/models/${providerId}/models/${modelId}/pricing`,
         {
           method: "PUT",
           body: JSON.stringify({
@@ -409,7 +409,7 @@ export const api = {
       ),
     resetModelPricing: (providerId: string, modelId: string) =>
       fetchAPI<Record<string, unknown>>(
-        `/api/models/${providerId}/models/${encodeURIComponent(modelId)}/pricing`,
+        `/api/models/${providerId}/models/${modelId}/pricing`,
         { method: "DELETE" },
       ),
   },
