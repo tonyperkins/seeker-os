@@ -14,9 +14,7 @@ import {
   Users,
   Hand,
   ChevronDown,
-  MoreHorizontal,
   ExternalLink,
-  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,10 +33,11 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DeleteButton } from "@/components/delete-button";
+import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { api, type SkipReasonOption } from "@/lib/api";
 import { useDemoMode } from "@/lib/demo";
 
@@ -103,10 +102,6 @@ const STATUS_TRANSITIONS: Record<string, TransitionDef[]> = {
   ],
 };
 
-const POST_APPLY_STATUSES = new Set([
-  "applied", "engaged", "company_rejected", "withdrawn", "offer_accepted", "offer_declined",
-]);
-
 const STATUS_LABELS: Record<string, string> = {
   ready: "Ready",
   reviewing: "Reviewing",
@@ -127,6 +122,82 @@ interface JobActionsProps {
   hasResume?: boolean;
   applyUrl?: string;
   atsSource?: string | null;
+  analysisVerdict?: string | null;
+}
+
+export type PrimaryActionType =
+  | "generate-resume"
+  | "apply-on-site"
+  | "mark-applied"
+  | "mark-engaged"
+  | "override-rejection"
+  | "reset-to-ready";
+
+export interface PrimaryAction {
+  type: PrimaryActionType;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  statusTarget: string;
+}
+
+export function getPrimaryAction(job: {
+  status: string;
+  has_resume: boolean;
+  apply_url: string;
+  ats_source: string | null;
+  analysis_verdict: string | null;
+}): PrimaryAction | null {
+  switch (job.status) {
+    case "ready":
+      if (job.has_resume) {
+        if (job.apply_url) {
+          return {
+            type: "apply-on-site",
+            label: `Apply on ${job.ats_source ?? "site"}`,
+            icon: ExternalLink,
+            statusTarget: "",
+          };
+        }
+        return {
+          type: "mark-applied",
+          label: "Mark Applied",
+          icon: Send,
+          statusTarget: "applied",
+        };
+      }
+      if (job.analysis_verdict === "APPLY" || job.analysis_verdict === "CONDITIONAL") {
+        return {
+          type: "generate-resume",
+          label: "Generate Resume",
+          icon: Send,
+          statusTarget: "",
+        };
+      }
+      return null;
+    case "applied":
+      return {
+        type: "mark-engaged",
+        label: "Mark Engaged",
+        icon: Users,
+        statusTarget: "engaged",
+      };
+    case "rejected":
+      return {
+        type: "override-rejection",
+        label: "Override Rejection",
+        icon: RotateCcw,
+        statusTarget: "override",
+      };
+    case "skipped":
+      return {
+        type: "reset-to-ready",
+        label: "Reset to Ready",
+        icon: CheckCircle2,
+        statusTarget: "ready",
+      };
+    default:
+      return null;
+  }
 }
 
 export function JobActions({
@@ -135,6 +206,7 @@ export function JobActions({
   hasResume = false,
   applyUrl,
   atsSource,
+  analysisVerdict,
 }: JobActionsProps) {
   const { demoMode } = useDemoMode();
   const router = useRouter();
@@ -149,6 +221,14 @@ export function JobActions({
   const [skipReasons, setSkipReasons] = useState<SkipReasonOption[]>([]);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [overrideNote, setOverrideNote] = useState("");
+
+  const primary = getPrimaryAction({
+    status: currentStatus,
+    has_resume: hasResume,
+    apply_url: applyUrl ?? "",
+    ats_source: atsSource ?? null,
+    analysis_verdict: analysisVerdict ?? null,
+  });
 
   useEffect(() => {
     api.settings.get().then((s) => {
@@ -179,55 +259,10 @@ export function JobActions({
     }
   }
 
-  async function handleDelete() {
-    await api.jobs.delete(jobId);
-    router.push("/jobs");
-  }
-
-  const transitions = STATUS_TRANSITIONS[currentStatus] ?? [];
-  const isPostApply = POST_APPLY_STATUSES.has(currentStatus);
-
-  // Derive the primary action from status + context
-  let primaryAction: { label: string; icon: React.ComponentType<{ className?: string }>; onClick: () => void; busyKey?: string } | null = null;
-
-  if (!isPostApply) {
-    if (currentStatus === "ready" || currentStatus === "interested" || currentStatus === "reviewing") {
-      if (applyUrl) {
-        primaryAction = {
-          label: `Apply on ${atsSource ?? "site"}`,
-          icon: ExternalLink,
-          onClick: () => window.open(applyUrl, "_blank", "noopener,noreferrer"),
-        };
-      } else {
-        primaryAction = {
-          label: "Mark Applied",
-          icon: Send,
-          onClick: () => doAction("apply", () => api.jobs.apply(jobId)),
-          busyKey: "apply",
-        };
-      }
-    } else if (currentStatus === "rejected") {
-      primaryAction = {
-        label: "Override Rejection",
-        icon: RotateCcw,
-        onClick: () => setOverrideOpen(true),
-      };
-    } else if (currentStatus === "skipped") {
-      primaryAction = {
-        label: "Reset to Ready",
-        icon: CheckCircle2,
-        onClick: () => doAction("ready", () => api.jobs.update(jobId, { status: "ready" })),
-        busyKey: "ready",
-      };
-    }
-  } else if (currentStatus === "applied") {
-    primaryAction = {
-      label: "Mark Engaged",
-      icon: Users,
-      onClick: () => doAction("transition-engaged", () => api.jobs.transition(jobId, "engaged")),
-      busyKey: "transition-engaged",
-    };
-  }
+  const allTransitions = STATUS_TRANSITIONS[currentStatus] ?? [];
+  const transitions = primary
+    ? allTransitions.filter((t) => t.status !== primary.statusTarget)
+    : allTransitions;
 
   function handleTransition(t: TransitionDef) {
     if (t.needsDialog === "reject") {
@@ -250,24 +285,43 @@ export function JobActions({
           {error}
         </div>
       )}
-      {/* Primary action — one filled button derived from state */}
-      {primaryAction && (
+      {/* Zone 1: Primary action — one filled button derived from state */}
+      {primary?.type === "generate-resume" ? (
+        <GenerateResumeButton jobId={jobId} size="lg" />
+      ) : primary ? (
         <Button
           variant="default"
           size="lg"
           disabled={busy !== null || demoMode}
-          onClick={primaryAction.onClick}
+          onClick={() => {
+            if (primary.type === "apply-on-site" && applyUrl) {
+              window.open(applyUrl, "_blank", "noopener,noreferrer");
+            } else if (primary.type === "mark-applied") {
+              doAction("apply", () => api.jobs.apply(jobId));
+            } else if (primary.type === "mark-engaged") {
+              doAction("transition-engaged", () => api.jobs.transition(jobId, "engaged"));
+            } else if (primary.type === "override-rejection") {
+              setOverrideOpen(true);
+            } else if (primary.type === "reset-to-ready") {
+              doAction("ready", () => api.jobs.update(jobId, { status: "ready" }));
+            }
+          }}
         >
-          {primaryAction.busyKey && busy === primaryAction.busyKey ? (
+          {((primary.type === "mark-applied" && busy === "apply") ||
+            (primary.type === "mark-engaged" && busy === "transition-engaged") ||
+            (primary.type === "reset-to-ready" && busy === "ready")) && (
             <Loader2 className="animate-spin" />
-          ) : (
-            <primaryAction.icon />
           )}
-          {primaryAction.label}
+          {primary.type === "apply-on-site" && <ExternalLink />}
+          {primary.type === "mark-applied" && busy !== "apply" && <Send />}
+          {primary.type === "mark-engaged" && busy !== "transition-engaged" && <Users />}
+          {primary.type === "override-rejection" && <RotateCcw />}
+          {primary.type === "reset-to-ready" && busy !== "ready" && <CheckCircle2 />}
+          {primary.label}
         </Button>
-      )}
+      ) : null}
 
-      {/* Status dropdown — only valid transitions from current state */}
+      {/* Zone 2: Status dropdown — all valid transitions minus the primary */}
       {transitions.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -279,7 +333,9 @@ export function JobActions({
             }
           />
           <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Change status</DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Change status</DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {transitions.map((t) => (
               <DropdownMenuItem
@@ -295,47 +351,10 @@ export function JobActions({
         </DropdownMenu>
       )}
 
-      {/* Overflow menu — rare/destructive actions */}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button variant="ghost" size="sm" disabled={busy !== null || demoMode}>
-              <MoreHorizontal />
-              More
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="start">
-          {currentStatus !== "ready" && !transitions.some((t) => t.status === "ready") && (
-            <DropdownMenuItem
-              onClick={() => doAction("ready", () => api.jobs.update(jobId, { status: "ready" }))}
-              disabled={busy !== null || demoMode}
-            >
-              <CheckCircle2 />
-              Reset to Ready
-            </DropdownMenuItem>
-          )}
-          {currentStatus === "rejected" && !transitions.some((t) => t.status === "override") && (
-            <DropdownMenuItem
-              onClick={() => setOverrideOpen(true)}
-              disabled={busy !== null || demoMode}
-            >
-              <RotateCcw />
-              Override Rejection
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DeleteButton
-            onDelete={handleDelete}
-            itemName={`job #${jobId}`}
-            itemId={jobId}
-            size="sm"
-            variant="ghost"
-            label="Delete"
-            triggerClassName="w-full justify-start text-destructive hover:text-destructive"
-          />
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Generate Resume as secondary when it's not the primary */}
+      {(!primary || primary.type !== "generate-resume") && (
+        <GenerateResumeButton jobId={jobId} variant="outline" />
+      )}
 
       {/* Reject dialog */}
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>

@@ -33,7 +33,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { JobActions } from "@/components/job-actions";
 import { JobEditDialog } from "@/components/job-edit-dialog";
-import { GenerateResumeButton } from "@/components/generate-resume-button";
+import { JobDeleteButton } from "@/components/job-delete-button";
 import { JDRenderer } from "@/components/jd-renderer";
 import { CompanyResearch } from "@/components/company-research";
 import { ScoreBadges } from "@/components/score-badges";
@@ -184,11 +184,17 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
           </div>
           <ScoreBadges initialJob={job} />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <RunAllButton jobId={job.id} />
-          <CopyAllButton job={job} />
-          <RefilterRescoreButton jobIds={[job.id]} />
-          <JobEditDialog job={job} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            <RunAllButton jobId={job.id} />
+            <CopyAllButton job={job} />
+            <RefilterRescoreButton jobIds={[job.id]} />
+          </div>
+          <div className="flex items-center gap-3">
+            <JobEditDialog job={job} />
+            <div className="h-6 w-px bg-border" />
+            <JobDeleteButton jobId={job.id} />
+          </div>
         </div>
       </div>
 
@@ -333,6 +339,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
                 hasResume={job.has_resume}
                 applyUrl={job.apply_url || undefined}
                 atsSource={job.ats_source}
+                analysisVerdict={job.analysis_verdict}
               />
             </CardContent>
           </Card>
@@ -348,8 +355,6 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
             </CardContent>
           </Card>
           */}
-
-          <GenerateResumeButton jobId={job.id} />
 
           <Button
             size="lg"
