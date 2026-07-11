@@ -182,21 +182,21 @@ class ModelRouter:
     # These are generous defaults used when the task is not explicitly configured
     # in providers.yml. They can be overridden per-task via config.
     _TASK_MAX_TOKENS_DEFAULTS: dict[str, int] = {
-        "jd_analysis": 16000,
-        "resume_generation_standard": 16000,
-        "resume_generation_high_value": 16000,
-        "cover_letter_generation": 4000,
-        "application_answer_generation": 2000,
-        "application_answer_critique": 2000,
-        "accuracy_validation": 8000,
-        "metadata_extraction": 1000,
-        "resume_parsing": 2000,
-        "company_dossier_generation": 16000,
-        "onboarding_interview": 4096,
+        "jd_analysis": 32000,
+        "resume_generation_standard": 32000,
+        "resume_generation_high_value": 32000,
+        "cover_letter_generation": 8000,
+        "application_answer_generation": 4000,
+        "application_answer_critique": 4000,
+        "accuracy_validation": 16000,
+        "metadata_extraction": 2000,
+        "resume_parsing": 4000,
+        "company_dossier_generation": 32000,
+        "onboarding_interview": 8192,
     }
 
     # Fallback for tasks not in the defaults table
-    _DEFAULT_MAX_TOKENS = 4096
+    _DEFAULT_MAX_TOKENS = 8192
 
     def get_task_max_tokens(self, task: str) -> int:
         """Resolve the max_tokens for a task from config, falling back to defaults.
