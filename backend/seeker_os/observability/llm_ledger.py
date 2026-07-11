@@ -96,6 +96,7 @@ def start_call(
 ) -> tuple[str, float]:
     call_id = str(uuid.uuid4())
     started = _now()
+    _t0 = time.monotonic()
     db = get_connection()
     try:
         db.execute(
@@ -117,6 +118,7 @@ def start_call(
         db.commit()
     finally:
         db.close()
+    logger.debug("start_call DB write took %.3fs (task=%s)", time.monotonic() - _t0, task)
     return call_id, time.monotonic()
 
 
@@ -140,6 +142,7 @@ def finish_call(
     status = "failed" if error else ("empty" if response is None or not response.text else "succeeded")
     error_type = classify_error(error) if error else ("empty_response" if status == "empty" else None)
     latency = response.latency_ms if response else int((time.monotonic() - started_monotonic) * 1000)
+    _t0 = time.monotonic()
     db = get_connection()
     try:
         db.execute(
@@ -159,6 +162,7 @@ def finish_call(
         db.commit()
     finally:
         db.close()
+    logger.debug("finish_call DB write took %.3fs (call_id=%s)", time.monotonic() - _t0, call_id)
 
 
 def attach_artifact(operation_id: str, artifact_type: str, artifact_id: int) -> None:

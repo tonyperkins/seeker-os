@@ -60,6 +60,7 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
       let buffer = "";
       let finalResult: PipelineRunSummary | null = null;
       let streamError: string | null = null;
+      let currentEvent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -69,7 +70,6 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
-        let currentEvent = "";
         for (const line of lines) {
           if (line.startsWith("event: ")) {
             currentEvent = line.slice(7).trim();

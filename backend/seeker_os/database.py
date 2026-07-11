@@ -913,6 +913,11 @@ def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
     In demo mode the database is treated as immutable: it is opened read-only
     and migrations are skipped. The demo DB must be pre-baked before startup.
     """
+    import logging
+    _log = logging.getLogger(__name__)
+    import time as _time
+    _t0 = _time.monotonic()
+
     if db_path is None:
         db_path = _db_path()
     db_path = Path(db_path)
@@ -945,6 +950,7 @@ def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("PRAGMA foreign_keys = ON")
+    _log.debug("get_connection opened in %.3fs (path=%s)", _time.monotonic() - _t0, db_path)
     return conn
 
 

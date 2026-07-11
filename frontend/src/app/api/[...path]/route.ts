@@ -5,20 +5,25 @@ const BACKEND =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:8000";
 
-const PROXY_TIMEOUT_MS = 120_000;
+const PROXY_TIMEOUT_MS = 300_000;
 
 async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const search = req.nextUrl.search;
   const url = `${BACKEND}${path}${search}`;
 
+  const isStream = path.includes("/stream");
+
   const init: RequestInit = {
     method: req.method,
     headers: {
       "Content-Type": req.headers.get("Content-Type") || "application/json",
     },
-    signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
   };
+
+  if (isStream) {
+    init.signal = AbortSignal.timeout(PROXY_TIMEOUT_MS);
+  }
 
   if (req.method !== "GET" && req.method !== "HEAD") {
     init.body = await req.text();
@@ -29,7 +34,11 @@ async function proxy(req: NextRequest) {
     const contentType = upstream.headers.get("Content-Type") || "application/json";
     return new Response(upstream.body, {
       status: upstream.status,
-      headers: { "Content-Type": contentType },
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Proxy error";

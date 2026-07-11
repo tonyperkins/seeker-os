@@ -188,7 +188,7 @@ class ModelRouter:
         "cover_letter_generation": 4000,
         "application_answer_generation": 2000,
         "application_answer_critique": 2000,
-        "accuracy_validation": 16000,
+        "accuracy_validation": 8000,
         "metadata_extraction": 1000,
         "resume_parsing": 2000,
         "company_dossier_generation": 16000,

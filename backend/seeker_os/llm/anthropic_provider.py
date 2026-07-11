@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import UTC, datetime
 
 import anthropic
 
 from seeker_os.llm.models import LLMRequest, LLMResponse, ModelInfo, ProviderHealth, TruncationError
+
+logger = logging.getLogger(__name__)
 
 
 class AnthropicProvider:
@@ -46,6 +49,10 @@ class AnthropicProvider:
     def generate(self, request: LLMRequest) -> LLMResponse:
         """Generate a completion using Anthropic's Messages API."""
         start = time.monotonic()
+        logger.info(
+            "llm_call provider=%s model=%s task=%s max_tokens=%s — sending request",
+            self._id, request.model, request.task, request.max_tokens,
+        )
 
         kwargs: dict = {
             "model": request.model,
@@ -68,6 +75,12 @@ class AnthropicProvider:
             else:
                 raise
         latency = int((time.monotonic() - start) * 1000)
+        logger.info(
+            "llm_call provider=%s model=%s task=%s — response received in %dms, stop=%s, tokens=%d",
+            self._id, request.model, request.task, latency,
+            response.stop_reason or "none",
+            response.usage.output_tokens if response.usage else 0,
+        )
 
         text = ""
         if response.content:

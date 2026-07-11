@@ -8,6 +8,8 @@ and stores the result.
 from __future__ import annotations
 
 import json
+import logging
+import time
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -294,6 +296,8 @@ def generate_resume(
     _emit("validation", "Running accuracy validation", "started")
     validator = AccuracyValidator(settings)
     validation = validator.validate(response.text, artifact_type="resume", master_resume=master_resume)
+    logger = logging.getLogger(__name__)
+    logger.info("resume_gen job_id=%s: accuracy validation done, passed=%s, violations=%d", job_id, validation.passed, len(validation.violations))
 
     # 5b. Run traceability check (LLM-judged claim verification)
     traceability = TraceabilityChecker(settings)
@@ -305,8 +309,10 @@ def generate_resume(
         )
         trace_result.merge_into(validation)
         _emit("traceability", "Verifying claim traceability", "completed", f"{len(trace_result.violations)} violations")
+        logger.info("resume_gen job_id=%s: traceability done, claims=%d, violations=%d", job_id, len(trace_result.claims), len(trace_result.violations))
     _emit("validation", "Running accuracy validation", "completed", f"{'passed' if validation.passed else 'violations found'}")
 
+    t0 = time.monotonic()
     try:
         record_evaluation(
             operation_id=operation_id,
@@ -319,7 +325,9 @@ def generate_resume(
             details={"violation_count": len(validation.violations)},
             rubric_digest=digest(accuracy_rules_text),
         )
+        logger.info("resume_gen job_id=%s: recording accuracy evaluation", job_id)
         if traceability.enabled:
+            logger.info("resume_gen job_id=%s: recording %d claim evaluations", job_id, len(trace_result.claims))
             for claim in trace_result.claims:
                 record_evaluation(
                     operation_id=operation_id,
@@ -339,13 +347,14 @@ def generate_resume(
                     rubric_digest=digest(_USER_PROMPT_TEMPLATE),
                 )
     except Exception:
-        import logging
         logging.getLogger(__name__).exception(
             "llm_evaluation_write_failed", extra={"operation_id": operation_id}
         )
+    logger.info("resume_gen job_id=%s: evaluations recorded in %.1fs", job_id, time.monotonic() - t0)
 
     # 6. Save to DB
     _emit("saving", "Saving resume", "started")
+    t1 = time.monotonic()
     now = datetime.now(UTC).isoformat()
     output_dir = Path(settings.profile.resume.output_dir or "data/resumes").expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -356,6 +365,7 @@ def generate_resume(
     md_filename = f"{safe_company}_{safe_title}_{job_id}_{now[:10]}.md"
     md_path = output_dir / md_filename
     md_path.write_text(response.text)
+    logger.info("resume_gen job_id=%s: markdown written to %s", job_id, md_path)
 
     cursor = db.execute(
         """
@@ -395,13 +405,14 @@ def generate_resume(
         )
     db.commit()
     db.close()
+    logger.info("resume_gen job_id=%s: DB insert + status transition done in %.1fs, resume_id=%s", job_id, time.monotonic() - t1, resume_id)
     try:
         attach_artifact(operation_id, "resume", int(resume_id))
     except Exception:
-        import logging
         logging.getLogger(__name__).exception(
             "llm_artifact_link_failed", extra={"operation_id": operation_id}
         )
+    logger.info("resume_gen job_id=%s: attach_artifact done, total post-LLM time %.1fs", job_id, time.monotonic() - t0)
     _emit("saving", "Saving resume", "completed", f"Resume #{resume_id}")
 
     return {

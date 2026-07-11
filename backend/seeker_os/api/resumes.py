@@ -627,6 +627,7 @@ def generate_resume_stream(body: ResumeGenerateRequest):
 
     def run_in_thread():
         try:
+            logger.info("resume_stream job_id=%s: background thread started", body.job_id)
             result = _generate(
                 settings=settings,
                 job_id=body.job_id,
@@ -635,8 +636,10 @@ def generate_resume_stream(body: ResumeGenerateRequest):
                 max_tokens=body.max_tokens,
                 progress_cb=progress_cb,
             )
+            logger.info("resume_stream job_id=%s: background thread completed, putting done", body.job_id)
             event_queue.put(("done", result))
         except Exception as e:
+            logger.exception("resume_stream job_id=%s: background thread failed", body.job_id)
             event_queue.put(("error", str(e)))
 
     thread = threading.Thread(target=run_in_thread, daemon=True)
@@ -651,7 +654,9 @@ def generate_resume_stream(body: ResumeGenerateRequest):
         import time
         start = time.monotonic()
         while True:
-            if time.monotonic() - start > 300:
+            elapsed = time.monotonic() - start
+            if elapsed > 300:
+                logger.warning("resume_stream job_id=%s: SSE timeout after %.1fs", body.job_id, elapsed)
                 yield f"event: error\ndata: {json.dumps({'error': 'Generation timeout (5min)'})}\n\n"
                 break
             try:
@@ -662,9 +667,11 @@ def generate_resume_stream(body: ResumeGenerateRequest):
                 continue
             if isinstance(item, tuple):
                 if item[0] == "done":
+                    logger.info("resume_stream job_id=%s: SSE done event sent after %.1fs", body.job_id, time.monotonic() - start)
                     yield f"event: done\ndata: {json.dumps(item[1], default=_json_default)}\n\n"
                     break
                 elif item[0] == "error":
+                    logger.info("resume_stream job_id=%s: SSE error event sent after %.1fs", body.job_id, time.monotonic() - start)
                     yield f"event: error\ndata: {json.dumps({'error': item[1]}, default=_json_default)}\n\n"
                     break
             else:

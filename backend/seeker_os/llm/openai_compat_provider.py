@@ -51,6 +51,10 @@ class OpenAICompatProvider:
     def generate(self, request: LLMRequest) -> LLMResponse:
         """Generate a completion using OpenAI Chat Completions API."""
         start = time.monotonic()
+        logger.info(
+            "llm_call provider=%s model=%s task=%s max_tokens=%s — sending request",
+            self._id, request.model, request.task, request.max_tokens,
+        )
 
         kwargs: dict = {
             "model": request.model,
@@ -65,6 +69,12 @@ class OpenAICompatProvider:
 
         response = self._client.chat.completions.create(**kwargs)
         latency = int((time.monotonic() - start) * 1000)
+        logger.info(
+            "llm_call provider=%s model=%s task=%s — response received in %dms, finish=%s, tokens=%d",
+            self._id, request.model, request.task, latency,
+            response.choices[0].finish_reason if response.choices else "none",
+            response.usage.completion_tokens if response.usage else 0,
+        )
 
         text = ""
         finish_reason = ""

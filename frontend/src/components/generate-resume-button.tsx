@@ -78,6 +78,7 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
       let buffer = "";
       let finalResult: { resume_id: number; validation_passed: boolean } | null = null;
       let streamError: string | null = null;
+      let currentEvent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -87,7 +88,6 @@ export function GenerateResumeButton({ jobId }: { jobId: number }) {
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
-        let currentEvent = "";
         for (const line of lines) {
           if (line.startsWith("event: ")) {
             currentEvent = line.slice(7).trim();

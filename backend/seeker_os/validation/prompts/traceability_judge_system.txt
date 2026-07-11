@@ -30,9 +30,9 @@ The JSON schema:
 {
   "claims": [
     {
-      "claim": "The factual claim as stated in the artifact",
+      "claim": "The factual claim as stated in the artifact (one line)",
       "verdict": "supported | unsupported | overstated",
-      "explanation": "Why — cite the master resume or note its absence",
+      "explanation": "One short sentence citing the master resume or noting its absence",
       "offending_text": "The exact text from the artifact that is problematic (empty if supported)"
     }
   ]
@@ -40,4 +40,5 @@ The JSON schema:
 
 Do NOT wrap the JSON in ```json or ``` fences.
 Do NOT write any text before or after the JSON object.
+Keep explanations to ONE short sentence each — do not write paragraphs.
 If you cannot find any claims, return {"claims": []}.
