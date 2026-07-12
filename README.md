@@ -54,6 +54,7 @@ queryable interface, no analytics, and no resume automation.
 - [Source Adapters](docs/SOURCE_ADAPTERS.md) — Pluggable source adapter design
 - [hiring.cafe Field Reference](docs/HIRINGCAFE_FIELDS.md)
 - [Dedup Design](docs/DEDUP_DESIGN.md)
+- [Langfuse LLM Observability](docs/LANGFUSE_INTEGRATION.md) — Optional tracing, cost-per-artifact, budget caps
 
 ## Status
 
