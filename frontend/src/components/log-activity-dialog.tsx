@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Loader2,
   Mail,
@@ -58,6 +59,7 @@ export function LogActivityDialog({
   variant?: "default" | "outline" | "ghost";
   onSuccess?: () => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export function LogActivityDialog({
       setOpen(false);
       reset();
       if (onSuccess) onSuccess();
-      else window.location.reload();
+      else router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log activity");
     } finally {

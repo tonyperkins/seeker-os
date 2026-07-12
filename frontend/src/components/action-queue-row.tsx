@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Trophy, Sparkles, FileText, SkipForward, Loader2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
@@ -83,6 +84,7 @@ function getTopSignal(job: JobSummary): string | null {
 }
 
 export function ActionQueueRow({ job, rank }: { job: JobSummary; rank: number }) {
+  const router = useRouter();
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [skipOpen, setSkipOpen] = useState(false);
@@ -101,8 +103,7 @@ export function ActionQueueRow({ job, rank }: { job: JobSummary; rank: number })
     setAnalyzeError(null);
     try {
       await api.jobs.analysis.run(job.id);
-      // Reload the page to reflect the new analysis
-      window.location.reload();
+      router.refresh();
     } catch (err) {
       setAnalyzeError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
@@ -127,7 +128,7 @@ export function ActionQueueRow({ job, rank }: { job: JobSummary; rank: number })
     setSkipping(true);
     try {
       await api.jobs.skip(job.id, reason);
-      window.location.reload();
+      router.refresh();
     } catch (err) {
       setAnalyzeError(err instanceof Error ? err.message : "Skip failed");
     } finally {
