@@ -19,6 +19,7 @@ from seeker_os.api.analytics import router as analytics_router
 from seeker_os.api.backup import router as backup_router
 from seeker_os.api.company_research import router as company_research_router
 from seeker_os.api.company_research_settings import router as company_research_settings_router
+from seeker_os.api.events_routes import router as events_router
 from seeker_os.api.jd_analysis import router as jd_analysis_router
 from seeker_os.api.jobs import router as jobs_router
 from seeker_os.api.models import router as models_router
@@ -146,6 +147,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(jobs_router)
+app.include_router(events_router)
 app.include_router(pipeline_router)
 app.include_router(queries_router)
 app.include_router(company_research_settings_router)

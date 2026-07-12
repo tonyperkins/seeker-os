@@ -5,7 +5,9 @@ import { fetchAPI, API_BASE } from "@/lib/api-core";
 import type * as T from "@/lib/api-types";
 
 // Re-export all types
+export { MANUAL_EVENT_TYPES } from "@/lib/api-types";
 export type {
+  ActivityEvent,
   ApplicationEvent,
   JobSummary,
   JobSortKey,
@@ -206,6 +208,40 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ reason, details }),
       }),
+  },
+
+  // Manual events / activity log
+  events: {
+    list: (opts?: {
+      event_type?: string; job_id?: number; scope?: "global";
+      manual_only?: boolean; limit?: number; offset?: number;
+    }) => {
+      const params = new URLSearchParams();
+      if (opts?.event_type) params.set("event_type", opts.event_type);
+      if (opts?.job_id !== undefined) params.set("job_id", String(opts.job_id));
+      if (opts?.scope) params.set("scope", opts.scope);
+      if (opts?.manual_only) params.set("manual_only", "true");
+      if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+      if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
+      const qs = params.toString();
+      return fetchAPI<T.ActivityEvent[]>(`/api/events${qs ? `?${qs}` : ""}`);
+    },
+    create: (data: {
+      event_type: string; job_id?: number | null; actor?: string;
+      occurred_at?: string; note?: string; metadata?: Record<string, unknown>;
+    }) =>
+      fetchAPI<T.ActivityEvent>("/api/events", {
+        method: "POST", body: JSON.stringify(data),
+      }),
+    update: (id: number, data: {
+      event_type?: string; occurred_at?: string; note?: string | null;
+      metadata?: Record<string, unknown> | null;
+    }) =>
+      fetchAPI<T.ActivityEvent>(`/api/events/${id}`, {
+        method: "PATCH", body: JSON.stringify(data),
+      }),
+    delete: (id: number) =>
+      fetchAPI<{ message: string }>(`/api/events/${id}`, { method: "DELETE" }),
   },
 
   // Pipeline

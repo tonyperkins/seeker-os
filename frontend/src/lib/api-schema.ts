@@ -385,6 +385,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Events
+         * @description Global activity feed — newest first, job context joined in.
+         */
+        get: operations["list_events_api_events_get"];
+        put?: never;
+        /**
+         * Create Manual Event
+         * @description Record a manual event, optionally tied to a job (job_id null = general note).
+         */
+        post: operations["create_manual_event_api_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/{event_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Manual Event
+         * @description Delete a manual event. System/lifecycle events are immutable.
+         */
+        delete: operations["delete_manual_event_api_events__event_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Manual Event
+         * @description Edit a manual event. System/lifecycle events are immutable.
+         */
+        patch: operations["update_manual_event_api_events__event_id__patch"];
+        trace?: never;
+    };
     "/api/pipeline/running": {
         parameters: {
             query?: never;
@@ -1839,6 +1887,34 @@ export interface components {
             rules: components["schemas"]["AccuracyRule"][];
         };
         /**
+         * ActivityEvent
+         * @description Event enriched with job context for the global activity feed.
+         */
+        ActivityEvent: {
+            /** Id */
+            id: number;
+            /** Job Id */
+            job_id?: number | null;
+            /** Event Type */
+            event_type: string;
+            /** Actor */
+            actor: string;
+            /** Occurred At */
+            occurred_at: string;
+            /** Created At */
+            created_at: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Note */
+            note?: string | null;
+            /** Job Title */
+            job_title?: string | null;
+            /** Job Company */
+            job_company?: string | null;
+        };
+        /**
          * AgingBucket
          * @description Aging stats for jobs in a given status.
          */
@@ -1934,12 +2010,14 @@ export interface components {
         /**
          * ApplicationEvent
          * @description An event in the job application lifecycle (read model).
+         *
+         *     job_id is None for global events (notes/calls not tied to a job).
          */
         ApplicationEvent: {
             /** Id */
             id: number;
             /** Job Id */
-            job_id: number;
+            job_id?: number | null;
             /** Event Type */
             event_type: string;
             /** Actor */
@@ -2345,6 +2423,25 @@ export interface components {
             } | null;
         };
         /**
+         * EventUpdate
+         * @description PATCH /api/events/{id} — edit a manual event. All fields optional.
+         *
+         *     Only manual event types may be edited; event_type may only change to
+         *     another manual type. metadata/note set to null explicitly are cleared.
+         */
+        EventUpdate: {
+            /** Event Type */
+            event_type?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
          * FiltersResponse
          * @description GET /api/filters — filter config + title filters.
          */
@@ -2563,6 +2660,33 @@ export interface components {
             score_distribution: {
                 [key: string]: number;
             };
+        };
+        /**
+         * GlobalEventCreate
+         * @description POST /api/events — manual event, optionally tied to a job.
+         *
+         *     Only manual event types (note, call, email_sent, email_received, meeting,
+         *     interview) are accepted; lifecycle events must go through their own
+         *     endpoints so status and event stay in sync.
+         */
+        GlobalEventCreate: {
+            /** Event Type */
+            event_type: string;
+            /** Job Id */
+            job_id?: number | null;
+            /**
+             * Actor
+             * @default candidate
+             */
+            actor: string;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Note */
+            note?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -6122,6 +6246,145 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RefilterRescoreResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_events_api_events_get: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated event types */
+                event_type?: string | null;
+                /** @description Filter to one job's events */
+                job_id?: number | null;
+                /** @description 'global' = only events with no job attached */
+                scope?: string | null;
+                /** @description Only manual event types */
+                manual_only?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityEvent"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_event_api_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalEventCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityEvent"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_manual_event_api_events__event_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_manual_event_api_events__event_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityEvent"];
                 };
             };
             /** @description Validation Error */
