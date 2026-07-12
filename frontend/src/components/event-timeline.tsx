@@ -140,7 +140,7 @@ export function EventTimeline({
   daysSinceLastActivity: number | null;
 }) {
   const router = useRouter();
-  const [events] = useState<ApplicationEvent[]>(initialEvents);
+  const events = initialEvents;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
