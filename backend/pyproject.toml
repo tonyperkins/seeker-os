@@ -18,6 +18,7 @@ dependencies = [
     "weasyprint>=60",        # PDF export (markdown → HTML → PDF)
     "markdown>=3.7",         # Markdown → HTML conversion (for PDF export)
     "python-docx>=1.1",      # DOCX export
+    "langfuse>=4,<5",        # LLM tracing (optional, lazy-imported when enabled; sink written against the v4 OTel API)
 ]
 
 [project.optional-dependencies]

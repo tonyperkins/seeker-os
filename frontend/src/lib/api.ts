@@ -41,6 +41,7 @@ export type {
   ObservabilityCall,
   ObservabilityEvaluation,
   ObservabilityOperationDetail,
+  LangfuseStatusResponse,
   SkipReasonOption,
   NoReasonSkip,
   SettingsResponse,
@@ -304,6 +305,7 @@ export const api = {
       fetchAPI<T.ObservabilityTaskSummary>(`/api/analytics/llm-observability/task-summary?task=${encodeURIComponent(task)}${model ? `&model=${encodeURIComponent(model)}` : ""}`),
     llmOperation: (operationId: string) =>
       fetchAPI<T.ObservabilityOperationDetail>(`/api/analytics/llm-observability/operations/${operationId}`),
+    langfuseStatus: () => fetchAPI<T.LangfuseStatusResponse>("/api/analytics/langfuse-status"),
   },
 
   // Resumes

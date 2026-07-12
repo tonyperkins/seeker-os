@@ -291,6 +291,7 @@ class ModelRouter:
         caps silently if resolved from defaults.
         """
         from seeker_os.observability.llm_ledger import finish_call, start_call
+        from seeker_os.observability.langfuse_sink import get_sink
 
         call_id = ""
         import time
@@ -305,6 +306,17 @@ class ModelRouter:
         except Exception:
             logger.exception("llm_telemetry_start_failed")
 
+        sink = get_sink()
+        if sink and call_id:
+            try:
+                sink.start(
+                    call_id=call_id, task=task, operation_id=operation_id,
+                    system_prompt=system_prompt, user_prompt=user_prompt,
+                    prompt_name=prompt_name, prompt_version=prompt_version,
+                )
+            except Exception:
+                logger.debug("langfuse_sink_error", exc_info=True)
+
         try:
             provider, model = self.resolve(task)
         except Exception as exc:
@@ -313,6 +325,17 @@ class ModelRouter:
                     finish_call(call_id, settings=self.settings, started_monotonic=started, error=exc)
             except Exception:
                 logger.exception("llm_telemetry_write_failed", extra={"call_id": call_id})
+            if sink:
+                try:
+                    sink.finish(
+                        call_id=call_id, task=task, operation_id=operation_id,
+                        system_prompt=system_prompt, user_prompt=user_prompt,
+                        error=exc, route_reason="routing_failure",
+                        prompt_name=prompt_name, prompt_version=prompt_version,
+                        started_monotonic=started,
+                    )
+                except Exception:
+                    logger.debug("langfuse_sink_error", exc_info=True)
             raise
 
         # Track whether max_tokens was explicitly provided by the caller
@@ -350,6 +373,18 @@ class ModelRouter:
                     )
             except Exception:
                 logger.exception("llm_telemetry_write_failed", extra={"call_id": call_id})
+            if sink:
+                try:
+                    sink.finish(
+                        call_id=call_id, task=task, operation_id=operation_id,
+                        system_prompt=system_prompt, user_prompt=user_prompt,
+                        error=exc, provider=provider.id, model=model,
+                        route_reason="task_or_tier_resolution",
+                        prompt_name=prompt_name, prompt_version=prompt_version,
+                        started_monotonic=started,
+                    )
+                except Exception:
+                    logger.debug("langfuse_sink_error", exc_info=True)
             raise
 
         response.call_id = call_id
@@ -362,6 +397,18 @@ class ModelRouter:
                 )
         except Exception:
             logger.exception("llm_telemetry_write_failed", extra={"call_id": call_id})
+        if sink:
+            try:
+                sink.finish(
+                    call_id=call_id, task=task, operation_id=operation_id,
+                    system_prompt=system_prompt, user_prompt=user_prompt,
+                    response=response, provider=provider.id, model=model,
+                    route_reason="task_or_tier_resolution",
+                    prompt_name=prompt_name, prompt_version=prompt_version,
+                    started_monotonic=started,
+                )
+            except Exception:
+                logger.debug("langfuse_sink_error", exc_info=True)
         return response
 
     def list_all_models(self, provider_id: str | None = None) -> list[ModelInfo]:

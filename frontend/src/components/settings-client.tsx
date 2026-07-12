@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { FileText, SlidersHorizontal } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { FileText, SlidersHorizontal, Activity } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -13,7 +13,8 @@ import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { MasterResumeUpload } from "@/components/master-resume-upload";
 import { ProfileForm } from "@/components/profile-form";
 import { FilterForm } from "@/components/filter-form";
-import { type ProfileData, type FiltersData, type ResumeParseResult } from "@/lib/api";
+import { type ProfileData, type FiltersData, type ResumeParseResult, type LangfuseStatusResponse, api } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
 
 export function SettingsClient({
   profile: initialProfile,
@@ -23,9 +24,14 @@ export function SettingsClient({
   filters: FiltersData | null;
 }) {
   const [parseResult, setParseResult] = useState<ResumeParseResult | null>(null);
+  const [langfuseStatus, setLangfuseStatus] = useState<LangfuseStatusResponse | null>(null);
 
   const handleParsed = useCallback((result: ResumeParseResult) => {
     setParseResult(result);
+  }, []);
+
+  useEffect(() => {
+    api.analytics.langfuseStatus().then(setLangfuseStatus).catch(() => {});
   }, []);
 
   // If no profile or filters loaded, show upload + parse only
@@ -101,6 +107,40 @@ export function SettingsClient({
             parseResult={parseResult}
           />
       </CollapsibleCard>
+
+      {/* Langfuse Observability Status */}
+      {langfuseStatus && (
+        <CollapsibleCard
+          icon={Activity}
+          title="LLM Observability"
+          description="Langfuse tracing status. Configure in config/observability.yml."
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge variant={langfuseStatus.initialized ? "default" : langfuseStatus.enabled ? "destructive" : "secondary"}>
+              {langfuseStatus.initialized
+                ? "Initialized"
+                : langfuseStatus.enabled
+                  ? "Config error"
+                  : "Disabled"}
+            </Badge>
+            {langfuseStatus.base_url && (
+              <span className="text-xs text-muted-foreground">
+                URL: {langfuseStatus.base_url}
+              </span>
+            )}
+            {langfuseStatus.enabled && (
+              <span className="text-xs text-muted-foreground">
+                Content capture: {langfuseStatus.capture_content ? "on" : "off"}
+              </span>
+            )}
+            {langfuseStatus.enabled && !langfuseStatus.keys_configured && (
+              <span className="text-xs text-destructive">
+                Keys not configured — set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env
+              </span>
+            )}
+          </div>
+        </CollapsibleCard>
+      )}
     </div>
   );
 }
