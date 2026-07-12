@@ -20,19 +20,6 @@ export interface paths {
         /**
          * Create Job
          * @description Manually add a job.
-         *
-         *     Flow (validate-then-insert — no partial records):
-         *     1. Compute url_hash, check dedup layer 1 (url_hash). If match → already_exists.
-         *     2. If jd_text provided (paste-JD path), use it directly. Otherwise attempt
-         *        fetch_jd from the URL. If fetch fails → return fetch_failed (no insert).
-         *     3. After JD is available, check content hash dedup (layer 3). If match and
-         *        force=False → return possible_duplicate (NO insert). If force=True →
-         *        proceed with insert (likely_duplicate warning).
-         *     4. Insert complete job with JD, run hard filters as informational metadata
-         *        (manual jobs bypass filter rejection — DECISION 1), run scoring, and
-         *        apply research adjustment from cached company dossier if available.
-         *     5. Manual jobs always land in 'ready' regardless of score — the user
-         *        decides (DECISION 1).
          */
         post: operations["create_job_api_jobs_post"];
         delete?: never;
@@ -53,11 +40,6 @@ export interface paths {
         /**
          * Override Job
          * @description Override a rejected job — auditable, not a silent status flip.
-         *
-         *     Records overridden_at, override_note, and preserves the original reject_reason
-         *     in original_reject_reason. Sets status to target_status (default 'ready').
-         *     The score and all other signals remain visible — this layers on top, never
-         *     overwrites (DECISION 4).
          */
         post: operations["override_job_api_jobs__job_id__override_post"];
         delete?: never;
@@ -106,11 +88,6 @@ export interface paths {
         /**
          * Add Recruiter
          * @description Add a recruiter contact to a job.
-         *
-         *     If recruiter_id is provided, links an existing recruiter entity.
-         *     Otherwise creates a new recruiter from inline fields.
-         *     Upserts on UNIQUE(recruiter_id, job_id): if the pair already exists,
-         *     updates source/notes; does NOT overwrite contacted_at.
          */
         post: operations["add_recruiter_api_jobs__job_id__recruiters_post"];
         delete?: never;
@@ -159,9 +136,6 @@ export interface paths {
         /**
          * Update Recruiter Association
          * @description Update association fields (source, notes only).
-         *
-         *     contacted_at is write-once — set on create, never overwritten.
-         *     This endpoint does NOT accept contacted_at.
          */
         patch: operations["update_recruiter_association_api_jobs_recruiters_association__association_id__patch"];
         trace?: never;
@@ -174,10 +148,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Search Recruiters
+         * Search Recruiters Route
          * @description Search recruiters by name or email for autocomplete picker.
          */
-        get: operations["search_recruiters_api_jobs_recruiters_search_get"];
+        get: operations["search_recruiters_route_api_jobs_recruiters_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -217,10 +191,7 @@ export interface paths {
         put?: never;
         /**
          * Skip Job
-         * @description Skip a job — removes it from the active queue (sets status to 'skipped').
-         *
-         *     Optionally accepts a structured reason and free-text details, written to
-         *     the event metadata so the calibration report can pick them up.
+         * @description Skip a job — removes it from the active queue.
          */
         post: operations["skip_job_api_jobs__job_id__skip_post"];
         delete?: never;
@@ -237,13 +208,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List No Reason Skips
+         * List No Reason Skips Route
          * @description List skipped/rejected jobs whose most recent candidate skip/rejected event
          *     has no reason in its metadata.
-         *
-         *     Used by the bulk-annotate view to find jobs that need a skip reason.
          */
-        get: operations["list_no_reason_skips_api_jobs_skipped_no_reason_get"];
+        get: operations["list_no_reason_skips_route_api_jobs_skipped_no_reason_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -264,10 +233,6 @@ export interface paths {
         /**
          * Annotate Skip
          * @description Add a reason to the most recent candidate skip/rejected event for a job.
-         *
-         *     Updates the event metadata in-place (the event itself is not changed —
-         *     only its metadata gains a reason field). Also updates the job's
-         *     reject_reason column for consistency.
          */
         post: operations["annotate_skip_api_jobs__job_id__annotate_skip_post"];
         delete?: never;
@@ -352,10 +317,6 @@ export interface paths {
         /**
          * Post Apply Transition
          * @description Post-apply status transition via the L1 central write path.
-         *
-         *     Valid transitions:
-         *       applied → {company_rejected | withdrawn | engaged}
-         *       engaged → {offer_accepted | offer_declined | company_rejected | withdrawn}
          */
         post: operations["post_apply_transition_api_jobs__job_id__transition_post"];
         delete?: never;
@@ -376,10 +337,6 @@ export interface paths {
         /**
          * Log Engaged Event
          * @description Log an engaged sub-lifecycle event WITHOUT changing status.
-         *
-         *     event_type must be one of the EngagedEventType values.
-         *     followup_sent and contact_received reset the staleness clock (they are
-         *     recent activity — the stale flag recomputes on next read).
          */
         post: operations["log_engaged_event_api_jobs__job_id__engaged_events_post"];
         delete?: never;
@@ -400,17 +357,6 @@ export interface paths {
         /**
          * Clean Start
          * @description Enter a job directly at a post-apply status with a backdated event.
-         *
-         *     Sets status directly (applied, engaged, company_rejected, withdrawn,
-         *     offer_accepted, offer_declined, rejected) WITHOUT walking the pre-apply
-         *     funnel. The event's occurred_at is the supplied (possibly past) date;
-         *     created_at is always server now().
-         *
-         *     When entering at engaged or company_rejected, an optional applied_occurred_at
-         *     may be supplied to record a backdated 'applied' event first (complete funnel
-         *     history). If omitted, the job stands at engaged/rejected with no applied event.
-         *
-         *     This is the "I already applied/engaged/got rejected" clean-start path.
          */
         post: operations["clean_start_api_jobs__job_id__clean_start_post"];
         delete?: never;
@@ -431,18 +377,6 @@ export interface paths {
         /**
          * Refilter Rescore
          * @description Refilter & rescore existing jobs with current config.
-         *
-         *     Re-runs hard filters and scoring on existing jobs. If an analysis has been
-         *     run, its verdict is factored into net_score. If company research has been
-         *     run (cached dossier), the research adjustment is factored in.
-         *
-         *     Accepts either:
-         *     - job_ids: list of specific job IDs
-         *     - run_id: all jobs from a specific pipeline run
-         *
-         *     Decision-status jobs (skipped, interested, applied, engaged, etc.) are only
-         *     rescored, not refiltered — user decisions are preserved regardless of score
-         *     movement.  System statuses (ready, rejected) are re-evaluated.
          */
         post: operations["refilter_rescore_api_jobs_refilter_rescore_post"];
         delete?: never;
@@ -763,6 +697,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analytics/llm-observability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Llm Observability
+         * @description Privacy-safe LLM reliability, cost, and quality summary.
+         */
+        get: operations["get_llm_observability_api_analytics_llm_observability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analytics/llm-observability/task-operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Task Operations
+         * @description Return recent operations for a specific LLM task.
+         *
+         *     For tasks with operation_id (e.g. resume generation), groups calls by
+         *     operation_id. For tasks without operation_id, returns individual calls.
+         */
+        get: operations["get_task_operations_api_analytics_llm_observability_task_operations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analytics/llm-observability/task-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Task Summary
+         * @description Return aggregate stats for a specific LLM task.
+         */
+        get: operations["get_task_summary_api_analytics_llm_observability_task_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analytics/llm-observability/operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Llm Operation
+         * @description Return safe lineage for one correlated LLM workflow.
+         */
+        get: operations["get_llm_operation_api_analytics_llm_observability_operations__operation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analytics/funnel": {
         parameters: {
             query?: never;
@@ -1050,7 +1067,7 @@ export interface paths {
         };
         /**
          * List Resumes
-         * @description List generated resumes.
+         * @description List generated resumes with optional search and sorting.
          */
         get: operations["list_resumes_api_resumes_get"];
         put?: never;
@@ -1400,6 +1417,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/models/{provider_id}/models/{model_id}/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Model Pricing
+         * @description Update a model's pricing in providers.yml.
+         *
+         *     If the model doesn't exist in the provider's config, it will be added
+         *     as a manual entry with the given pricing.
+         */
+        put: operations["update_model_pricing_api_models__provider_id__models__model_id__pricing_put"];
+        post?: never;
+        /**
+         * Reset Model Pricing
+         * @description Reset a model's manual pricing, allowing auto-fetched pricing to take over.
+         *
+         *     Removes pricing fields from the model entry in providers.yml. If the model
+         *     was auto-discovered (not in providers.yml), this is a no-op.
+         */
+        delete: operations["reset_model_pricing_api_models__provider_id__models__model_id__pricing_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/profile": {
         parameters: {
             query?: never;
@@ -1701,26 +1748,6 @@ export interface paths {
         };
         /** Health */
         get: operations["health_api_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/demo-mode": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Demo Mode Status
-         * @description Return whether the backend is running in read-only demo mode.
-         */
-        get: operations["demo_mode_status_api_demo_mode_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2298,11 +2325,6 @@ export interface components {
         DatabaseRestoreResponse: {
             /** Message */
             message: string;
-        };
-        /** DemoModeResponse */
-        DemoModeResponse: {
-            /** Demo Mode */
-            demo_mode: boolean;
         };
         /**
          * EngagedEventCreate
@@ -3277,6 +3299,37 @@ export interface components {
             input_price_per_mtok?: number | null;
             /** Output Price Per Mtok */
             output_price_per_mtok?: number | null;
+            /** Pricing Source */
+            pricing_source?: string | null;
+        };
+        /**
+         * ModelPricingResponse
+         * @description Response for pricing update.
+         */
+        ModelPricingResponse: {
+            /** Provider Id */
+            provider_id: string;
+            /** Model Id */
+            model_id: string;
+            /** Input Price Per Mtok */
+            input_price_per_mtok?: number | null;
+            /** Output Price Per Mtok */
+            output_price_per_mtok?: number | null;
+            /**
+             * Pricing Source
+             * @default manual
+             */
+            pricing_source: string;
+        };
+        /**
+         * ModelPricingUpdateRequest
+         * @description PUT /api/models/{provider_id}/models/{model_id}/pricing — update model pricing.
+         */
+        ModelPricingUpdateRequest: {
+            /** Input Price Per Mtok */
+            input_price_per_mtok?: number | null;
+            /** Output Price Per Mtok */
+            output_price_per_mtok?: number | null;
         };
         /**
          * ModifierPrecision
@@ -3435,6 +3488,258 @@ export interface components {
             event_type: string;
             /** Occurred At */
             occurred_at: string;
+        };
+        /** ObservabilityCall */
+        ObservabilityCall: {
+            /** Call Id */
+            call_id: string;
+            /** Parent Call Id */
+            parent_call_id?: string | null;
+            /** Task */
+            task: string;
+            /** Provider */
+            provider?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Status */
+            status: string;
+            /** Error Type */
+            error_type?: string | null;
+            /** Stop Reason */
+            stop_reason?: string | null;
+            /** Temperature */
+            temperature?: number | null;
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Prompt Name */
+            prompt_name?: string | null;
+            /** Prompt Version */
+            prompt_version?: string | null;
+            /** Route Reason */
+            route_reason?: string | null;
+            /**
+             * Input Tokens
+             * @default 0
+             */
+            input_tokens: number;
+            /**
+             * Output Tokens
+             * @default 0
+             */
+            output_tokens: number;
+            /**
+             * Latency Ms
+             * @default 0
+             */
+            latency_ms: number;
+            /**
+             * Estimated Cost
+             * @default 0
+             */
+            estimated_cost: number;
+            /** Started At */
+            started_at: string;
+        };
+        /** ObservabilityEvaluation */
+        ObservabilityEvaluation: {
+            /** Evaluation Id */
+            evaluation_id: string;
+            /** Evaluator Name */
+            evaluator_name: string;
+            /**
+             * Evaluator Type
+             * @default
+             */
+            evaluator_type: string;
+            /**
+             * Evaluator Version
+             * @default
+             */
+            evaluator_version: string;
+            /** Metric Name */
+            metric_name: string;
+            /** Score */
+            score?: number | null;
+            /** Label */
+            label?: string | null;
+            /** Passed */
+            passed?: boolean | null;
+            /** Evaluated At */
+            evaluated_at: string;
+        };
+        /** ObservabilityOperation */
+        ObservabilityOperation: {
+            /** Operation Id */
+            operation_id: string;
+            /** Started At */
+            started_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Calls
+             * @default 0
+             */
+            calls: number;
+            /**
+             * Estimated Cost
+             * @default 0
+             */
+            estimated_cost: number;
+            /** Validation Passed */
+            validation_passed?: boolean | null;
+            /** Artifact Type */
+            artifact_type?: string | null;
+            /** Artifact Id */
+            artifact_id?: number | null;
+            /** Job Id */
+            job_id?: number | null;
+            /** Job Title */
+            job_title?: string | null;
+            /** Company */
+            company?: string | null;
+            /**
+             * Task
+             * @default
+             */
+            task: string;
+            /**
+             * Grouped
+             * @default true
+             */
+            grouped: boolean;
+            /** Model */
+            model?: string | null;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
+            /**
+             * Latency Ms
+             * @default 0
+             */
+            latency_ms: number;
+        };
+        /** ObservabilityOperationDetail */
+        ObservabilityOperationDetail: {
+            /** Operation Id */
+            operation_id: string;
+            /** Artifact Type */
+            artifact_type?: string | null;
+            /** Artifact Id */
+            artifact_id?: number | null;
+            /** Job Id */
+            job_id?: number | null;
+            /** Job Title */
+            job_title?: string | null;
+            /** Company */
+            company?: string | null;
+            /** Calls */
+            calls?: components["schemas"]["ObservabilityCall"][];
+            /** Evaluations */
+            evaluations?: components["schemas"]["ObservabilityEvaluation"][];
+        };
+        /** ObservabilitySummary */
+        ObservabilitySummary: {
+            /**
+             * Total Calls
+             * @default 0
+             */
+            total_calls: number;
+            /**
+             * Total Estimated Cost
+             * @default 0
+             */
+            total_estimated_cost: number;
+            /**
+             * Failed Calls
+             * @default 0
+             */
+            failed_calls: number;
+            /**
+             * Truncated Calls
+             * @default 0
+             */
+            truncated_calls: number;
+            /** Validation Pass Rate */
+            validation_pass_rate?: number | null;
+            /**
+             * Unsupported Claims
+             * @default 0
+             */
+            unsupported_claims: number;
+            /**
+             * Overstated Claims
+             * @default 0
+             */
+            overstated_claims: number;
+            /** Cost Per Passing Resume */
+            cost_per_passing_resume?: number | null;
+            /**
+             * Historical Data Incomplete
+             * @default true
+             */
+            historical_data_incomplete: boolean;
+            /** Available Tasks */
+            available_tasks?: string[];
+            /** Recent Operations */
+            recent_operations?: components["schemas"]["ObservabilityOperation"][];
+        };
+        /** ObservabilityTaskSummary */
+        ObservabilityTaskSummary: {
+            /**
+             * Task
+             * @default
+             */
+            task: string;
+            /**
+             * Calls
+             * @default 0
+             */
+            calls: number;
+            /**
+             * Estimated Cost
+             * @default 0
+             */
+            estimated_cost: number;
+            /**
+             * Failed Calls
+             * @default 0
+             */
+            failed_calls: number;
+            /**
+             * Truncated Calls
+             * @default 0
+             */
+            truncated_calls: number;
+            /**
+             * Avg Latency Ms
+             * @default 0
+             */
+            avg_latency_ms: number;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
+            /** Models Used */
+            models_used?: string[];
+            /** Validation Pass Rate */
+            validation_pass_rate?: number | null;
+            /**
+             * Unsupported Claims
+             * @default 0
+             */
+            unsupported_claims: number;
+            /**
+             * Overstated Claims
+             * @default 0
+             */
+            overstated_claims: number;
+            /** Cost Per Passing Resume */
+            cost_per_passing_resume?: number | null;
         };
         /**
          * PaginatedJobsResponse
@@ -4296,6 +4601,11 @@ export interface components {
             /** Job Id */
             job_id: number;
             /**
+             * Job Company
+             * @default
+             */
+            job_company: string;
+            /**
              * Task
              * @default
              */
@@ -4332,6 +4642,8 @@ export interface components {
              * @default 0
              */
             output_tokens: number;
+            /** Estimated Cost */
+            estimated_cost?: number | null;
             /**
              * Latency Ms
              * @default 0
@@ -4911,6 +5223,8 @@ export interface components {
             provider?: string | null;
             /** Model */
             model?: string | null;
+            /** Default Tier */
+            default_tier?: string | null;
         };
         /**
          * TaskUpdateRequest
@@ -5396,7 +5710,7 @@ export interface operations {
             };
         };
     };
-    search_recruiters_api_jobs_recruiters_search_get: {
+    search_recruiters_route_api_jobs_recruiters_search_get: {
         parameters: {
             query?: {
                 /** @description Search by name or email */
@@ -5498,7 +5812,7 @@ export interface operations {
             };
         };
     };
-    list_no_reason_skips_api_jobs_skipped_no_reason_get: {
+    list_no_reason_skips_route_api_jobs_skipped_no_reason_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6335,6 +6649,125 @@ export interface operations {
             };
         };
     };
+    get_llm_observability_api_analytics_llm_observability_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservabilitySummary"];
+                };
+            };
+        };
+    };
+    get_task_operations_api_analytics_llm_observability_task_operations_get: {
+        parameters: {
+            query: {
+                /** @description Task name to filter by. Use 'resume_generation' to match both standard and high_value variants. */
+                task: string;
+                /** @description Filter by specific model. */
+                model?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservabilityOperation"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_summary_api_analytics_llm_observability_task_summary_get: {
+        parameters: {
+            query: {
+                /** @description Task name to summarize. */
+                task: string;
+                /** @description Filter by specific model. */
+                model?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservabilityTaskSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_operation_api_analytics_llm_observability_operations__operation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservabilityOperationDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_funnel_stats_api_analytics_funnel_get: {
         parameters: {
             query?: never;
@@ -6651,6 +7084,12 @@ export interface operations {
         parameters: {
             query?: {
                 job_id?: number | null;
+                /** @description Free-text search across company, provider, model, task */
+                search?: string | null;
+                /** @description Sort field */
+                sort_by?: string | null;
+                /** @description Sort direction: asc or desc */
+                order?: string;
                 limit?: number;
             };
             header?: never;
@@ -7247,6 +7686,74 @@ export interface operations {
             };
         };
     };
+    update_model_pricing_api_models__provider_id__models__model_id__pricing_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelPricingUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelPricingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_model_pricing_api_models__provider_id__models__model_id__pricing_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelPricingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_profile_api_profile_get: {
         parameters: {
             query?: never;
@@ -7747,26 +8254,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
-                };
-            };
-        };
-    };
-    demo_mode_status_api_demo_mode_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DemoModeResponse"];
                 };
             };
         };

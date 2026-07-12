@@ -35,12 +35,10 @@ export function MasterResumeUpload({
   onUploaded,
   onParsed,
   bare = false,
-  disabled = false,
 }: {
   onUploaded?: () => void;
   onParsed?: (result: ResumeParseResult) => void;
   bare?: boolean;
-  disabled?: boolean;
 }) {
   const [info, setInfo] = useState<MasterResumeInfo | null>(null);
   const [content, setContent] = useState("");
@@ -90,7 +88,6 @@ export function MasterResumeUpload({
   }, [loadInfo, loadContent]);
 
   async function handleFile(file: File) {
-    if (disabled) return;
     setUploading(true);
     setError(null);
     try {
@@ -109,21 +106,18 @@ export function MasterResumeUpload({
   }
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (disabled) return;
     const file = e.target.files?.[0];
     if (file) handleFile(file);
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
-    if (disabled) return;
     setDragOver(false);
     const file = e.dataTransfer.files?.[0];
     if (file) handleFile(file);
   }
 
   async function handleParse() {
-    if (disabled) return;
     setParsing(true);
     setParseError(null);
     try {
@@ -224,27 +218,27 @@ export function MasterResumeUpload({
             accept=".md,.docx,.pdf"
             onChange={handleInputChange}
             className="hidden"
-            disabled={uploading || disabled}
+            disabled={uploading}
           />
           <span className={cn(
             "inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground",
-            disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-primary/90",
+            "cursor-pointer hover:bg-primary/90",
           )}>
             {uploading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Upload className="h-3.5 w-3.5" />
             )}
-            {uploading ? "Uploading..." : disabled ? "Demo mode" : "Upload"}
+            {uploading ? "Uploading..." : "Upload"}
           </span>
         </label>
         <Button variant="outline" size="sm" onClick={() => { loadInfo(); loadContent(); }} disabled={loading}>
           <RefreshCw className="h-3.5 w-3.5" />
           Refresh
         </Button>
-        <Button variant="outline" size="sm" onClick={handleParse} disabled={parsing || disabled || !info?.exists}>
+        <Button variant="outline" size="sm" onClick={handleParse} disabled={parsing || !info?.exists}>
           {parsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-          {parsing ? "Parsing..." : disabled ? "Demo mode" : "Parse"}
+          {parsing ? "Parsing..." : "Parse"}
         </Button>
       </div>
 
@@ -271,20 +265,20 @@ export function MasterResumeUpload({
       {/* Upload drop zone (only when no file exists) */}
       {!info?.exists && (
         <div
-          onDragOver={(e) => { if (!disabled) { e.preventDefault(); setDragOver(true); } }}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           className={cn(
             "rounded-lg border-2 border-dashed p-6 text-center transition-colors",
-            dragOver && !disabled
+            dragOver
               ? "border-primary bg-primary/5"
               : "border-border",
-            disabled ? "opacity-50 cursor-not-allowed" : "hover:border-muted-foreground/50",
+            "hover:border-muted-foreground/50",
           )}
         >
           <Upload className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm text-muted-foreground mb-3">
-            {disabled ? "Resume upload is disabled in demo mode" : "Drag & drop your master resume here, or use Upload button above"}
+            Drag & drop your master resume here, or use Upload button above
           </p>
           <p className="text-xs text-muted-foreground">
             Accepted: .md, .docx, .pdf

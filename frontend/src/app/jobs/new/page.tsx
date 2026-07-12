@@ -24,12 +24,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { api, type JobCreateResponse } from "@/lib/api";
-import { useDemoMode } from "@/lib/demo";
 
 type Phase = "idle" | "fetching" | "fetch_failed" | "success" | "exists" | "possible_dup" | "likely_dup" | "form";
 
 export default function NewJobPage() {
-  const { demoMode } = useDemoMode();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<JobCreateResponse | null>(null);
@@ -358,8 +356,8 @@ export default function NewJobPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => handleSubmit(false)} disabled={!jdText.trim() || demoMode}>
-                  {demoMode ? "Demo mode" : "Add Job with Pasted JD"}
+                <Button onClick={() => handleSubmit(false)} disabled={!jdText.trim()}>
+                  Add Job with Pasted JD
                 </Button>
               </div>
             </div>
@@ -498,8 +496,8 @@ export default function NewJobPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => handleSubmit(false)} disabled={(!url.trim() && !jdText.trim()) || demoMode}>
-                  {demoMode ? "Demo mode" : url.trim() ? (jdText.trim() ? "Add Job" : "Fetch & Add") : "Add Job from JD"}
+                <Button onClick={() => handleSubmit(false)} disabled={!url.trim() && !jdText.trim()}>
+                  {url.trim() ? (jdText.trim() ? "Add Job" : "Fetch & Add") : "Add Job from JD"}
                 </Button>
               </div>
             </div>
