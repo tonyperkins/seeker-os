@@ -567,14 +567,23 @@ class TestStaleAllowlist:
     events do NOT reset the staleness clock."""
 
     def test_allowlist_contents(self):
-        """STALE_ACTIVITY_EVENTS contains exactly the expected events."""
+        """STALE_ACTIVITY_EVENTS contains exactly the expected events.
+
+        Manual communication events (call, emails, meeting) count as activity;
+        plain notes do NOT — writing yourself a reminder is not contact.
+        """
         expected = {
             "applied", "engaged",
             "interview", "challenge_assigned", "challenge_submitted",
             "offer_received", "offer_countered",
             "followup_sent", "contact_received",
+            "call", "email_sent", "email_received", "meeting",
         }
         assert STALE_ACTIVITY_EVENTS == expected
+
+    def test_note_is_not_stale_activity(self):
+        """A plain note never resets the staleness clock."""
+        assert "note" not in STALE_ACTIVITY_EVENTS
 
     def test_non_activity_event_does_not_reset_staleness(self, client):
         """An event type NOT in the allowlist does not reset the staleness clock.

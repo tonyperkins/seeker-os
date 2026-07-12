@@ -4,7 +4,7 @@ import type { components as ApiComponents } from "@/lib/api-schema";
 
 export interface ApplicationEvent {
   id: number;
-  job_id: number;
+  job_id: number | null;
   event_type: string;
   actor: string;
   occurred_at: string;
@@ -12,6 +12,22 @@ export interface ApplicationEvent {
   metadata: Record<string, unknown> | null;
   note: string | null;
 }
+
+/** Event enriched with job context for the global activity feed. */
+export interface ActivityEvent extends ApplicationEvent {
+  job_title: string | null;
+  job_company: string | null;
+}
+
+/** Event types the user records by hand — the only editable/deletable ones. */
+export const MANUAL_EVENT_TYPES = [
+  "note",
+  "call",
+  "email_sent",
+  "email_received",
+  "meeting",
+  "interview",
+] as const;
 
 export interface JobSummary {
   id: number;

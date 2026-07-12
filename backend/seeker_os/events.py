@@ -102,6 +102,11 @@ class EventType:
     CONTACT_RECEIVED = "contact_received"
     RECRUITER_CONTACT = "recruiter_contact"
     REFILTER_RESCORED = "refilter_rescored"
+    NOTE = "note"
+    CALL = "call"
+    EMAIL_SENT = "email_sent"
+    EMAIL_RECEIVED = "email_received"
+    MEETING = "meeting"
 
     _ALL = frozenset({
         DISCOVERED, FILTER_PASSED, FILTER_REJECTED, JD_FETCHED,
@@ -114,7 +119,26 @@ class EventType:
         OFFER_RECEIVED, OFFER_COUNTERED, FOLLOWUP_SENT, CONTACT_RECEIVED,
         RECRUITER_CONTACT,
         REFILTER_RESCORED,
+        NOTE, CALL, EMAIL_SENT, EMAIL_RECEIVED, MEETING,
     })
+
+
+MANUAL_EVENT_TYPES: frozenset[str] = frozenset({
+    EventType.NOTE,
+    EventType.CALL,
+    EventType.EMAIL_SENT,
+    EventType.EMAIL_RECEIVED,
+    EventType.MEETING,
+    EventType.INTERVIEW,
+})
+"""Event types the user records by hand (notes, calls, emails, meetings,
+interviews). Only these may be edited or deleted after the fact — every other
+type is written by the pipeline or a status transition and stays append-only,
+because calibration and funnel analytics read them as ground truth.
+
+interview is in both this set and the engaged sub-lifecycle: recruiter screens
+happen before a job is formally engaged, so it must be recordable at any status.
+"""
 
 
 class JobStatus:
@@ -199,6 +223,10 @@ STALE_ACTIVITY_EVENTS: frozenset[str] = frozenset({
     EventType.OFFER_COUNTERED,
     EventType.FOLLOWUP_SENT,
     EventType.CONTACT_RECEIVED,
+    EventType.CALL,
+    EventType.EMAIL_SENT,
+    EventType.EMAIL_RECEIVED,
+    EventType.MEETING,
 })
 """Allowlist of event types that count as "application activity" for stale-flag
 purposes. Only these events reset the staleness clock for applied/engaged jobs.
@@ -207,6 +235,10 @@ Terminal-status events (company_rejected, withdrawn, offer_accepted,
 offer_declined) are excluded — the status guard already short-circuits before
 stale computes. manual_created/discovered are excluded — they are about job
 creation, not application activity.
+
+Manual communication events (call, email_sent, email_received, meeting) count
+as activity — logging a call with a recruiter is contact. Plain notes do NOT:
+writing yourself a reminder about a silent application is not activity.
 
 New event types default to NOT resetting staleness unless explicitly added here.
 """
@@ -251,7 +283,7 @@ def _utc_now_iso() -> str:
 
 
 def _validate_occurred_at(
-    db: sqlite3.Connection, job_id: int, occurred_at: str,
+    db: sqlite3.Connection, job_id: int | None, occurred_at: str,
     *, allow_before_discovery: bool = False,
 ) -> None:
     """Soft validation: reject future dates and dates before job discovery.
@@ -297,7 +329,7 @@ def _validate_occurred_at(
 
 def record_event(
     db: sqlite3.Connection,
-    job_id: int,
+    job_id: int | None,
     event_type: str,
     actor: str,
     *,

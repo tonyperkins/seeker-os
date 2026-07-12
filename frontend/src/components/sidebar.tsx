@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Briefcase, Kanban, Search, FileText, Cpu, Settings, PanelLeftClose, PanelLeftOpen, Menu, X, Activity } from "lucide-react";
+import { LayoutDashboard, Briefcase, Kanban, Search, FileText, Cpu, Settings, PanelLeftClose, PanelLeftOpen, Menu, X, Activity, NotebookPen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ActivityIndicator } from "@/components/activity-indicator";
@@ -13,6 +13,7 @@ const primaryNavItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/kanban", label: "Kanban", icon: Kanban },
+  { href: "/activity", label: "Activity", icon: NotebookPen },
   { href: "/queries", label: "Queries", icon: Search },
   { href: "/resumes", label: "Resumes", icon: FileText },
   { href: "/models", label: "Models", icon: Cpu },

@@ -16,6 +16,8 @@ import {
   Mail,
   Inbox,
   Clock,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { api, type ApplicationEvent } from "@/lib/api";
 import { formatDate } from "@/lib/date";
+import { ACTIVITY_TYPE_META, LogActivityDialog } from "@/components/log-activity-dialog";
 
 const ACTOR_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   candidate: User,
@@ -73,7 +76,16 @@ const EVENT_LABELS: Record<string, string> = {
   followup_sent: "Follow-up Sent",
   contact_received: "Contact Received",
   refilter_rescored: "Refilter & Rescored",
+  note: "Note",
+  call: "Call",
+  email_sent: "Email Sent",
+  email_received: "Email Received",
+  meeting: "Meeting",
 };
+
+// User-recorded activity — editable and deletable. Everything else in the
+// timeline is append-only.
+const MANUAL_TYPE_SET = new Set(ACTIVITY_TYPE_META.map((t) => t.type));
 
 const POST_APPLY_TRANSITIONS: { status: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { status: "engaged", label: "Engaged", icon: Users },
@@ -97,6 +109,13 @@ function defaultDateTimeLocal(): string {
   const now = new Date();
   const offset = now.getTimezoneOffset();
   const local = new Date(now.getTime() - offset * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function isoToDateTimeLocal(iso: string): string {
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return defaultDateTimeLocal();
+  const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
 }
 
@@ -170,6 +189,38 @@ export function EventTimeline({
       setBusy(null);
       setDialogOpen(null);
       resetDialogState();
+    }
+  }
+
+  async function doEditEvent(eventId: number) {
+    setBusy(`edit-${eventId}`);
+    setError(null);
+    try {
+      await api.events.update(eventId, {
+        occurred_at: toISOString(eventDate),
+        note: eventNote.trim() || null,
+      });
+      refreshPage();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update event");
+    } finally {
+      setBusy(null);
+      setDialogOpen(null);
+      resetDialogState();
+    }
+  }
+
+  async function doDeleteEvent(eventId: number) {
+    setBusy(`delete-${eventId}`);
+    setError(null);
+    try {
+      await api.events.delete(eventId);
+      refreshPage();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete event");
+    } finally {
+      setBusy(null);
+      setDialogOpen(null);
     }
   }
 
@@ -336,6 +387,11 @@ export function EventTimeline({
             {error}
           </div>
         )}
+
+        {/* Manual activity logging — available at any status */}
+        <div className="flex flex-wrap gap-2">
+          <LogActivityDialog jobId={jobId} />
+        </div>
 
         {/* Post-apply transition controls */}
         {currentStatus === "applied" && (
@@ -633,10 +689,11 @@ export function EventTimeline({
             events.map((event) => {
               const ActorIcon = ACTOR_ICONS[event.actor] ?? Cpu;
               const label = EVENT_LABELS[event.event_type] ?? event.event_type;
+              const isManual = MANUAL_TYPE_SET.has(event.event_type);
               return (
                 <div
                   key={event.id}
-                  className="flex items-start gap-3 rounded-lg border border-border/60 p-3"
+                  className="group flex items-start gap-3 rounded-lg border border-border/60 p-3"
                 >
                   <div className="flex flex-col items-center gap-1 pt-0.5">
                     <ActorIcon className="size-4 text-muted-foreground" />
@@ -645,6 +702,92 @@ export function EventTimeline({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">{label}</span>
                       <Badge variant="secondary" className="text-xs">{event.actor}</Badge>
+                      {isManual && (
+                        <span className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Dialog
+                            open={dialogOpen === `edit-${event.id}`}
+                            onOpenChange={(o) => {
+                              if (!o) setDialogOpen(null);
+                              else {
+                                setDialogOpen(`edit-${event.id}`);
+                                setEventDate(isoToDateTimeLocal(event.occurred_at));
+                                setEventNote(event.note ?? "");
+                              }
+                            }}
+                          >
+                            <DialogTrigger
+                              render={
+                                <Button variant="ghost" size="icon-sm" aria-label={`Edit ${label}`} disabled={busy !== null}>
+                                  <Pencil className="size-3.5" />
+                                </Button>
+                              }
+                            />
+                            <DialogContent className="sm:max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Edit: {label}</DialogTitle>
+                                <DialogDescription>
+                                  Update the date or note. System events cannot be edited — only manually logged activity.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="flex flex-col gap-3">
+                                <div className="flex flex-col gap-1.5">
+                                  <Label htmlFor="event-date">Date / Time</Label>
+                                  <Input
+                                    id="event-date"
+                                    type="datetime-local"
+                                    value={eventDate}
+                                    onChange={(e2) => setEventDate(e2.target.value)}
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                  <Label htmlFor="event-note">Note</Label>
+                                  <Textarea
+                                    id="event-note"
+                                    value={eventNote}
+                                    onChange={(e2) => setEventNote(e2.target.value)}
+                                    rows={3}
+                                    className="text-sm"
+                                  />
+                                </div>
+                              </div>
+                              <DialogFooter>
+                                <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                                <Button onClick={() => doEditEvent(event.id)} disabled={busy !== null}>
+                                  {busy === `edit-${event.id}` ? <Loader2 className="animate-spin" /> : null}
+                                  Save
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                          <Dialog
+                            open={dialogOpen === `delete-${event.id}`}
+                            onOpenChange={(o) => { if (!o) setDialogOpen(null); else setDialogOpen(`delete-${event.id}`); }}
+                          >
+                            <DialogTrigger
+                              render={
+                                <Button variant="ghost" size="icon-sm" aria-label={`Delete ${label}`} disabled={busy !== null}>
+                                  <Trash2 className="size-3.5 text-destructive" />
+                                </Button>
+                              }
+                            />
+                            <DialogContent className="sm:max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Delete this {label.toLowerCase()}?</DialogTitle>
+                                <DialogDescription>
+                                  This permanently removes the entry from the timeline.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <DialogFooter>
+                                <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                                <Button variant="destructive" onClick={() => doDeleteEvent(event.id)} disabled={busy !== null}>
+                                  {busy === `delete-${event.id}` ? <Loader2 className="animate-spin" /> : null}
+                                  Delete
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Calendar className="size-3" />

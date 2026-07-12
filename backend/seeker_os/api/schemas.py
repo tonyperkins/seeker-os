@@ -403,9 +403,12 @@ class RefilterRescoreResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ApplicationEvent(BaseModel):
-    """An event in the job application lifecycle (read model)."""
+    """An event in the job application lifecycle (read model).
+
+    job_id is None for global events (notes/calls not tied to a job).
+    """
     id: int
-    job_id: int
+    job_id: int | None = None
     event_type: str
     actor: str
     occurred_at: str
@@ -425,6 +428,39 @@ class ApplicationEventCreate(BaseModel):
     occurred_at: str | None = None
     metadata: dict | None = None
     note: str | None = None
+
+
+class GlobalEventCreate(BaseModel):
+    """POST /api/events — manual event, optionally tied to a job.
+
+    Only manual event types (note, call, email_sent, email_received, meeting,
+    interview) are accepted; lifecycle events must go through their own
+    endpoints so status and event stay in sync.
+    """
+    event_type: str
+    job_id: int | None = None
+    actor: str = "candidate"
+    occurred_at: str | None = None
+    metadata: dict | None = None
+    note: str | None = None
+
+
+class EventUpdate(BaseModel):
+    """PATCH /api/events/{id} — edit a manual event. All fields optional.
+
+    Only manual event types may be edited; event_type may only change to
+    another manual type. metadata/note set to null explicitly are cleared.
+    """
+    event_type: str | None = None
+    occurred_at: str | None = None
+    metadata: dict | None = None
+    note: str | None = None
+
+
+class ActivityEvent(ApplicationEvent):
+    """Event enriched with job context for the global activity feed."""
+    job_title: str | None = None
+    job_company: str | None = None
 
 
 class PostApplyTransition(BaseModel):
