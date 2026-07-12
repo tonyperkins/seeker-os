@@ -12,12 +12,10 @@ export function FilterForm({
   filters,
   parseResult,
   onSaved,
-  disabled = false,
 }: {
   filters: FiltersData;
   parseResult?: ResumeParseResult | null;
   onSaved?: () => void;
-  disabled?: boolean;
 }) {
   const [form, setForm] = useState<FiltersData>(filters);
   const [saving, setSaving] = useState(false);
@@ -201,11 +199,11 @@ export function FilterForm({
 
       {/* Save */}
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={saving || disabled}>
+        <Button onClick={handleSave} disabled={saving}>
           {saving ? <Loader2 className="animate-spin" /> : saved ? <CheckCircle2 /> : <Save />}
-          {saving ? "Saving..." : disabled ? "Demo mode" : saved ? "Saved!" : dirty ? "Save Filters *" : "Save Filters"}
+          {saving ? "Saving..." : saved ? "Saved!" : dirty ? "Save Filters *" : "Save Filters"}
         </Button>
-        {dirty && !disabled && (
+        {dirty && (
           <span className="text-xs text-amber-600 dark:text-amber-400">Unsaved changes</span>
         )}
       </div>

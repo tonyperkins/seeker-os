@@ -24,10 +24,8 @@ import {
   TabsContent,
 } from "@/components/ui/tabs";
 import { api, type JobDetail, type RecruiterContact } from "@/lib/api";
-import { useDemoMode } from "@/lib/demo";
 
 export function JobEditDialog({ job }: { job: JobDetail }) {
-  const { demoMode } = useDemoMode();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -126,7 +124,7 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" disabled={demoMode}>
+          <Button variant="outline" size="sm">
             <Pencil className="size-4" />
             Edit
           </Button>
@@ -255,7 +253,6 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            disabled={demoMode}
                             onClick={() => setEditingRecruiterId(rc.id)}
                           >
                             <Pencil className="size-4" />
@@ -263,7 +260,6 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            disabled={demoMode}
                             onClick={async () => {
                               try {
                                 await api.jobs.deleteRecruiter(rc.id);
@@ -342,7 +338,6 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={demoMode}
                   onClick={() => setShowAddRecruiter(true)}
                 >
                   <Plus className="size-4" />
@@ -361,7 +356,7 @@ export function JobEditDialog({ job }: { job: JobDetail }) {
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button onClick={handleSave} disabled={saving || demoMode}>
+          <Button onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="animate-spin" /> : <Save className="size-4" />}
             Save changes
           </Button>

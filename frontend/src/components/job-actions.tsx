@@ -39,7 +39,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GenerateResumeButton } from "@/components/generate-resume-button";
 import { api, type SkipReasonOption } from "@/lib/api";
-import { useDemoMode } from "@/lib/demo";
 
 type TransitionDef = {
   status: string;
@@ -208,7 +207,6 @@ export function JobActions({
   atsSource,
   analysisVerdict,
 }: JobActionsProps) {
-  const { demoMode } = useDemoMode();
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -296,7 +294,7 @@ export function JobActions({
         <Button
           variant="default"
           size="lg"
-          disabled={busy !== null || demoMode}
+          disabled={busy !== null}
           onClick={() => {
             if (primary.type === "apply-on-site" && applyUrl) {
               window.open(applyUrl, "_blank", "noopener,noreferrer");
@@ -330,7 +328,7 @@ export function JobActions({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="outline" disabled={busy !== null || demoMode}>
+              <Button variant="outline" disabled={busy !== null}>
                 Status: {STATUS_LABELS[currentStatus] ?? currentStatus}
                 <ChevronDown />
               </Button>
@@ -345,7 +343,7 @@ export function JobActions({
               <DropdownMenuItem
                 key={t.status}
                 onClick={() => handleTransition(t)}
-                disabled={busy !== null || demoMode}
+                disabled={busy !== null}
               >
                 <t.icon />
                 {t.label}
@@ -360,7 +358,7 @@ export function JobActions({
         <Button
           variant="outline"
           size="lg"
-          disabled={busy !== null || demoMode}
+          disabled={busy !== null}
           onClick={() => window.open(applyUrl, "_blank", "noopener,noreferrer")}
         >
           <ExternalLink />
@@ -426,7 +424,7 @@ export function JobActions({
             <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
             <Button
               variant="destructive"
-              disabled={!rejectReason || busy !== null || demoMode}
+              disabled={!rejectReason || busy !== null}
               onClick={() =>
                 doAction(
                   "reject",
@@ -503,7 +501,7 @@ export function JobActions({
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
             <Button
-              disabled={busy !== null || demoMode}
+              disabled={busy !== null}
               onClick={() =>
                 doAction(
                   "skip",
@@ -554,7 +552,7 @@ export function JobActions({
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
             <Button
-              disabled={busy !== null || demoMode}
+              disabled={busy !== null}
               onClick={() =>
                 doAction(
                   "override",

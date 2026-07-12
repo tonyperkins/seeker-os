@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, type PipelineRunSummary, type PipelineProgressEvent } from "@/lib/api";
-import { useDemoMode } from "@/lib/demo";
 
 const STEPS = [
   { key: "discovery", label: "Discovery", icon: Search },
@@ -30,7 +29,6 @@ const STEPS = [
 type StepStatus = "pending" | "started" | "in_progress" | "completed";
 
 export function RunPipelineButton({ setupComplete = true, compact = false }: { setupComplete?: boolean; compact?: boolean }) {
-  const { demoMode } = useDemoMode();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PipelineRunSummary | null>(null);
@@ -163,16 +161,15 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
     <div className={`flex flex-col gap-3 ${compact ? "relative" : ""}`}>
       <Button
         onClick={handleRun}
-        disabled={loading || !setupComplete || demoMode}
+        disabled={loading || !setupComplete}
         size={compact ? "default" : "lg"}
-        title={demoMode ? "Pipeline runs are disabled in demo mode" : undefined}
       >
         {loading ? (
           <Loader2 className="animate-spin" />
         ) : (
           <Play />
         )}
-        {loading ? "Running…" : demoMode ? "Demo mode" : setupComplete ? "Run pipeline" : "Complete setup first"}
+        {loading ? "Running…" : setupComplete ? "Run pipeline" : "Complete setup first"}
       </Button>
       {!setupComplete && !compact && (
         <p className="text-xs text-muted-foreground text-center">

@@ -171,9 +171,6 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
       }
       action={
         <div className="flex items-center gap-1">
-          {data && (
-            <CopyButtonFromData data={data} />
-          )}
           <Button
             variant="outline"
             size="sm"
@@ -187,6 +184,9 @@ export function JobAnalysis({ jobId }: { jobId: number }) {
             )}
             {data ? "Refresh" : "Analyze"}
           </Button>
+          {data && (
+            <CopyButtonFromData data={data} />
+          )}
         </div>
       }
     >

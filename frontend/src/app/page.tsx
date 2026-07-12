@@ -33,7 +33,6 @@ export default async function DashboardPage() {
   let settings: SettingsResponse | null = null;
   let resumeInfo: MasterResumeInfo | null = null;
   let providers: ProvidersConfigResponse | null = null;
-  let isDemoMode = false;
   let docsToReview = 0;
   let movement: MovementReport | null = null;
   let signalQuality: SignalQualityReport | null = null;
@@ -46,13 +45,12 @@ export default async function DashboardPage() {
     settled("Action queue", api.jobs.list({ status: "ready", sort_by: "net_score", limit: 5 }), unavailable),
   ]);
 
-  const [funnelResult, runsResult, settingsResult, resumeResult, providersResult, demoResult, pendingResult, movementResult, signalResult, spendResult] = await Promise.all([
+  const [funnelResult, runsResult, settingsResult, resumeResult, providersResult, pendingResult, movementResult, signalResult, spendResult] = await Promise.all([
     settled("Pipeline metrics", api.analytics.funnel(), unavailable),
     settled("Pipeline runs", api.pipeline.runs(), unavailable),
     settled("Settings", api.settings.get(), unavailable),
     settled("Master resume", api.resumes.getMaster(), unavailable),
     settled("Model providers", api.models.getConfig(), unavailable),
-    settled("Demo mode", api.demoMode.get(), unavailable),
     settled("Documents to review", api.resumes.pendingCount(), unavailable),
     settled("Movement", api.analytics.movement({ days: 7, limit: 30 }), unavailable),
     settled("Signal quality", api.analytics.signalQuality(), unavailable),
@@ -60,11 +58,11 @@ export default async function DashboardPage() {
   ]);
 
   funnel = funnelResult;
+
   runs = runsResult ?? [];
   settings = settingsResult;
   resumeInfo = resumeResult;
   providers = providersResult;
-  isDemoMode = demoResult?.demo_mode ?? false;
   docsToReview = pendingResult?.count ?? 0;
   movement = movementResult;
   signalQuality = signalResult;
@@ -90,10 +88,8 @@ export default async function DashboardPage() {
   const hasResume = resumeInfo?.exists ?? false;
   const setupComplete = hasProvider && tiersConfigured && isProfileConfigured && hasResume;
 
-  // Demo mode ships with a synthetic profile, resume, and zero providers.
-  // It should land directly on the dashboard, not the onboarding wizard.
   const setupStateAvailable = settingsResult !== null && providersResult !== null;
-  if (setupStateAvailable && !setupComplete && !isDemoMode) {
+  if (setupStateAvailable && !setupComplete) {
     redirect("/onboarding");
   }
 

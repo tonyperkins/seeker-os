@@ -15,10 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { api, type SkipReasonOption, type NoReasonSkip } from "@/lib/api";
-import { useDemoMode } from "@/lib/demo";
 
 export function BulkAnnotateSkips() {
-  const { demoMode } = useDemoMode();
   const [open, setOpen] = useState(false);
   const [skips, setSkips] = useState<NoReasonSkip[] | null>(null);
   const [skipReasons, setSkipReasons] = useState<SkipReasonOption[]>([]);
@@ -97,7 +95,7 @@ export function BulkAnnotateSkips() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" disabled={demoMode}>
+          <Button variant="outline" size="sm">
             <MinusCircle className="size-3.5" />
             Annotate Skips
           </Button>
@@ -137,7 +135,7 @@ export function BulkAnnotateSkips() {
               <Button
                 size="sm"
                 variant="default"
-                disabled={readyToAnnotate === 0 || annotating !== null || demoMode}
+                disabled={readyToAnnotate === 0 || annotating !== null}
                 onClick={annotateAll}
               >
                 {annotating === -1 ? <Loader2 className="size-3.5 animate-spin" /> : null}
@@ -190,7 +188,7 @@ export function BulkAnnotateSkips() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={!selectedReason[s.job_id] || annotating !== null || demoMode}
+                      disabled={!selectedReason[s.job_id] || annotating !== null}
                       onClick={() => annotate(s.job_id)}
                     >
                       {annotating === s.job_id ? <Loader2 className="size-3.5 animate-spin" /> : null}

@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { api, type ResumeProgressEvent } from "@/lib/api";
 import { ErrorBanner } from "@/components/error-banner";
-import { useDemoMode } from "@/lib/demo";
 
 const STEPS = [
   { key: "load_job", label: "Loading job", icon: FileSearch },
@@ -37,7 +36,6 @@ export function GenerateResumeButton({
   size?: "default" | "sm" | "lg" | "icon" | "icon-sm";
   variant?: "default" | "outline" | "ghost" | "destructive" | "link";
 }) {
-  const { demoMode } = useDemoMode();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ resume_id: number; validation_passed: boolean } | null>(null);
@@ -176,9 +174,9 @@ export function GenerateResumeButton({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
-          <Button size={size} variant={variant} disabled={busy || demoMode} title={demoMode ? "Resume generation is disabled in demo mode" : undefined}>
+          <Button size={size} variant={variant} disabled={busy}>
             {busy ? <Loader2 className="animate-spin" /> : <FileText />}
-            {demoMode ? "Demo mode" : "Generate Resume"}
+            Generate Resume
           </Button>
         }
       />

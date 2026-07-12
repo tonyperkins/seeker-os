@@ -26,28 +26,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 CONFIG_DIR = PROJECT_ROOT / "config"
-DEMO_CONFIG_DIR = CONFIG_DIR / "demo"
 DATA_DIR = PROJECT_ROOT / "data"
-
-
-def is_demo_mode() -> bool:
-    """Return True if the application should run in read-only demo mode.
-
-    Fail-closed: unset, empty, or malformed values default to True (demo-restricted).
-    ONLY the exact clean string 'false' disables demo mode.  Every other value,
-    including '0', 'no', 'off', and case/whitespace variants, fails closed to demo.
-    """
-    raw = os.environ.get("DEMO_MODE", "")
-    if raw is None:
-        return True
-    # Exact match only — no strip, no lowercasing.  'False', 'false ', 'FALSE', '0', 'no' → demo.
-    if raw == "false":
-        return False
-    # Recognized demo-only affirmative values (informational, not required for denial).
-    if raw in ("true", "1", "yes", "on"):
-        return True
-    # Malformed / empty / unset → fail closed
-    return True
 
 
 def expand_path(value: str) -> str:
@@ -656,13 +635,7 @@ class Settings:
 
     def __init__(self, config_dir: Path | None = None):
         load_dotenv(PROJECT_ROOT / ".env")
-        self.demo_mode = is_demo_mode()
-        if config_dir is not None:
-            self.config_dir = config_dir
-        elif self.demo_mode:
-            self.config_dir = DEMO_CONFIG_DIR
-        else:
-            self.config_dir = CONFIG_DIR
+        self.config_dir = config_dir if config_dir is not None else CONFIG_DIR
 
         self.profile: ProfileConfig | None = None
         self.scoring: ScoringConfig | None = None
@@ -693,56 +666,10 @@ class Settings:
         return resolve_env_vars(data)
 
     def _load_all(self):
-        if self.demo_mode:
-            self._load_demo_configs()
-            return
-
         self._load_live_configs()
 
-    def _load_demo_configs(self):
-        """Load only fictional demo persona configs. No personal files, no LLM providers."""
-        if (self.config_dir / "profile.demo.yml").exists():
-            profile_data = self._load_yaml("profile.demo.yml")
-            self.profile = ProfileConfig(**profile_data)
-            if profile_data and "lifecycle" in profile_data:
-                self.lifecycle = LifecycleConfig(**profile_data["lifecycle"])
-
-        if (self.config_dir / "filters.demo.yml").exists():
-            self.filters = FiltersConfig(**self._load_yaml("filters.demo.yml"))
-
-        if (self.config_dir / "scoring_rubric.demo.yml").exists():
-            scoring_data = self._load_yaml("scoring_rubric.demo.yml")
-            if "scoring" in scoring_data:
-                scoring_data = scoring_data["scoring"]
-            self.scoring = ScoringConfig(**scoring_data)
-
-        if (self.config_dir / "identity_rules.demo.yml").exists():
-            data = self._load_yaml("identity_rules.demo.yml")
-            if data and "identity" in data:
-                self.identity = IdentityConfig(**data["identity"])
-
-        if (self.config_dir / "channel_rules.demo.yml").exists():
-            data = self._load_yaml("channel_rules.demo.yml")
-            if data and "channels" in data:
-                self.channel_rules = ChannelRulesConfig(**data["channels"])
-
-        if (self.config_dir / "company_research.demo.yml").exists():
-            data = self._load_yaml("company_research.demo.yml")
-            if data:
-                self.company_research = CompanyResearchConfig(**data)
-
-        if (self.config_dir / "skip_reasons.demo.yml").exists():
-            data = self._load_yaml("skip_reasons.demo.yml")
-            if data:
-                self.skip_reasons = SkipReasonsConfig(**data)
-
-        # Demo mode has no live sources, queries, or providers.
-        self.sources = SourcesConfig()
-        self.queries = QueriesConfig()
-        self.providers = ProvidersConfig()
-
     def _load_live_configs(self):
-        """Load the user's real config files (non-demo)."""
+        """Load the user's config files."""
         # sources.yml and filters.yml can be committed (no personal data)
         if (self.config_dir / "sources.yml").exists():
             self.sources = SourcesConfig(**self._load_yaml("sources.yml"))
@@ -824,10 +751,7 @@ def get_settings(config_dir: Path | None = None) -> Settings:
     """
     global _settings_cache, _settings_cache_key
     effective_config_dir = Path(
-        config_dir
-        if config_dir is not None
-        else DEMO_CONFIG_DIR if is_demo_mode()
-        else CONFIG_DIR
+        config_dir if config_dir is not None else CONFIG_DIR
     )
     # Include the constructor identity so tests or embedders that replace the
     # Settings factory do not receive an instance created by the old factory.

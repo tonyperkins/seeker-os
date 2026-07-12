@@ -84,11 +84,6 @@ export type {
 } from "@/lib/api-types";
 
 export const api = {
-  // Demo mode
-  demoMode: {
-    get: () => fetchAPI<{ demo_mode: boolean }>("/api/demo-mode"),
-  },
-
   // Jobs
   jobs: {
     list: (

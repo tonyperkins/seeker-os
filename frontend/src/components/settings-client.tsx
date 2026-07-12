@@ -14,7 +14,6 @@ import { MasterResumeUpload } from "@/components/master-resume-upload";
 import { ProfileForm } from "@/components/profile-form";
 import { FilterForm } from "@/components/filter-form";
 import { type ProfileData, type FiltersData, type ResumeParseResult } from "@/lib/api";
-import { useDemoMode } from "@/lib/demo";
 
 export function SettingsClient({
   profile: initialProfile,
@@ -23,7 +22,6 @@ export function SettingsClient({
   profile: ProfileData | null;
   filters: FiltersData | null;
 }) {
-  const { demoMode } = useDemoMode();
   const [parseResult, setParseResult] = useState<ResumeParseResult | null>(null);
 
   const handleParsed = useCallback((result: ResumeParseResult) => {
@@ -45,7 +43,7 @@ export function SettingsClient({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <MasterResumeUpload onParsed={handleParsed} bare disabled={demoMode} />
+          <MasterResumeUpload onParsed={handleParsed} bare />
           {parseResult && (
             <div className="mt-4 flex items-start gap-2 rounded-md bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400">
               <FileText className="mt-0.5 size-4 shrink-0" />
@@ -75,7 +73,7 @@ export function SettingsClient({
         title="Master Resume"
         description="Upload, parse, and edit your master resume. Used for tailored resume generation."
       >
-          <MasterResumeUpload onParsed={handleParsed} bare disabled={demoMode} />
+          <MasterResumeUpload onParsed={handleParsed} bare />
       </CollapsibleCard>
 
       {/* Profile Form */}
@@ -88,7 +86,6 @@ export function SettingsClient({
             key={parseResult ? `parsed-${parseResult.contact.name}` : "initial"}
             profile={initialProfile}
             parseResult={parseResult}
-            disabled={demoMode}
           />
       </CollapsibleCard>
 
@@ -102,7 +99,6 @@ export function SettingsClient({
             key={parseResult ? `parsed-${parseResult.suggested_comp_floor}` : "initial"}
             filters={initialFilters}
             parseResult={parseResult}
-            disabled={demoMode}
           />
       </CollapsibleCard>
     </div>
