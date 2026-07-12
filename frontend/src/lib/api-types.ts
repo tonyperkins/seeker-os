@@ -459,6 +459,14 @@ export interface ObservabilityOperationDetail {
   evaluations: ObservabilityEvaluation[];
 }
 
+export interface LangfuseStatusResponse {
+  enabled: boolean;
+  initialized: boolean;
+  base_url: string;
+  capture_content: boolean;
+  keys_configured: boolean;
+}
+
 export interface SkipReasonOption {
   key: string;
   label: string;

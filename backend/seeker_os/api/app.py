@@ -79,7 +79,24 @@ async def lifespan(app: FastAPI):
     run_migrations()
     _sync_queries_from_yaml()
 
+    # Initialize Langfuse sink if enabled in config
+    from seeker_os.config import get_settings
+    from seeker_os.observability.langfuse_sink import init_sink
+    try:
+        init_sink(get_settings())
+    except Exception:
+        logger.warning("langfuse_init_failed_at_startup", exc_info=True)
+
     yield
+
+    # Flush Langfuse sink on shutdown (blocking, in threadpool)
+    from seeker_os.observability.langfuse_sink import get_sink
+    sink = get_sink()
+    if sink:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, sink.shutdown)
+        logger.info("langfuse_sink_shut_down")
 
 
 def _sync_queries_from_yaml() -> None:

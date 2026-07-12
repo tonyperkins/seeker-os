@@ -107,4 +107,13 @@ def reload_config():
     from seeker_os.api.app import _sync_queries_from_yaml
     _sync_queries_from_yaml()
 
+    # Re-initialize Langfuse sink (handles enabled→disabled and disabled→enabled)
+    from seeker_os.config import get_settings
+    from seeker_os.observability.langfuse_sink import init_sink
+    try:
+        init_sink(get_settings())
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning("langfuse_reinit_failed", exc_info=True)
+
     return MessageResponse(message="Configuration reloaded from disk")

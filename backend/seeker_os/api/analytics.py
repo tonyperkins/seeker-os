@@ -12,6 +12,7 @@ from seeker_os.api.schemas import (
     AgingReport,
     CalibrationReport,
     FunnelStats,
+    LangfuseStatusResponse,
     MovementEvent,
     MovementReport,
     ObservabilityCall,
@@ -479,6 +480,14 @@ def get_llm_operation(operation_id: str):
         )
     finally:
         db.close()
+
+
+@router.get("/langfuse-status", response_model=LangfuseStatusResponse)
+def get_langfuse_status():
+    """Langfuse tracing sink status for UI display and connection debugging."""
+    from seeker_os.observability.langfuse_sink import get_status
+
+    return LangfuseStatusResponse(**get_status())
 
 
 @router.get("/funnel", response_model=FunnelStats)

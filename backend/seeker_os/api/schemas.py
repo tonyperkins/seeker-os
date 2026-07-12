@@ -376,6 +376,15 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class LangfuseStatusResponse(BaseModel):
+    """Status of the Langfuse tracing sink."""
+    enabled: bool = False
+    initialized: bool = False
+    base_url: str = ""
+    capture_content: bool = False
+    keys_configured: bool = False
+
+
 class RefilterRescoreRequest(BaseModel):
     """POST /api/jobs/refilter-rescore."""
     job_ids: list[int] | None = None
