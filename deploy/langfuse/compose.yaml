@@ -1,7 +1,10 @@
 # Vendored Langfuse v3 self-hosted stack.
 #
 # This is a minimally modified copy of Langfuse's official docker-compose.yml:
-#   - Pinned image versions (no :latest)
+#   - Langfuse images pinned to an exact version — upgrades are a deliberate
+#     diff against upstream's docker-compose.yml, not an automatic pull.
+#     (postgres/redis stay on major tags for security patches; the Chainguard
+#     minio image only publishes :latest on the free tier.)
 #   - Container/volume names prefixed seekeros-langfuse-* to avoid collisions
 #   - Host ports chosen to not conflict with the main stack
 #   - Only langfuse-web joins the seekeros network (external); internal
@@ -27,7 +30,7 @@
 
 services:
   langfuse-worker:
-    image: docker.io/langfuse/langfuse-worker:3
+    image: docker.io/langfuse/langfuse-worker:3.212.0
     restart: always
     container_name: seekeros-langfuse-worker
     depends_on: &langfuse-depends-on
@@ -75,7 +78,7 @@ services:
       REDIS_TLS_ENABLED: false
 
   langfuse-web:
-    image: docker.io/langfuse/langfuse:3
+    image: docker.io/langfuse/langfuse:3.212.0
     restart: always
     container_name: seekeros-langfuse-web
     depends_on: *langfuse-depends-on
