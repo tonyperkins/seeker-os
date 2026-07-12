@@ -4,7 +4,7 @@ import { DollarSign, Cpu, TrendingDown, AlertTriangle } from "lucide-react";
 import { CollapsibleCard } from "@/components/collapsible-card";
 import { formatDate } from "@/lib/date";
 import { formatCurrency, formatTokens } from "@/lib/format";
-import type { SpendReport } from "@/lib/api";
+import type { CostPerArtifactResponse, SpendReport } from "@/lib/api";
 
 function formatPrice(n: number | null): string {
   if (n === null) return "—";
@@ -62,7 +62,7 @@ function splitModelId(provider: string, model: string): { prefix: string | null;
   return { prefix: null, base: model };
 }
 
-export function SpendBreakdownCard({ report, freeTierOnly }: { report: SpendReport | null; freeTierOnly?: boolean }) {
+export function SpendBreakdownCard({ report, freeTierOnly, unitEconomics }: { report: SpendReport | null; freeTierOnly?: boolean; unitEconomics?: CostPerArtifactResponse | null }) {
   if (!report || report.total_calls === 0) {
     return (
       <CollapsibleCard
@@ -120,6 +120,25 @@ export function SpendBreakdownCard({ report, freeTierOnly }: { report: SpendRepo
       action={headerStats}
       contentClassName="flex flex-col gap-3"
     >
+      {/* Unit economics — avg ledger cost per artifact (#54) */}
+      {unitEconomics && (unitEconomics.avg_cost_per_analyzed_jd !== null || unitEconomics.avg_cost_per_tailored_resume !== null || unitEconomics.avg_cost_per_dossier !== null) && (
+        <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-3 text-sm">
+          <h4 className="w-full text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">Unit Economics</h4>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Per analyzed JD</span>
+            <span className="font-mono font-semibold">{formatCurrency(unitEconomics.avg_cost_per_analyzed_jd ?? 0)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Per tailored resume</span>
+            <span className="font-mono font-semibold">{formatCurrency(unitEconomics.avg_cost_per_tailored_resume ?? 0)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground">Per company dossier</span>
+            <span className="font-mono font-semibold">{formatCurrency(unitEconomics.avg_cost_per_dossier ?? 0)}</span>
+          </div>
+        </div>
+      )}
+
       {/* Route price warnings */}
       {report.route_pricing.length > 0 && (
         <div className="flex flex-col gap-1.5 border-t border-border pt-3">

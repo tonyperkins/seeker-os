@@ -385,6 +385,78 @@ class LangfuseStatusResponse(BaseModel):
     keys_configured: bool = False
 
 
+class SLOMetric(BaseModel):
+    """A single SLO metric with target, actual, and pass/fail status."""
+    name: str
+    target: float
+    actual: float
+    unit: str = ""
+    passing: bool = True
+
+
+class SLOStatusResponse(BaseModel):
+    """SLO status — actuals vs targets from observability.yml."""
+    window_hours: int = 24
+    metrics: list[SLOMetric] = Field(default_factory=list)
+    daily_spend_usd: float = 0.0
+    daily_spend_budget_usd: float = 5.0
+
+
+class BudgetStatusResponse(BaseModel):
+    """Budget usage for paid retrieval calls."""
+    adapter_type: str = "tavily"
+    daily_count: int = 0
+    daily_cap: int = 0
+    monthly_count: int = 0
+    monthly_cap: int = 0
+    daily_errors: int = 0
+    daily_remaining: int | None = None
+    monthly_remaining: int | None = None
+
+
+class CostBucket(BaseModel):
+    """Aggregate cost for one grouping key (task or artifact type)."""
+    key: str
+    calls: int = 0
+    cost_usd: float = 0.0
+
+
+class CostSummaryResponse(BaseModel):
+    """Aggregate LLM cost breakdown by pipeline stage and artifact type.
+
+    Sourced from the SQLite ledger (llm_calls.estimated_cost). Calls not yet
+    attributed to an artifact appear under artifact type 'unattributed'.
+    """
+    total_calls: int = 0
+    total_cost_usd: float = 0.0
+    by_task: list[CostBucket] = Field(default_factory=list)
+    by_artifact_type: list[CostBucket] = Field(default_factory=list)
+
+
+class ArtifactCost(BaseModel):
+    """Unit cost for one artifact (analyzed JD, tailored resume, or dossier)."""
+    artifact_id: int
+    job_id: int | None = None
+    label: str = ""
+    calls: int = 0
+    cost_usd: float = 0.0
+
+
+class CostPerArtifactResponse(BaseModel):
+    """Per-artifact unit economics, from ledger artifact attribution.
+
+    Resume costs include accuracy_validation (same operation → same artifact).
+    Dossier cost is raw cost per company — dossiers are TTL-cached and reused
+    across jobs, and we deliberately do not amortize (see #54).
+    """
+    avg_cost_per_analyzed_jd: float | None = None
+    avg_cost_per_tailored_resume: float | None = None
+    avg_cost_per_dossier: float | None = None
+    analyzed_jds: list[ArtifactCost] = Field(default_factory=list)
+    tailored_resumes: list[ArtifactCost] = Field(default_factory=list)
+    dossiers: list[ArtifactCost] = Field(default_factory=list)
+
+
 class RefilterRescoreRequest(BaseModel):
     """POST /api/jobs/refilter-rescore."""
     job_ids: list[int] | None = None

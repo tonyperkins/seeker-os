@@ -467,6 +467,62 @@ export interface LangfuseStatusResponse {
   keys_configured: boolean;
 }
 
+export interface SLOMetric {
+  name: string;
+  target: number;
+  actual: number;
+  unit: string;
+  passing: boolean;
+}
+
+export interface SLOStatusResponse {
+  window_hours: number;
+  metrics: SLOMetric[];
+  daily_spend_usd: number;
+  daily_spend_budget_usd: number;
+}
+
+export interface BudgetStatusResponse {
+  adapter_type: string;
+  daily_count: number;
+  daily_cap: number;
+  monthly_count: number;
+  monthly_cap: number;
+  daily_errors: number;
+  daily_remaining: number | null;
+  monthly_remaining: number | null;
+}
+
+export interface CostBucket {
+  key: string;
+  calls: number;
+  cost_usd: number;
+}
+
+export interface CostSummaryResponse {
+  total_calls: number;
+  total_cost_usd: number;
+  by_task: CostBucket[];
+  by_artifact_type: CostBucket[];
+}
+
+export interface ArtifactCost {
+  artifact_id: number;
+  job_id: number | null;
+  label: string;
+  calls: number;
+  cost_usd: number;
+}
+
+export interface CostPerArtifactResponse {
+  avg_cost_per_analyzed_jd: number | null;
+  avg_cost_per_tailored_resume: number | null;
+  avg_cost_per_dossier: number | null;
+  analyzed_jds: ArtifactCost[];
+  tailored_resumes: ArtifactCost[];
+  dossiers: ArtifactCost[];
+}
+
 export interface SkipReasonOption {
   key: string;
   label: string;

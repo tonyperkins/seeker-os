@@ -904,6 +904,24 @@ def _backfill_llm_artifacts(conn: sqlite3.Connection) -> None:
 
 MIGRATIONS.append(_backfill_llm_artifacts)
 
+# Migration 31: Retrieval call tracking for budget cap enforcement.
+# Each paid Tavily search query is recorded here so the budget guard can
+# count daily/monthly calls before allowing the next one.
+MIGRATIONS.append(
+    """
+    CREATE TABLE IF NOT EXISTS retrieval_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        adapter_type TEXT NOT NULL,
+        query TEXT NOT NULL,
+        status TEXT NOT NULL,
+        error_message TEXT,
+        called_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_retrieval_calls_adapter_date
+        ON retrieval_calls(adapter_type, called_at);
+    """
+)
+
 def _split_sql_statements(script: str) -> list[str]:
     """Split a migration script into individual statements on ';'.
 
