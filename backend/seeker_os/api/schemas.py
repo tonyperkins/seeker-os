@@ -414,6 +414,49 @@ class BudgetStatusResponse(BaseModel):
     monthly_remaining: int | None = None
 
 
+class CostBucket(BaseModel):
+    """Aggregate cost for one grouping key (task or artifact type)."""
+    key: str
+    calls: int = 0
+    cost_usd: float = 0.0
+
+
+class CostSummaryResponse(BaseModel):
+    """Aggregate LLM cost breakdown by pipeline stage and artifact type.
+
+    Sourced from the SQLite ledger (llm_calls.estimated_cost). Calls not yet
+    attributed to an artifact appear under artifact type 'unattributed'.
+    """
+    total_calls: int = 0
+    total_cost_usd: float = 0.0
+    by_task: list[CostBucket] = Field(default_factory=list)
+    by_artifact_type: list[CostBucket] = Field(default_factory=list)
+
+
+class ArtifactCost(BaseModel):
+    """Unit cost for one artifact (analyzed JD, tailored resume, or dossier)."""
+    artifact_id: int
+    job_id: int | None = None
+    label: str = ""
+    calls: int = 0
+    cost_usd: float = 0.0
+
+
+class CostPerArtifactResponse(BaseModel):
+    """Per-artifact unit economics, from ledger artifact attribution.
+
+    Resume costs include accuracy_validation (same operation → same artifact).
+    Dossier cost is raw cost per company — dossiers are TTL-cached and reused
+    across jobs, and we deliberately do not amortize (see #54).
+    """
+    avg_cost_per_analyzed_jd: float | None = None
+    avg_cost_per_tailored_resume: float | None = None
+    avg_cost_per_dossier: float | None = None
+    analyzed_jds: list[ArtifactCost] = Field(default_factory=list)
+    tailored_resumes: list[ArtifactCost] = Field(default_factory=list)
+    dossiers: list[ArtifactCost] = Field(default_factory=list)
+
+
 class RefilterRescoreRequest(BaseModel):
     """POST /api/jobs/refilter-rescore."""
     job_ids: list[int] | None = None

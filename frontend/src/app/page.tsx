@@ -9,7 +9,7 @@ import { CollapsibleCard } from "@/components/collapsible-card";
 import { SpendBreakdownCard } from "@/components/spend-breakdown-card";
 import { DismissibleBanner } from "@/components/dismissible-banner";
 import { PageHeader } from "@/components/page-header";
-import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport } from "@/lib/api";
+import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport, type CostPerArtifactResponse } from "@/lib/api";
 import { isFreeTierOnly } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +37,7 @@ export default async function DashboardPage() {
   let movement: MovementReport | null = null;
   let signalQuality: SignalQualityReport | null = null;
   let spend: SpendReport | null = null;
+  let unitEconomics: CostPerArtifactResponse | null = null;
   const unavailable: string[] = [];
   const [activeResp, consideringResp, allPostReadyResp, actionQueueResp] = await Promise.all([
     settled("Active applications", api.jobs.list({ status: "applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 50 }), unavailable),
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
     settled("Action queue", api.jobs.list({ status: "ready", sort_by: "net_score", limit: 5 }), unavailable),
   ]);
 
-  const [funnelResult, runsResult, settingsResult, resumeResult, providersResult, pendingResult, movementResult, signalResult, spendResult] = await Promise.all([
+  const [funnelResult, runsResult, settingsResult, resumeResult, providersResult, pendingResult, movementResult, signalResult, spendResult, unitEconResult] = await Promise.all([
     settled("Pipeline metrics", api.analytics.funnel(), unavailable),
     settled("Pipeline runs", api.pipeline.runs(), unavailable),
     settled("Settings", api.settings.get(), unavailable),
@@ -55,6 +56,7 @@ export default async function DashboardPage() {
     settled("Movement", api.analytics.movement({ days: 7, limit: 30 }), unavailable),
     settled("Signal quality", api.analytics.signalQuality(), unavailable),
     settled("Spend", api.analytics.spend(), unavailable),
+    settled("Unit economics", api.analytics.costPerArtifact(), unavailable),
   ]);
 
   funnel = funnelResult;
@@ -67,6 +69,7 @@ export default async function DashboardPage() {
   movement = movementResult;
   signalQuality = signalResult;
   spend = spendResult;
+  unitEconomics = unitEconResult;
   actionQueueJobs = actionQueueResp?.jobs ?? [];
   activeJobs = activeResp?.jobs ?? [];
   consideringJobs = consideringResp?.jobs ?? [];
@@ -202,7 +205,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* ZONE 7 — LLM Spend */}
-      <SpendBreakdownCard report={spend} freeTierOnly={isFreeTierOnly(providers?.providers ?? [], providers?.tiers ?? {})} />
+      <SpendBreakdownCard report={spend} unitEconomics={unitEconomics} freeTierOnly={isFreeTierOnly(providers?.providers ?? [], providers?.tiers ?? {})} />
     </div>
   );
 }

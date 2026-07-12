@@ -30,6 +30,10 @@ from seeker_os.api.schemas import (
     SLOMetric,
     SLOStatusResponse,
     BudgetStatusResponse,
+    ArtifactCost,
+    CostBucket,
+    CostPerArtifactResponse,
+    CostSummaryResponse,
     VerdictDistribution,
 )
 from seeker_os.config import get_settings
@@ -594,6 +598,138 @@ def get_budget_status():
         daily_errors=usage["daily_errors"],
         daily_remaining=(daily_cap - usage["daily_count"]) if daily_cap > 0 else None,
         monthly_remaining=(monthly_cap - usage["monthly_count"]) if monthly_cap > 0 else None,
+    )
+
+
+@router.get("/cost-summary", response_model=CostSummaryResponse)
+def get_cost_summary():
+    """Aggregate LLM cost breakdown by pipeline stage and artifact type.
+
+    Source of truth is the SQLite ledger, not Langfuse.
+    """
+    db = get_connection()
+    try:
+        totals = db.execute(
+            "SELECT COUNT(*) AS calls, COALESCE(SUM(estimated_cost), 0) AS cost "
+            "FROM llm_calls"
+        ).fetchone()
+        by_task = db.execute(
+            "SELECT task AS key, COUNT(*) AS calls, "
+            "COALESCE(SUM(estimated_cost), 0) AS cost "
+            "FROM llm_calls GROUP BY task ORDER BY cost DESC"
+        ).fetchall()
+        by_artifact = db.execute(
+            "SELECT COALESCE(artifact_type, 'unattributed') AS key, "
+            "COUNT(*) AS calls, COALESCE(SUM(estimated_cost), 0) AS cost "
+            "FROM llm_calls GROUP BY COALESCE(artifact_type, 'unattributed') "
+            "ORDER BY cost DESC"
+        ).fetchall()
+    finally:
+        db.close()
+
+    return CostSummaryResponse(
+        total_calls=totals["calls"],
+        total_cost_usd=round(totals["cost"], 6),
+        by_task=[
+            CostBucket(key=r["key"], calls=r["calls"], cost_usd=round(r["cost"], 6))
+            for r in by_task
+        ],
+        by_artifact_type=[
+            CostBucket(key=r["key"], calls=r["calls"], cost_usd=round(r["cost"], 6))
+            for r in by_artifact
+        ],
+    )
+
+
+# Per-artifact cost sections: artifact_type → (join table, job column, label SQL).
+# attach_artifact() tags every call in an operation, so e.g. accuracy_validation
+# calls roll into their resume's artifact automatically.
+_ARTIFACT_COST_SQL = {
+    "analyzed_jds": """
+        SELECT c.artifact_id, ja.job_id,
+               COALESCE(j.title || ' — ' || j.company, 'Job #' || ja.job_id) AS label,
+               COUNT(*) AS calls, COALESCE(SUM(c.estimated_cost), 0) AS cost
+        FROM llm_calls c
+        JOIN job_analyses ja ON ja.id = c.artifact_id
+        LEFT JOIN jobs j ON j.id = ja.job_id
+        WHERE c.artifact_type = 'job_analysis'
+        GROUP BY c.artifact_id
+        ORDER BY MAX(c.started_at) DESC
+        LIMIT 100
+    """,
+    "tailored_resumes": """
+        SELECT c.artifact_id, r.job_id,
+               COALESCE(j.title || ' — ' || j.company, 'Job #' || r.job_id) AS label,
+               COUNT(*) AS calls, COALESCE(SUM(c.estimated_cost), 0) AS cost
+        FROM llm_calls c
+        JOIN resumes r ON r.id = c.artifact_id
+        LEFT JOIN jobs j ON j.id = r.job_id
+        WHERE c.artifact_type = 'resume'
+        GROUP BY c.artifact_id
+        ORDER BY MAX(c.started_at) DESC
+        LIMIT 100
+    """,
+    # Company-keyed, not job-keyed. Raw cost per dossier — deliberately not
+    # amortized across the jobs a cached dossier serves (see #54).
+    "dossiers": """
+        SELECT c.artifact_id, NULL AS job_id,
+               COALESCE(cr.company_name, 'Research #' || c.artifact_id) AS label,
+               COUNT(*) AS calls, COALESCE(SUM(c.estimated_cost), 0) AS cost
+        FROM llm_calls c
+        JOIN company_research cr ON cr.id = c.artifact_id
+        WHERE c.artifact_type = 'company_research'
+        GROUP BY c.artifact_id
+        ORDER BY MAX(c.started_at) DESC
+        LIMIT 100
+    """,
+}
+
+_ARTIFACT_AVG_SQL = {
+    "analyzed_jds": "job_analysis",
+    "tailored_resumes": "resume",
+    "dossiers": "company_research",
+}
+
+
+@router.get("/cost-per-artifact", response_model=CostPerArtifactResponse)
+def get_cost_per_artifact():
+    """Per-artifact unit economics: cost-per-analyzed-JD, cost-per-tailored-resume,
+    cost-per-dossier. Sourced from ledger artifact attribution."""
+    db = get_connection()
+    try:
+        sections: dict[str, list[ArtifactCost]] = {}
+        averages: dict[str, float | None] = {}
+        for section, sql in _ARTIFACT_COST_SQL.items():
+            rows = db.execute(sql).fetchall()
+            sections[section] = [
+                ArtifactCost(
+                    artifact_id=r["artifact_id"], job_id=r["job_id"],
+                    label=r["label"], calls=r["calls"],
+                    cost_usd=round(r["cost"], 6),
+                )
+                for r in rows
+            ]
+            # Average over ALL artifacts of this type, not just the listed page
+            avg_row = db.execute(
+                "SELECT AVG(cost) AS avg_cost FROM ("
+                "  SELECT SUM(estimated_cost) AS cost FROM llm_calls"
+                "  WHERE artifact_type = ? GROUP BY artifact_id"
+                ")",
+                (_ARTIFACT_AVG_SQL[section],),
+            ).fetchone()
+            averages[section] = (
+                round(avg_row["avg_cost"], 6) if avg_row and avg_row["avg_cost"] is not None else None
+            )
+    finally:
+        db.close()
+
+    return CostPerArtifactResponse(
+        avg_cost_per_analyzed_jd=averages["analyzed_jds"],
+        avg_cost_per_tailored_resume=averages["tailored_resumes"],
+        avg_cost_per_dossier=averages["dossiers"],
+        analyzed_jds=sections["analyzed_jds"],
+        tailored_resumes=sections["tailored_resumes"],
+        dossiers=sections["dossiers"],
     )
 
 

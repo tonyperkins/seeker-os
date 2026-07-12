@@ -44,6 +44,10 @@ export type {
   LangfuseStatusResponse,
   SLOStatusResponse,
   BudgetStatusResponse,
+  CostBucket,
+  CostSummaryResponse,
+  ArtifactCost,
+  CostPerArtifactResponse,
   SkipReasonOption,
   NoReasonSkip,
   SettingsResponse,
@@ -310,6 +314,8 @@ export const api = {
     langfuseStatus: () => fetchAPI<T.LangfuseStatusResponse>("/api/analytics/langfuse-status"),
     sloStatus: () => fetchAPI<T.SLOStatusResponse>("/api/analytics/slo-status"),
     budgetStatus: () => fetchAPI<T.BudgetStatusResponse>("/api/analytics/budget-status"),
+    costSummary: () => fetchAPI<T.CostSummaryResponse>("/api/analytics/cost-summary"),
+    costPerArtifact: () => fetchAPI<T.CostPerArtifactResponse>("/api/analytics/cost-per-artifact"),
   },
 
   // Resumes

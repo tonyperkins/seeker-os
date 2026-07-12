@@ -493,6 +493,36 @@ export interface BudgetStatusResponse {
   monthly_remaining: number | null;
 }
 
+export interface CostBucket {
+  key: string;
+  calls: number;
+  cost_usd: number;
+}
+
+export interface CostSummaryResponse {
+  total_calls: number;
+  total_cost_usd: number;
+  by_task: CostBucket[];
+  by_artifact_type: CostBucket[];
+}
+
+export interface ArtifactCost {
+  artifact_id: number;
+  job_id: number | null;
+  label: string;
+  calls: number;
+  cost_usd: number;
+}
+
+export interface CostPerArtifactResponse {
+  avg_cost_per_analyzed_jd: number | null;
+  avg_cost_per_tailored_resume: number | null;
+  avg_cost_per_dossier: number | null;
+  analyzed_jds: ArtifactCost[];
+  tailored_resumes: ArtifactCost[];
+  dossiers: ArtifactCost[];
+}
+
 export interface SkipReasonOption {
   key: string;
   label: string;
