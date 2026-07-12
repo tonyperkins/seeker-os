@@ -627,6 +627,57 @@ class SkipReasonsConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Observability models (Langfuse, budget caps, SLOs)
+# ---------------------------------------------------------------------------
+
+class LangfuseConfig(BaseModel):
+    """Langfuse tracing configuration.
+
+    Two modes: disabled (default, zero overhead) and external (URL + keys —
+    covers the vendored stack, Langfuse Cloud, and any self-hosted instance).
+    """
+    enabled: bool = False
+    base_url: str = "http://langfuse-web:3000"
+    public_key: str = ""
+    secret_key: str = ""
+    capture_content: bool = False
+    flush_interval_seconds: float = 1.0
+
+
+class BudgetCapsConfig(BaseModel):
+    """Daily/monthly caps for paid retrieval calls (Tavily).
+
+    When a cap is exceeded, the retrieval adapter returns empty results and
+    logs a WARNING. Set to 0 for unlimited (no cap).
+    """
+    tavily_daily_cap: int = 0
+    tavily_monthly_cap: int = 0
+
+
+class SLOConfig(BaseModel):
+    """SLO targets for pipeline health indicators.
+
+    All thresholds read from config — never hardcoded. Values are used by
+    the /api/analytics/slo-status endpoint to compare actuals vs targets.
+
+    Pipeline availability: fraction of distinct operation_ids over the SLO
+    window whose LLM calls all completed without error (computed from ledger
+    error rows). Window is in hours.
+    """
+    analysis_latency_p95_ms: int = 30_000
+    pipeline_availability_target: float = 0.99
+    daily_spend_budget_usd: float = 5.0
+    slo_window_hours: int = 24
+
+
+class ObservabilityConfig(BaseModel):
+    """Umbrella config for observability.yml — Langfuse, budget caps, SLOs."""
+    langfuse: LangfuseConfig = LangfuseConfig()
+    budget_caps: BudgetCapsConfig = BudgetCapsConfig()
+    slo: SLOConfig = SLOConfig()
+
+
+# ---------------------------------------------------------------------------
 # Settings — top-level config container
 # ---------------------------------------------------------------------------
 
@@ -648,6 +699,7 @@ class Settings:
         self.company_research: CompanyResearchConfig | None = None
         self.skip_reasons: SkipReasonsConfig | None = None
         self.lifecycle: LifecycleConfig = LifecycleConfig()
+        self.observability: ObservabilityConfig = ObservabilityConfig()
 
         self._load_all()
 
@@ -717,6 +769,11 @@ class Settings:
             data = self._load_yaml("skip_reasons.yml")
             if data:
                 self.skip_reasons = SkipReasonsConfig(**data)
+
+        if (self.config_dir / "observability.yml").exists():
+            data = self._load_yaml("observability.yml")
+            if data:
+                self.observability = ObservabilityConfig(**data)
 
     def load_blacklist(self) -> list[str]:
         """Load blacklist.txt (flat list, one company per line)."""
