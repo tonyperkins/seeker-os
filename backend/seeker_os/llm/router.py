@@ -307,6 +307,15 @@ class ModelRouter:
             logger.exception("llm_telemetry_start_failed")
 
         sink = get_sink()
+        if sink and call_id:
+            try:
+                sink.start(
+                    call_id=call_id, task=task, operation_id=operation_id,
+                    system_prompt=system_prompt, user_prompt=user_prompt,
+                    prompt_name=prompt_name, prompt_version=prompt_version,
+                )
+            except Exception:
+                logger.debug("langfuse_sink_error", exc_info=True)
 
         try:
             provider, model = self.resolve(task)

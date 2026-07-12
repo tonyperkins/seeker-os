@@ -3,7 +3,8 @@
 Mirrors the ledger's start_call()/finish_call() pattern at the ModelRouter
 choke point. When disabled (default), the SDK is never imported and all
 methods are no-ops. When enabled, traces are emitted to Langfuse via the
-v3 Python SDK (OTel-based).
+OTel-based Python SDK (v4 — validated against 4.14; `start_generation`/
+`finish_generation` from the v2/early-v3 API do not exist on this client).
 
 Design constraints (see #53):
 - The langfuse import is lazy — inside the enabled-guarded init, never at
@@ -18,7 +19,7 @@ Design constraints (see #53):
 from __future__ import annotations
 
 import logging
-import time
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -28,10 +29,15 @@ _warned_init = False
 
 
 class LangfuseSink:
-    """Wraps a Langfuse v3 SDK client for trace emission.
+    """Wraps a Langfuse SDK client for trace emission.
 
     Constructed by init_sink() only when enabled=True and keys are present.
     All methods swallow exceptions so the pipeline is never affected.
+
+    start() opens a generation observation (so Langfuse records real
+    durations); finish() updates it with the outcome and ends it. In-flight
+    observations are keyed by call_id — generate() guarantees a finish() on
+    every exit path, and shutdown() ends any orphans defensively.
     """
 
     def __init__(
@@ -46,6 +52,9 @@ class LangfuseSink:
         from langfuse import Langfuse
 
         self._capture_content = capture_content
+        self._public_key = public_key
+        self._active: dict[str, Any] = {}
+        self._lock = threading.Lock()
         self._client = Langfuse(
             public_key=public_key,
             secret_key=secret_key,
@@ -64,15 +73,35 @@ class LangfuseSink:
         prompt_name: str | None = None,
         prompt_version: str | None = None,
     ) -> None:
-        """Record the start of an LLM generation.
-
-        We don't create a trace at start — the v3 SDK's start_generation()
-        is called at finish with the full payload. This keeps start lightweight
-        and avoids half-created traces on routing failures.
-        """
-        # No-op: trace is emitted at finish with complete data.
-        # This mirrors the ledger's start_call (which writes a DB row) but
-        # Langfuse traces are better emitted as complete events.
+        """Open a generation observation, grouped into a trace by operation_id."""
+        try:
+            trace_context = None
+            if operation_id:
+                # Deterministic W3C trace id derived from the operation, so all
+                # calls in one pipeline operation land in one Langfuse trace.
+                trace_context = {
+                    "trace_id": self._client.create_trace_id(seed=operation_id)
+                }
+            gen = self._client.start_observation(
+                as_type="generation",
+                name=prompt_name or task,
+                trace_context=trace_context,
+                input=(
+                    {"system": system_prompt, "user": user_prompt}
+                    if self._capture_content
+                    else None
+                ),
+                metadata={
+                    "operation_id": operation_id,
+                    "call_id": call_id,
+                    "task": task,
+                },
+                version=prompt_version or None,
+            )
+            with self._lock:
+                self._active[call_id] = gen
+        except Exception:
+            logger.debug("langfuse_start_failed", exc_info=True)
 
     def finish(
         self,
@@ -91,56 +120,38 @@ class LangfuseSink:
         prompt_version: str | None = None,
         started_monotonic: float = 0.0,
     ) -> None:
-        """Record the completion (or failure) of an LLM generation."""
+        """Update the observation opened by start() with the outcome and end it."""
         try:
-            latency_ms = (
-                response.latency_ms if response and response.latency_ms
-                else int((time.monotonic() - started_monotonic) * 1000) if started_monotonic
-                else 0
-            )
-            input_tokens = response.input_tokens if response else 0
-            output_tokens = response.output_tokens if response else getattr(error, "output_tokens", 0)
-            stop_reason = response.stop_reason if response else getattr(error, "stop_reason", None)
-            status = "error" if error else ("succeeded" if response and response.text else "empty")
+            with self._lock:
+                gen = self._active.pop(call_id, None)
+            if gen is None:
+                return
 
-            metadata: dict[str, Any] = {
-                "operation_id": operation_id,
-                "route_reason": route_reason,
-                "call_id": call_id,
-            }
-
-            # Build the generation payload
-            gen_kwargs: dict[str, Any] = {
-                "name": prompt_name or task,
-                "model": model or "",
-                "metadata": metadata,
-                "input": (
-                    {"system": system_prompt, "user": user_prompt}
-                    if self._capture_content
-                    else None
-                ),
-                "output": response.text if response and self._capture_content else None,
-                "usage": {
-                    "input": input_tokens,
-                    "output": output_tokens,
-                    "unit": "TOKENS",
+            update_kwargs: dict[str, Any] = {
+                "metadata": {
+                    "operation_id": operation_id,
+                    "call_id": call_id,
+                    "task": task,
+                    "provider": provider,
+                    "route_reason": route_reason,
+                    "stop_reason": getattr(response, "stop_reason", None),
+                    "latency_ms": getattr(response, "latency_ms", None),
                 },
-                "level": "ERROR" if error else "DEFAULT",
+                "usage_details": {
+                    "input": getattr(response, "input_tokens", 0) or 0,
+                    "output": getattr(response, "output_tokens", 0) or 0,
+                },
             }
+            if model:
+                update_kwargs["model"] = model
+            if self._capture_content and response is not None:
+                update_kwargs["output"] = response.text
+            if error is not None:
+                update_kwargs["level"] = "ERROR"
+                update_kwargs["status_message"] = str(error)
 
-            if prompt_version:
-                gen_kwargs["version"] = prompt_version
-
-            if error:
-                gen_kwargs["status_message"] = str(error)
-
-            self._client.start_generation(
-                trace_id=operation_id or call_id,
-                **gen_kwargs,
-            )
-            self._client.finish_generation(
-                generation=None,  # let SDK handle the generation object internally
-            )
+            gen.update(**update_kwargs)
+            gen.end()
         except Exception:
             logger.debug("langfuse_finish_failed", exc_info=True)
 
@@ -153,6 +164,16 @@ class LangfuseSink:
 
     def shutdown(self) -> None:
         """Shut down the SDK client, flushing pending traces."""
+        # End any in-flight observations so they aren't dropped (spans that
+        # are never ended are not exported).
+        with self._lock:
+            orphans = list(self._active.values())
+            self._active.clear()
+        for gen in orphans:
+            try:
+                gen.end()
+            except Exception:
+                logger.debug("langfuse_orphan_end_failed", exc_info=True)
         try:
             self._client.flush()
         except Exception:
@@ -161,6 +182,18 @@ class LangfuseSink:
             self._client.shutdown()
         except Exception:
             logger.debug("langfuse_shutdown_failed", exc_info=True)
+        # The SDK caches its resource manager (background workers, queues)
+        # per public_key and shutdown() does NOT deregister it — a later
+        # client with the same key would get back the dead instance, whose
+        # flush() blocks forever on queues no worker drains. Deregister so
+        # config-reload re-init gets a fresh, working client. (Private API;
+        # verified against langfuse 4.14 — see test_langfuse_sink.py.)
+        try:
+            from langfuse._client.resource_manager import LangfuseResourceManager
+
+            LangfuseResourceManager._instances.pop(self._public_key, None)
+        except Exception:
+            logger.debug("langfuse_deregister_failed", exc_info=True)
 
 
 def init_sink(settings: Any) -> None:
@@ -212,7 +245,7 @@ def init_sink(settings: Any) -> None:
         if not _warned_init:
             logger.warning(
                 "langfuse_sdk_not_installed: The 'langfuse' package is not installed. "
-                "Install with: pip install langfuse>=3. Tracing is disabled."
+                "Install with: pip install 'langfuse>=4,<5'. Tracing is disabled."
             )
             _warned_init = True
     except Exception:
