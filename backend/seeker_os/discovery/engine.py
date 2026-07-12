@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 from seeker_os.discovery.cache import DiskCache
 from seeker_os.discovery.sources.base import SourceAdapter
 from seeker_os.models import JobCard, SourceQuery
@@ -11,6 +13,7 @@ def fetch_all_queries(
     queries: list[SourceQuery],
     adapters: dict[str, SourceAdapter],
     cache: DiskCache,
+    progress_cb: Callable[[int, int, str, int], None] | None = None,
 ) -> list[JobCard]:
     """Fetch all enabled queries across all sources, with delay between requests.
 
@@ -21,14 +24,16 @@ def fetch_all_queries(
       - Stop early if SourcePage.is_last_page is true
     Deduplicate across queries (same source_job_id appearing in multiple queries).
     Return combined list of unique JobCards.
+
+    If progress_cb is provided, it is called after each query completes with
+    (query_index, total_enabled_queries, query_label, cards_so_far) so callers
+    can report per-query progress during the discovery phase.
     """
     all_jobs: list[JobCard] = []
     seen_ids: set[str] = set()
+    enabled_queries = [q for q in queries if q.enabled]
 
-    for query in queries:
-        if not query.enabled:
-            continue
-
+    for idx, query in enumerate(enabled_queries):
         adapter = adapters.get(query.source_id)
         if adapter is None:
             print(f"  WARNING: No adapter for source_id '{query.source_id}' — skipping query '{query.slug}'")
@@ -46,5 +51,8 @@ def fetch_all_queries(
 
             if source_page.is_last_page:
                 break
+
+        if progress_cb:
+            progress_cb(idx + 1, len(enabled_queries), query.label or query.slug, len(all_jobs))
 
     return all_jobs

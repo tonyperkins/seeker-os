@@ -249,7 +249,7 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
 
           {/* Current detail line */}
           {currentDetail && (
-            <div className="truncate border-t border-border pt-2 text-xs text-muted-foreground">
+            <div className="line-clamp-2 border-t border-border pt-2 text-xs text-muted-foreground">
               {currentDetail}
             </div>
           )}
@@ -265,7 +265,8 @@ export function RunPipelineButton({ setupComplete = true, compact = false }: { s
           )}
 
           {/* Running counts */}
-          <div className="grid grid-cols-3 gap-2 border-t border-border pt-2 text-center">
+          <div className="grid grid-cols-4 gap-2 border-t border-border pt-2 text-center">
+            <Count label="Fetched" value={events.at(-1)?.cards_fetched ?? 0} />
             <Count label="New" value={events.at(-1)?.cards_new ?? 0} />
             <Count label="JDs" value={events.at(-1)?.tier3_fetched ?? 0} />
             <Count label="Scored" value={events.at(-1)?.tier4_scored ?? 0} />

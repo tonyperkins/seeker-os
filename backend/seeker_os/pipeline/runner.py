@@ -230,8 +230,15 @@ def run_pipeline(
             ))
 
         enabled_count = sum(1 for sq in source_queries if sq.enabled)
-        _emit("discovery", "Discovery", "started", detail=f"Fetching from {enabled_count} queries…")
-        cards = fetch_all_queries(source_queries, adapters, cache)
+        _emit("discovery", "Discovery", "started", total=enabled_count,
+              detail=f"Fetching from {enabled_count} queries…")
+        cards = fetch_all_queries(
+            source_queries, adapters, cache,
+            progress_cb=lambda cur, tot, label, cards_so_far:
+                _emit("discovery", "Discovery", "in_progress",
+                      current=cur, total=tot,
+                      detail=f"Fetching '{label}' ({cur}/{tot}) — {cards_so_far} cards so far"),
+        )
         result.cards_fetched = len(cards)
         _emit("discovery", "Discovery", "in_progress", total=len(cards), detail=f"Fetched {len(cards)} cards")
 

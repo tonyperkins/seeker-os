@@ -43,10 +43,16 @@ def composite_key(source_job_id: str, source_map: dict[str, str]) -> str | None:
 
 
 def content_hash(jd_text: str) -> str:
-    """MD5 of first 500 chars of normalized JD text."""
+    """MD5 of normalized JD text (full text, not truncated).
+
+    Hashing the full text avoids false positives where two different roles
+    at the same company share boilerplate intro text in the first N chars.
+    HTML is stripped and whitespace normalized so minor formatting differences
+    don't prevent a legitimate repost match.
+    """
     text = re.sub(r"<[^>]+>", "", jd_text).lower()
     text = re.sub(r"\s+", " ", text).strip()
-    return hashlib.md5(text[:500].encode()).hexdigest()
+    return hashlib.md5(text.encode()).hexdigest()
 
 
 def check_duplicate(

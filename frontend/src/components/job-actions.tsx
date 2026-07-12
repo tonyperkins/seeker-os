@@ -273,6 +273,10 @@ export function JobActions({
       setOverrideOpen(true);
     } else if (t.status === "ready") {
       doAction("ready", () => api.jobs.update(jobId, { status: "ready" }));
+    } else if (t.status === "applied") {
+      doAction("apply", () => api.jobs.apply(jobId));
+    } else if (t.status === "reviewing" || t.status === "interested") {
+      doAction(`transition-${t.status}`, () => api.jobs.update(jobId, { status: t.status }));
     } else {
       doAction(`transition-${t.status}`, () => api.jobs.transition(jobId, t.status));
     }

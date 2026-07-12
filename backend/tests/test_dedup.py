@@ -109,6 +109,7 @@ class TestContentHash:
     def test_normalizes_whitespace(self):
         assert content_hash("hello   world") == content_hash("hello world")
 
-    def test_truncates_at_500(self):
-        long_text = "a" * 600
-        assert content_hash(long_text) == content_hash("a" * 500)
+    def test_full_text_not_truncated(self):
+        # Content hash uses the full JD text, not just the first 500 chars.
+        # This prevents false positives when different roles share boilerplate intros.
+        assert content_hash("a" * 600) != content_hash("a" * 500)
