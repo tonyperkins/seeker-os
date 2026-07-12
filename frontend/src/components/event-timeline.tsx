@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Loader2,
   Calendar,
@@ -138,6 +139,7 @@ export function EventTimeline({
   isStale: boolean;
   daysSinceLastActivity: number | null;
 }) {
+  const router = useRouter();
   const [events] = useState<ApplicationEvent[]>(initialEvents);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -152,10 +154,6 @@ export function EventTimeline({
     setAppliedDate("");
   }
 
-  function refreshPage() {
-    window.location.reload();
-  }
-
   async function doTransition(targetStatus: string) {
     setBusy(`transition-${targetStatus}`);
     setError(null);
@@ -164,7 +162,7 @@ export function EventTimeline({
         occurred_at: toISOString(eventDate),
         note: eventNote.trim() || undefined,
       });
-      refreshPage();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Transition failed");
     } finally {
@@ -182,7 +180,7 @@ export function EventTimeline({
         occurred_at: toISOString(eventDate),
         note: eventNote.trim() || undefined,
       });
-      refreshPage();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log event");
     } finally {
@@ -200,7 +198,7 @@ export function EventTimeline({
         occurred_at: toISOString(eventDate),
         note: eventNote.trim() || null,
       });
-      refreshPage();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update event");
     } finally {
@@ -215,7 +213,7 @@ export function EventTimeline({
     setError(null);
     try {
       await api.events.delete(eventId);
-      refreshPage();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete event");
     } finally {
@@ -233,7 +231,7 @@ export function EventTimeline({
         applied_occurred_at: appliedDate ? toISOString(appliedDate) : undefined,
         note: eventNote.trim() || undefined,
       });
-      refreshPage();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Clean-start failed");
     } finally {
