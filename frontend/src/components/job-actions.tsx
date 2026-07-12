@@ -351,6 +351,19 @@ export function JobActions({
         </DropdownMenu>
       )}
 
+      {/* Apply on site — secondary when not already the primary */}
+      {applyUrl && primary?.type !== "apply-on-site" && (
+        <Button
+          variant="outline"
+          size="lg"
+          disabled={busy !== null || demoMode}
+          onClick={() => window.open(applyUrl, "_blank", "noopener,noreferrer")}
+        >
+          <ExternalLink />
+          Apply on {atsSource ?? "site"}
+        </Button>
+      )}
+
       {/* Generate Resume as secondary when it's not the primary */}
       {(!primary || primary.type !== "generate-resume") && (
         <GenerateResumeButton jobId={jobId} variant="outline" />
