@@ -591,16 +591,38 @@ def _run_retrieval_queries(
                 except Exception:
                     logger.debug("Retrieval cache parse failed for '%s' — re-fetching", q)
 
+        # Budget guard — check caps before making a paid call
+        adapter_type = getattr(adapter, "type", "tavily")
+        try:
+            from seeker_os.config import get_settings
+            obs = get_settings().observability
+            daily_cap = obs.budget_caps.tavily_daily_cap if adapter_type == "tavily" else 0
+            monthly_cap = obs.budget_caps.tavily_monthly_cap if adapter_type == "tavily" else 0
+        except Exception:
+            daily_cap = 0
+            monthly_cap = 0
+
+        from seeker_os.observability.budget_guard import check_budget, record_call
+
+        if not check_budget(adapter_type, daily_cap, monthly_cap):
+            logger.warning(
+                "budget_cap_exceeded: skipping retrieval query '%s' — "
+                "%s daily/monthly cap reached", q, adapter_type,
+            )
+            continue
+
         # Cache miss or force_refresh — call the adapter
         try:
             snippets = adapter.search(q)
             all_snippets.extend(snippets)
+            record_call(adapter_type, q, "succeeded")
             # Cache the results as JSON
             try:
                 cache.set(q, json.dumps([s.model_dump() for s in snippets]))
             except Exception:
                 logger.debug("Failed to cache retrieval results for '%s'", q)
         except Exception as e:
+            record_call(adapter_type, q, "failed", str(e))
             logger.warning("Retrieval query '%s' failed: %s", q, e)
 
     return all_snippets

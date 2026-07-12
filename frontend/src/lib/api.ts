@@ -42,6 +42,8 @@ export type {
   ObservabilityEvaluation,
   ObservabilityOperationDetail,
   LangfuseStatusResponse,
+  SLOStatusResponse,
+  BudgetStatusResponse,
   SkipReasonOption,
   NoReasonSkip,
   SettingsResponse,
@@ -306,6 +308,8 @@ export const api = {
     llmOperation: (operationId: string) =>
       fetchAPI<T.ObservabilityOperationDetail>(`/api/analytics/llm-observability/operations/${operationId}`),
     langfuseStatus: () => fetchAPI<T.LangfuseStatusResponse>("/api/analytics/langfuse-status"),
+    sloStatus: () => fetchAPI<T.SLOStatusResponse>("/api/analytics/slo-status"),
+    budgetStatus: () => fetchAPI<T.BudgetStatusResponse>("/api/analytics/budget-status"),
   },
 
   // Resumes

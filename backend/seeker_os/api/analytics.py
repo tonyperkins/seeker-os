@@ -27,6 +27,9 @@ from seeker_os.api.schemas import (
     SpendByModel,
     SpendByTask,
     SpendReport,
+    SLOMetric,
+    SLOStatusResponse,
+    BudgetStatusResponse,
     VerdictDistribution,
 )
 from seeker_os.config import get_settings
@@ -488,6 +491,110 @@ def get_langfuse_status():
     from seeker_os.observability.langfuse_sink import get_status
 
     return LangfuseStatusResponse(**get_status())
+
+
+@router.get("/slo-status", response_model=SLOStatusResponse)
+def get_slo_status():
+    """SLO status — compare actuals vs targets from observability.yml.
+
+    Metrics:
+    - analysis_latency_p95_ms: p95 latency for jd_analysis calls in the SLO window
+    - pipeline_availability: fraction of distinct operation_ids with no failed calls
+    - daily_spend: total estimated_cost for today vs daily_spend_budget_usd
+    """
+    from datetime import UTC, datetime, timedelta
+
+    settings = get_settings()
+    slo = settings.observability.slo
+    window_start = (datetime.now(UTC) - timedelta(hours=slo.slo_window_hours)).isoformat()
+
+    db = get_connection()
+    try:
+        # 1. Analysis latency p95
+        latency_rows = db.execute(
+            """SELECT latency_ms FROM llm_calls
+               WHERE task = 'jd_analysis'
+                 AND status = 'succeeded'
+                 AND started_at >= ?
+               ORDER BY latency_ms""",
+            (window_start,),
+        ).fetchall()
+        if latency_rows:
+            latencies = [r["latency_ms"] for r in latency_rows]
+            p95_idx = int(len(latencies) * 0.95)
+            p95_actual = latencies[min(p95_idx, len(latencies) - 1)]
+        else:
+            p95_actual = 0
+
+        # 2. Pipeline availability
+        total_ops = db.execute(
+            "SELECT COUNT(DISTINCT operation_id) as cnt FROM llm_calls WHERE started_at >= ? AND operation_id IS NOT NULL",
+            (window_start,),
+        ).fetchone()["cnt"]
+        failed_ops = db.execute(
+            """SELECT COUNT(DISTINCT operation_id) as cnt FROM llm_calls
+               WHERE started_at >= ? AND operation_id IS NOT NULL AND status = 'failed'""",
+            (window_start,),
+        ).fetchone()["cnt"]
+        availability_actual = ((total_ops - failed_ops) / total_ops) if total_ops > 0 else 1.0
+
+        # 3. Daily spend
+        day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        spend_row = db.execute(
+            "SELECT COALESCE(SUM(estimated_cost), 0) as total FROM llm_calls WHERE started_at >= ?",
+            (day_start,),
+        ).fetchone()
+        daily_spend = spend_row["total"] if spend_row else 0.0
+    finally:
+        db.close()
+
+    metrics = [
+        SLOMetric(
+            name="analysis_latency_p95_ms",
+            target=float(slo.analysis_latency_p95_ms),
+            actual=float(p95_actual),
+            unit="ms",
+            passing=p95_actual <= slo.analysis_latency_p95_ms,
+        ),
+        SLOMetric(
+            name="pipeline_availability",
+            target=slo.pipeline_availability_target,
+            actual=availability_actual,
+            unit="%",
+            passing=availability_actual >= slo.pipeline_availability_target,
+        ),
+    ]
+
+    return SLOStatusResponse(
+        window_hours=slo.slo_window_hours,
+        metrics=metrics,
+        daily_spend_usd=daily_spend,
+        daily_spend_budget_usd=slo.daily_spend_budget_usd,
+    )
+
+
+@router.get("/budget-status", response_model=BudgetStatusResponse)
+def get_budget_status():
+    """Budget usage for paid retrieval calls (Tavily)."""
+    from seeker_os.observability.budget_guard import get_usage
+
+    settings = get_settings()
+    caps = settings.observability.budget_caps
+
+    usage = get_usage("tavily")
+    daily_cap = caps.tavily_daily_cap
+    monthly_cap = caps.tavily_monthly_cap
+
+    return BudgetStatusResponse(
+        adapter_type="tavily",
+        daily_count=usage["daily_count"],
+        daily_cap=daily_cap,
+        monthly_count=usage["monthly_count"],
+        monthly_cap=monthly_cap,
+        daily_errors=usage["daily_errors"],
+        daily_remaining=(daily_cap - usage["daily_count"]) if daily_cap > 0 else None,
+        monthly_remaining=(monthly_cap - usage["monthly_count"]) if monthly_cap > 0 else None,
+    )
 
 
 @router.get("/funnel", response_model=FunnelStats)

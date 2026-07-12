@@ -385,6 +385,35 @@ class LangfuseStatusResponse(BaseModel):
     keys_configured: bool = False
 
 
+class SLOMetric(BaseModel):
+    """A single SLO metric with target, actual, and pass/fail status."""
+    name: str
+    target: float
+    actual: float
+    unit: str = ""
+    passing: bool = True
+
+
+class SLOStatusResponse(BaseModel):
+    """SLO status — actuals vs targets from observability.yml."""
+    window_hours: int = 24
+    metrics: list[SLOMetric] = Field(default_factory=list)
+    daily_spend_usd: float = 0.0
+    daily_spend_budget_usd: float = 5.0
+
+
+class BudgetStatusResponse(BaseModel):
+    """Budget usage for paid retrieval calls."""
+    adapter_type: str = "tavily"
+    daily_count: int = 0
+    daily_cap: int = 0
+    monthly_count: int = 0
+    monthly_cap: int = 0
+    daily_errors: int = 0
+    daily_remaining: int | None = None
+    monthly_remaining: int | None = None
+
+
 class RefilterRescoreRequest(BaseModel):
     """POST /api/jobs/refilter-rescore."""
     job_ids: list[int] | None = None

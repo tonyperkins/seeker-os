@@ -467,6 +467,32 @@ export interface LangfuseStatusResponse {
   keys_configured: boolean;
 }
 
+export interface SLOMetric {
+  name: string;
+  target: number;
+  actual: number;
+  unit: string;
+  passing: boolean;
+}
+
+export interface SLOStatusResponse {
+  window_hours: number;
+  metrics: SLOMetric[];
+  daily_spend_usd: number;
+  daily_spend_budget_usd: number;
+}
+
+export interface BudgetStatusResponse {
+  adapter_type: string;
+  daily_count: number;
+  daily_cap: number;
+  monthly_count: number;
+  monthly_cap: number;
+  daily_errors: number;
+  daily_remaining: number | null;
+  monthly_remaining: number | null;
+}
+
 export interface SkipReasonOption {
   key: string;
   label: string;

@@ -13,8 +13,9 @@ import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { MasterResumeUpload } from "@/components/master-resume-upload";
 import { ProfileForm } from "@/components/profile-form";
 import { FilterForm } from "@/components/filter-form";
-import { type ProfileData, type FiltersData, type ResumeParseResult, type LangfuseStatusResponse, api } from "@/lib/api";
+import { type ProfileData, type FiltersData, type ResumeParseResult, type LangfuseStatusResponse, type SLOStatusResponse, type BudgetStatusResponse, api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 
 export function SettingsClient({
   profile: initialProfile,
@@ -25,6 +26,8 @@ export function SettingsClient({
 }) {
   const [parseResult, setParseResult] = useState<ResumeParseResult | null>(null);
   const [langfuseStatus, setLangfuseStatus] = useState<LangfuseStatusResponse | null>(null);
+  const [sloStatus, setSloStatus] = useState<SLOStatusResponse | null>(null);
+  const [budgetStatus, setBudgetStatus] = useState<BudgetStatusResponse | null>(null);
 
   const handleParsed = useCallback((result: ResumeParseResult) => {
     setParseResult(result);
@@ -32,6 +35,8 @@ export function SettingsClient({
 
   useEffect(() => {
     api.analytics.langfuseStatus().then(setLangfuseStatus).catch(() => {});
+    api.analytics.sloStatus().then(setSloStatus).catch(() => {});
+    api.analytics.budgetStatus().then(setBudgetStatus).catch(() => {});
   }, []);
 
   // If no profile or filters loaded, show upload + parse only
@@ -137,6 +142,88 @@ export function SettingsClient({
               <span className="text-xs text-destructive">
                 Keys not configured — set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env
               </span>
+            )}
+          </div>
+        </CollapsibleCard>
+      )}
+
+      {/* SLO Status */}
+      {sloStatus && (
+        <CollapsibleCard
+          icon={Activity}
+          title="SLO Status"
+          description={`Pipeline health targets over the last ${sloStatus.window_hours}h window.`}
+        >
+          <div className="space-y-4">
+            {sloStatus.metrics.map((m) => (
+              <div key={m.name} className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{m.name.replace(/_/g, " ")}</span>
+                  <Badge variant={m.passing ? "default" : "destructive"}>
+                    {m.passing ? "Passing" : "Breached"}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Actual: {m.actual.toLocaleString()}{m.unit}</span>
+                  <span>·</span>
+                  <span>Target: {m.target.toLocaleString()}{m.unit}</span>
+                </div>
+              </div>
+            ))}
+            <div className="space-y-1 border-t pt-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">Daily Spend</span>
+                <span className={sloStatus.daily_spend_usd > sloStatus.daily_spend_budget_usd ? "text-destructive" : "text-muted-foreground"}>
+                  ${sloStatus.daily_spend_usd.toFixed(2)} / ${sloStatus.daily_spend_budget_usd.toFixed(2)}
+                </span>
+              </div>
+              <Progress
+                value={Math.min((sloStatus.daily_spend_usd / sloStatus.daily_spend_budget_usd) * 100, 100)}
+                className="h-2"
+              />
+            </div>
+          </div>
+        </CollapsibleCard>
+      )}
+
+      {/* Budget Status */}
+      {budgetStatus && (budgetStatus.daily_cap > 0 || budgetStatus.monthly_cap > 0) && (
+        <CollapsibleCard
+          icon={Activity}
+          title="Retrieval Budget"
+          description="Tavily API call usage against daily/monthly caps."
+        >
+          <div className="space-y-4">
+            {budgetStatus.daily_cap > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Today</span>
+                  <span className="text-muted-foreground">
+                    {budgetStatus.daily_count} / {budgetStatus.daily_cap} calls
+                    {budgetStatus.daily_errors > 0 && (
+                      <span className="text-destructive"> ({budgetStatus.daily_errors} errors)</span>
+                    )}
+                  </span>
+                </div>
+                <Progress
+                  value={Math.min((budgetStatus.daily_count / budgetStatus.daily_cap) * 100, 100)}
+                  className="h-2"
+                />
+              </div>
+            )}
+            {budgetStatus.monthly_cap > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">This Month</span>
+                  <span className="text-muted-foreground">
+                    {budgetStatus.monthly_count} / {budgetStatus.monthly_cap} calls
+                  </span>
+                </div>
+                <Progress
+                  value={Math.min((budgetStatus.monthly_count / budgetStatus.monthly_cap) * 100, 100)}
+                  className="h-2"
+                />
+              </div>
             )}
           </div>
         </CollapsibleCard>
