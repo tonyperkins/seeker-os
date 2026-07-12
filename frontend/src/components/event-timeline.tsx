@@ -16,8 +16,6 @@ import {
   Mail,
   Inbox,
   Clock,
-  Phone,
-  StickyNote,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -39,6 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { api, type ApplicationEvent } from "@/lib/api";
 import { formatDate } from "@/lib/date";
+import { ACTIVITY_TYPE_META, LogActivityDialog } from "@/components/log-activity-dialog";
 
 const ACTOR_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   candidate: User,
@@ -84,18 +83,9 @@ const EVENT_LABELS: Record<string, string> = {
   meeting: "Meeting",
 };
 
-// User-recorded activity — loggable at any status, editable and deletable.
-// Everything else in the timeline is append-only.
-const MANUAL_ACTIVITY_TYPES: { type: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { type: "note", label: "Note", icon: StickyNote },
-  { type: "call", label: "Call", icon: Phone },
-  { type: "email_sent", label: "Email Sent", icon: Mail },
-  { type: "email_received", label: "Email Received", icon: Inbox },
-  { type: "meeting", label: "Meeting", icon: Users },
-  { type: "interview", label: "Interview", icon: Users },
-];
-
-const MANUAL_TYPE_SET = new Set(MANUAL_ACTIVITY_TYPES.map((t) => t.type));
+// User-recorded activity — editable and deletable. Everything else in the
+// timeline is append-only.
+const MANUAL_TYPE_SET = new Set(ACTIVITY_TYPE_META.map((t) => t.type));
 
 const POST_APPLY_TRANSITIONS: { status: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { status: "engaged", label: "Engaged", icon: Users },
@@ -195,26 +185,6 @@ export function EventTimeline({
       refreshPage();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log event");
-    } finally {
-      setBusy(null);
-      setDialogOpen(null);
-      resetDialogState();
-    }
-  }
-
-  async function doManualEvent(eventType: string) {
-    setBusy(`manual-${eventType}`);
-    setError(null);
-    try {
-      await api.events.create({
-        job_id: jobId,
-        event_type: eventType,
-        occurred_at: toISOString(eventDate),
-        note: eventNote.trim() || undefined,
-      });
-      refreshPage();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to log activity");
     } finally {
       setBusy(null);
       setDialogOpen(null);
@@ -420,68 +390,7 @@ export function EventTimeline({
 
         {/* Manual activity logging — available at any status */}
         <div className="flex flex-wrap gap-2">
-          <span className="text-xs font-medium text-muted-foreground self-center">Log activity:</span>
-          {MANUAL_ACTIVITY_TYPES.map((m) => (
-            <Dialog
-              key={m.type}
-              open={dialogOpen === `manual-${m.type}`}
-              onOpenChange={(o) => { if (!o) setDialogOpen(null); else { setDialogOpen(`manual-${m.type}`); setEventDate(defaultDateTimeLocal()); setEventNote(""); } }}
-            >
-              <DialogTrigger
-                render={
-                  <Button variant="ghost" size="sm" disabled={busy !== null}>
-                    <m.icon className="size-3.5" />
-                    {m.label}
-                  </Button>
-                }
-              />
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Log: {m.label}</DialogTitle>
-                  <DialogDescription>
-                    Adds a {m.label.toLowerCase()} to this job&apos;s timeline. Does not change status. You can edit or delete it later.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="event-date">Date / Time</Label>
-                    <Input
-                      id="event-date"
-                      type="datetime-local"
-                      value={eventDate}
-                      onChange={(e2) => setEventDate(e2.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Defaults to now. Backdate if logging something that already happened.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="event-note">
-                      Note {m.type === "note" ? null : <span className="text-xs font-normal text-muted-foreground">(optional)</span>}
-                    </Label>
-                    <Textarea
-                      id="event-note"
-                      value={eventNote}
-                      onChange={(e2) => setEventNote(e2.target.value)}
-                      rows={3}
-                      className="text-sm"
-                      autoFocus
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-                  <Button
-                    onClick={() => doManualEvent(m.type)}
-                    disabled={busy !== null || (m.type === "note" && !eventNote.trim())}
-                  >
-                    {busy === `manual-${m.type}` ? <Loader2 className="animate-spin" /> : null}
-                    Log {m.label}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          ))}
+          <LogActivityDialog jobId={jobId} />
         </div>
 
         {/* Post-apply transition controls */}

@@ -13,8 +13,8 @@ import {
   StickyNote,
   Pencil,
   Trash2,
-  Plus,
 } from "lucide-react";
+import { LogActivityDialog } from "@/components/log-activity-dialog";
 import { api, type ActivityEvent } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,9 +71,8 @@ export default function ActivityPage() {
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  // Composer / edit dialog state
+  // Edit dialog state
   const [dialogOpen, setDialogOpen] = useState<string | null>(null);
-  const [composeType, setComposeType] = useState("note");
   const [eventDate, setEventDate] = useState(defaultDateTimeLocal());
   const [eventNote, setEventNote] = useState("");
 
@@ -97,26 +96,6 @@ export default function ActivityPage() {
   }, [typeFilter]);
 
   useEffect(() => { load(); }, [load]);
-
-  async function createEvent() {
-    setBusy("create");
-    setError(null);
-    try {
-      await api.events.create({
-        event_type: composeType,
-        occurred_at: toISOString(eventDate),
-        note: eventNote.trim() || undefined,
-      });
-      setDialogOpen(null);
-      setEventNote("");
-      setEventDate(defaultDateTimeLocal());
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function saveEdit(id: number) {
     setBusy(`edit-${id}`);
@@ -154,75 +133,7 @@ export default function ActivityPage() {
       <PageHeader
         title="Activity"
         description="Notes, calls, emails, and meetings — job-linked and general"
-        actions={
-          <Dialog
-            open={dialogOpen === "compose"}
-            onOpenChange={(o) => {
-              if (!o) setDialogOpen(null);
-              else { setDialogOpen("compose"); setEventDate(defaultDateTimeLocal()); setEventNote(""); }
-            }}
-          >
-            <Button onClick={() => { setDialogOpen("compose"); setEventDate(defaultDateTimeLocal()); setEventNote(""); }}>
-              <Plus className="size-4" />
-              Log Activity
-            </Button>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Log Activity</DialogTitle>
-                <DialogDescription>
-                  A general entry not tied to a job. To log activity against a
-                  specific job, use the timeline on that job&apos;s page.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Type</Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(TYPE_META).map(([type, meta]) => (
-                      <Button
-                        key={type}
-                        type="button"
-                        variant={composeType === type ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setComposeType(type)}
-                      >
-                        <meta.icon className="size-3.5" />
-                        {meta.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="activity-date">Date / Time</Label>
-                  <Input
-                    id="activity-date"
-                    type="datetime-local"
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="activity-note">Note</Label>
-                  <Textarea
-                    id="activity-note"
-                    value={eventNote}
-                    onChange={(e) => setEventNote(e.target.value)}
-                    rows={4}
-                    className="text-sm"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-                <Button onClick={createEvent} disabled={busy !== null || !eventNote.trim()}>
-                  {busy === "create" ? <Loader2 className="animate-spin" /> : null}
-                  Save
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        }
+        actions={<LogActivityDialog variant="default" onSuccess={() => load()} />}
       />
 
       {/* Type filter */}

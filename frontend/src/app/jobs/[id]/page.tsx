@@ -41,6 +41,7 @@ import { JobAnalysis } from "@/components/job-analysis";
 import { EventTimeline } from "@/components/event-timeline";
 import { CopyButton } from "@/components/copy-button";
 import { RunAllButton } from "@/components/run-all-button";
+import { LogActivityDialog } from "@/components/log-activity-dialog";
 import { CopyAllButton } from "@/components/copy-all-button";
 import { RefilterRescoreButton } from "@/components/refilter-rescore-button";
 import { JobStatusBanner } from "@/components/job-status-banner";
@@ -187,6 +188,7 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-2">
             <RunAllButton jobId={job.id} />
+            <LogActivityDialog jobId={job.id} />
             <CopyAllButton job={job} />
             <RefilterRescoreButton jobIds={[job.id]} />
           </div>
