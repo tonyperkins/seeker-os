@@ -18,11 +18,11 @@
 # keys in the Langfuse UI (Project Settings → API Keys).
 langfuse:
   enabled: true
-  # URL of the Langfuse server. Default is the vendored stack's container
-  # name (reachable via Docker network DNS). For Langfuse Cloud, use
-  # https://cloud.langfuse.com. For a remote self-hosted instance, use
-  # its URL.
-  base_url: "http://localhost:3001"
+  # URL of the Langfuse server. Set LANGFUSE_BASE_URL in .env to override
+  # per environment (e.g. http://langfuse-web:3000 for Docker, 
+  # https://langfuse.perkinslab.com for Caddy proxy).
+  # Defaults to http://localhost:3001 for dev.sh mode.
+  base_url: ${LANGFUSE_BASE_URL:-http://localhost:3001}
   # API keys — set via env vars, never literal values in this file.
   public_key: ${LANGFUSE_PUBLIC_KEY}
   secret_key: ${LANGFUSE_SECRET_KEY}
@@ -31,9 +31,9 @@ langfuse:
   # response text, job titles, company names, or resume content.
   # Set to true for local debugging to capture full prompt/response content.
   # WARNING: enabling this sends PII to the Langfuse server.
-  capture_content: true
+  capture_content: ${LANGFUSE_CAPTURE_CONTENT:-false}
   # How often the SDK flushes traces to the server (seconds).
-  flush_interval_seconds: 1.0
+  flush_interval_seconds: ${LANGFUSE_FLUSH_INTERVAL:-1.0}
 
 # ── Paid Retrieval Budget Caps ──
 # Daily/monthly limits for Tavily calls. When a cap is exceeded, the
