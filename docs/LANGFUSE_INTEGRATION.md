@@ -4,95 +4,58 @@ Seeker OS optionally integrates with [Langfuse](https://langfuse.com) for
 LLM tracing — a visual trace UI and prompt management layer on top of the
 built-in SQLite LLM ledger.
 
-## Local Stack Runbook — Bring Up Everything
+## Architecture
 
-This section covers bringing up the complete stack (Seeker OS + Langfuse)
-for local testing. If you've already done the first-time setup, jump to
-[Day-to-day](#day-to-day).
+The Langfuse stack is deployed as infrastructure in the
+[homelab repo](https://github.com/tonyperkins/homelab) at
+`docker/langfuse/`. It is not vendored in this repo — Seeker OS connects to
+it as a client via URL + API keys, the same way it would connect to Langfuse
+Cloud or any other self-hosted instance.
 
-### First-time setup
+## Quick start (local dev)
 
-**1. Langfuse stack secrets** (its own `.env`, separate from the app's):
+**Prerequisites:** Langfuse stack running on the Docker host (milo). See
+`docker/langfuse/` in the homelab repo for setup.
 
-```bash
-cd deploy/langfuse
-cp .env.example .env
-# Replace every placeholder:
-#   openssl rand -base64 32   (for secrets)
-#   openssl rand -base64 24   (for passwords)
-cd ../..
-```
-
-**2. App-side observability config:**
+**1. App-side observability config:**
 
 ```bash
 cp config/observability.example.yml config/observability.yml
-# Leave enabled: false for now — you flip it after you have keys
 ```
 
-**3. Bring up the stacks** — order matters:
-
-```bash
-docker compose up -d                                    # main stack first — creates the seekeros network
-docker compose -f deploy/langfuse/compose.yaml up -d    # then Langfuse (6 containers; ClickHouse takes ~30s)
+Edit `config/observability.yml`:
+```yaml
+langfuse:
+  enabled: true
+  base_url: "http://localhost:3001"   # dev.sh mode (app on host)
+  # base_url: "http://langfuse-web:3000"  # Docker mode (app in container)
+  # base_url: "https://langfuse.perkinslab.com"  # Caddy reverse proxy
+  public_key: ${LANGFUSE_PUBLIC_KEY}
+  secret_key: ${LANGFUSE_SECRET_KEY}
+  capture_content: false
 ```
 
-The main stack must come first because the Langfuse compose declares
-`seekeros` as an external network. If you ever want Langfuse up without
-the app, `docker network create seekeros` substitutes.
+**2. Get API keys from Langfuse:**
 
-**4. Get keys and enable:**
+1. Open the Langfuse UI (e.g. `http://localhost:3001` or `https://langfuse.perkinslab.com`)
+2. Create an admin account, org, and project
+3. **Project Settings → API Keys** → copy both keys
 
-1. Open `http://localhost:3001`, create the admin account, an org, and a project
-2. **Project Settings → API Keys** → copy both keys into the main app's `.env`:
-   ```
-   LANGFUSE_PUBLIC_KEY=pk-lf-...
-   LANGFUSE_SECRET_KEY=sk-lf-...
-   ```
-3. In `config/observability.yml`: set `enabled: true`
-   - If running via `dev.sh` (app on host, not Docker): set
-     `base_url: "http://localhost:3001"` (the Langfuse host port mapping)
-   - If running via `docker compose up -d` (app in Docker): leave
-     `base_url: "http://langfuse-web:3000"` (container DNS on the shared
-     network)
-4. Restart the backend or hit **Reload Config** in Settings — the Langfuse
-   status chip on the Settings page should flip to **initialized**
+**3. Add keys to the app's `.env`:**
+
+```
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+```
+
+**4. Reload config:**
+
+Hit **Reload Config** in Settings, or restart the backend. The Langfuse
+status chip should flip to **initialized**.
 
 **5. Verify:**
 
-Run one JD analysis and check `http://localhost:3001` for the trace.
-
-### Day-to-day
-
-After first-time setup, it's just the two `up -d` commands; keys and config
-persist:
-
-```bash
-docker compose up -d
-docker compose -f deploy/langfuse/compose.yaml up -d
-```
-
-Stop Langfuse independently (volumes keep its data):
-
-```bash
-docker compose -f deploy/langfuse/compose.yaml down
-```
-
-The app degrades gracefully while Langfuse is down — the sink logs a warning
-and the SQLite ledger carries on.
-
-### Notes
-
-- **Capture content:** Traces are metadata-only by default. For full
-  prompts/responses in the trace UI while testing locally, set
-  `capture_content: true` in `observability.yml` and reload. Remember it's
-  sending your resume/JD content to the Langfuse containers on your machine.
-- **Headless init:** The vendored compose passes through Langfuse's
-  `LANGFUSE_INIT_*` env vars — set org/project/user/keys in
-  `deploy/langfuse/.env` and the stack provisions itself headlessly on first
-  boot. Worth wiring up for public deployment; overkill for local testing.
-
----
+Run one JD analysis or resume generation. Check the Langfuse UI for the trace.
 
 ## How it relates to the SQLite ledger
 
@@ -106,103 +69,17 @@ overhead and zero behavior change. The ledger always works regardless.
 
 1. **Disabled** (default) — no Langfuse SDK import, no network calls, zero overhead
 2. **External** — point at any Langfuse instance via URL + API keys:
-   - The vendored self-hosted stack (below)
+   - Self-hosted on the homelab Docker host (`docker/langfuse/` in the homelab repo)
    - Langfuse Cloud (`https://cloud.langfuse.com`)
    - Any other self-hosted Langfuse instance
 
-## Setup: vendored self-hosted stack
+## base_url by environment
 
-### Prerequisites
-
-- Docker and Docker Compose
-- The main Seeker OS stack running (or at least the `seekeros` network exists)
-
-### 1. Start the main stack first
-
-The vendored Langfuse stack attaches to the `seekeros` Docker network, which
-is created by the main stack's `compose.yaml`. Start the main stack first:
-
-```bash
-docker compose up -d
-```
-
-Or just create the network manually:
-
-```bash
-docker network create seekeros
-```
-
-### 2. Configure Langfuse secrets
-
-```bash
-cd deploy/langfuse
-cp .env.example .env
-# Edit .env and replace all placeholder values with generated secrets:
-#   openssl rand -base64 32
-```
-
-### 3. Start the Langfuse stack
-
-```bash
-docker compose -f deploy/langfuse/compose.yaml up -d
-```
-
-Wait for all services to be healthy (~30 seconds):
-
-```bash
-docker compose -f deploy/langfuse/compose.yaml ps
-```
-
-### 4. Create an admin account
-
-Open `http://localhost:3001` (or the port you configured as `LANGFUSE_PORT`).
-Follow the first-run setup to create an admin account.
-
-### 5. Create a project and API keys
-
-1. Create a new organization and project
-2. Go to **Project Settings → API Keys**
-3. Copy the **Public Key** and **Secret Key**
-
-### 6. Configure Seeker OS to use Langfuse
-
-Add the keys to your main `.env`:
-
-```bash
-LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_SECRET_KEY=sk-lf-...
-```
-
-Copy the example config and enable Langfuse:
-
-```bash
-cp config/observability.example.yml config/observability.yml
-```
-
-Edit `config/observability.yml`:
-
-```yaml
-langfuse:
-  enabled: true
-  base_url: "http://langfuse-web:3000"  # vendored stack container DNS
-  public_key: ${LANGFUSE_PUBLIC_KEY}
-  secret_key: ${LANGFUSE_SECRET_KEY}
-  capture_content: false  # metadata-only by default
-```
-
-Reload config via the Settings page or restart the backend.
-
-### 7. Verify
-
-Run a pipeline operation (analyze a job, generate a resume). The trace should
-appear in the Langfuse UI within seconds.
-
-## Setup: Langfuse Cloud
-
-1. Sign up at [cloud.langfuse.com](https://cloud.langfuse.com)
-2. Create a project and API keys
-3. Set `base_url: "https://cloud.langfuse.com"` in `config/observability.yml`
-4. Add the keys to `.env` as above
+| Environment | base_url | Why |
+|-------------|----------|-----|
+| `dev.sh` (app on host) | `http://localhost:3001` | Host port mapping |
+| Docker (app in container) | `http://langfuse-web:3000` | Container DNS on shared network |
+| Remote / prod | `https://langfuse.perkinslab.com` | Caddy reverse proxy with TLS |
 
 ## Privacy: capture_content
 
@@ -222,12 +99,13 @@ on a self-hosted instance you control, never on Langfuse Cloud with real data.
 
 ### "Connection refused" or DNS resolution failure
 
-The default `base_url` (`http://langfuse-web:3000`) uses Docker container DNS.
-If you see a DNS resolution failure, the vendored stack isn't running:
-
+Check that the Langfuse stack is running on the Docker host:
 ```bash
-docker compose -f deploy/langfuse/compose.yaml up -d
+docker compose -f docker/langfuse/compose.yaml ps   # on milo
 ```
+
+If running via `dev.sh`, use `http://localhost:3001` as `base_url` — the
+container DNS name `langfuse-web` is not resolvable from the host.
 
 ### Traces not appearing
 
@@ -235,6 +113,8 @@ docker compose -f deploy/langfuse/compose.yaml up -d
 2. Check that keys are set in `.env` (not empty)
 3. Check the backend logs for Langfuse warnings
 4. Verify the Langfuse UI is accessible at your configured URL
+5. After changing `base_url`, always reload config — the old OTel exporter
+   thread is shut down and a new sink is created with the updated URL
 
 ### Disabling Langfuse
 
@@ -247,17 +127,8 @@ continues recording as usual.
 After changing keys or `base_url`, reload config via the Settings page or
 restart the backend. The sink re-initializes with the new configuration.
 
-## Vendored stack maintenance
+## Headless init
 
-The vendored compose file at `deploy/langfuse/compose.yaml` is a minimally
-modified copy of [Langfuse's official docker-compose.yml](https://github.com/langfuse/langfuse/blob/main/docker-compose.yml).
-Modifications:
-
-- Pinned image versions (no `:latest` tags)
-- Container/volume names prefixed `seekeros-langfuse-*`
-- Host port configurable via `LANGFUSE_PORT` (default 3001)
-- Only `langfuse-web` joins the `seekeros` network (external); internal
-  services stay on the stack's own default network
-
-To upgrade Langfuse, diff against the upstream compose file and update pinned
-image versions. Do not use `:latest` tags.
+The Langfuse compose file passes through `LANGFUSE_INIT_*` env vars — set
+org/project/user/keys in `docker/langfuse/.env` (homelab repo) and the stack
+provisions itself headlessly on first boot. Useful for reproducible deploys.

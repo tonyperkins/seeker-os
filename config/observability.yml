@@ -31,7 +31,7 @@ langfuse:
   # response text, job titles, company names, or resume content.
   # Set to true for local debugging to capture full prompt/response content.
   # WARNING: enabling this sends PII to the Langfuse server.
-  capture_content: false
+  capture_content: true
   # How often the SDK flushes traces to the server (seconds).
   flush_interval_seconds: 1.0
 
