@@ -163,7 +163,7 @@ for model in "${MODELS[@]}"; do
       sed "s|anthropic:messages:|${PROVIDER_PREFIX}:|g; s|https://api.anthropic.com|${API_BASE_URL}|g; s|ANTHROPIC_API_KEY|OPENAI_API_KEY|g" "$config_file" > "$temp_config"
       # Route the llm-rubric judge through Kilo using a non-reasoning model
       # (reasoning models spend all tokens thinking, leaving no visible output)
-      export JUDGE_PROVIDER_ID="${PROVIDER_PREFIX}:${JUDGE_MODEL:-kilo-auto/efficient}"
+      export JUDGE_PROVIDER_ID="${PROVIDER_PREFIX}:${JUDGE_MODEL:-minimax/minimax-m3}"
       export JUDGE_API_BASE_URL="$API_BASE_URL"
       export JUDGE_API_KEY="{{ env.OPENAI_API_KEY }}"
       run_config="$temp_config"
