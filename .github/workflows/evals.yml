@@ -57,6 +57,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Check API key
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set. Add it in GitHub repo settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
       - name: Install Python dependencies
         run: |
           pip install pyyaml pydantic python-dotenv
