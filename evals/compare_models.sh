@@ -53,6 +53,7 @@ PROVIDER="${PROVIDER:-anthropic}"
 EVAL_CONFIGS="${EVAL_CONFIGS:-jd_analysis}"
 EVAL_TEST_LIMIT="${EVAL_TEST_LIMIT:-0}"
 PARALLEL_MODELS="${PARALLEL_MODELS:-1}"
+FAIL_FAST="${FAIL_FAST:-3}"
 SEEKER_OS_CONFIG_DIR="${SEEKER_OS_CONFIG_DIR:-config}"
 
 # Default model lists per provider
@@ -113,6 +114,9 @@ else
   echo "║  Tests:     all golden dataset cases"
 fi
 echo "║  Parallel:  $PARALLEL_MODELS models at a time"
+if [ "$FAIL_FAST" -gt 0 ]; then
+  echo "║  Fail fast: after $FAIL_FAST consecutive 0% models"
+fi
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "Models to test:"
@@ -125,8 +129,14 @@ echo ""
 SUMMARY_FILE="$RESULTS_DIR/comparison_${PROVIDER}_$(date +%Y%m%d_%H%M%S).json"
 echo "[" > "$SUMMARY_FILE"
 FIRST_ENTRY=true
+CONSECUTIVE_ZERO=0
+ABORTED=false
 
 for model in "${MODELS[@]}"; do
+  if [ "$ABORTED" = true ]; then
+    echo "⏭  Skipping $model (fail-fast triggered)"
+    continue
+  fi
   for config_name in "${CONFIGS[@]}"; do
     config_file="$REPO_ROOT/evals/promptfoo/${config_name}.yaml"
     if [ ! -f "$config_file" ]; then
@@ -190,7 +200,12 @@ tests = data.get('results', {}).get('results', [])
 passed = sum(1 for t in tests if t.get('success'))
 total = len(tests)
 rate = (passed / total * 100) if total > 0 else 0
-print(f'{passed}/{total} ({rate:.1f}%)')
+# Check for empty-output pattern (reasoning models hitting max_tokens)
+empty_count = sum(1 for t in tests if not t.get('response', {}).get('output', ''))
+if empty_count == total and total > 0:
+    print(f'0/{total} (0.0%) EMPTY_OUTPUT')
+else:
+    print(f'{passed}/{total} ({rate:.1f}%)')
 " 2>/dev/null || echo "parse error")
 
       tokens=$(python3 -c "
@@ -207,6 +222,36 @@ print(f'{total:,}')
     fi
 
     echo "   Result: $passed | Tokens: $tokens | Time: ${duration}s | Exit: $eval_exit"
+
+    # --- Fail-fast checks ---
+    if [ "$FAIL_FAST" -gt 0 ]; then
+      # Check for auth/connection errors in the output
+      if echo "$passed" | grep -qiE 'auth|401|403|connection|refused|timeout|ECONNREFUSED' || [ ! -f "$output_file" ]; then
+        echo "❌ FAIL FAST: Infrastructure error detected — aborting remaining models"
+        echo "   Check your API key and network connectivity."
+        ABORTED=true
+        echo ""
+        continue
+      fi
+      # Check for 0% pass rate (systemic harness issue)
+      if echo "$passed" | grep -qE '0/[0-9]+ \(0\.0%\)'; then
+        CONSECUTIVE_ZERO=$((CONSECUTIVE_ZERO + 1))
+        if echo "$passed" | grep -q 'EMPTY_OUTPUT'; then
+          echo "   ⚠  All outputs empty (reasoning model hit max_tokens — increase max_tokens in config)"
+        fi
+        if [ "$CONSECUTIVE_ZERO" -ge "$FAIL_FAST" ]; then
+          echo "❌ FAIL FAST: $CONSECUTIVE_ZERO consecutive models scored 0%"
+          echo "   This likely indicates a harness/config issue, not model quality."
+          echo "   Check evals/results/ for the last result file to debug."
+          ABORTED=true
+          echo ""
+          continue
+        fi
+        echo "   ⚠  0% pass rate ($CONSECUTIVE_ZERO/$FAIL_FAST before abort)"
+      else
+        CONSECUTIVE_ZERO=0
+      fi
+    fi
     echo ""
 
     # Append to summary JSON
