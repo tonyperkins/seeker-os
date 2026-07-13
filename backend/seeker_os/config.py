@@ -43,15 +43,21 @@ def expand_path(value: str) -> str:
 # Env var resolution
 # ---------------------------------------------------------------------------
 
-_ENV_VAR_PATTERN = re.compile(r"\$\{(\w+)\}")
+_ENV_VAR_PATTERN = re.compile(r"\$\{(\w+)(?::-(.*?))?\}")
 
 
 def resolve_env_vars(value: Any) -> Any:
-    """Recursively resolve ${VAR_NAME} references in a data structure."""
+    """Recursively resolve ${VAR_NAME} and ${VAR_NAME:-default} references."""
     if isinstance(value, str):
         def _replace(m: re.Match) -> str:
             var_name = m.group(1)
-            return os.environ.get(var_name, m.group(0))  # leave as-is if not found
+            default = m.group(2)  # None if no :-default syntax
+            val = os.environ.get(var_name)
+            if val is not None:
+                return val
+            if default is not None:
+                return default
+            return m.group(0)  # leave as-is if not found
         return _ENV_VAR_PATTERN.sub(_replace, value)
     if isinstance(value, dict):
         return {k: resolve_env_vars(v) for k, v in value.items()}
@@ -78,7 +84,7 @@ def _check_unresolved_env_refs(data: Any, filename: str) -> None:
         if isinstance(obj, str):
             for m in _ENV_VAR_PATTERN.finditer(obj):
                 var_name = m.group(1)
-                if os.environ.get(var_name) is None:
+                if os.environ.get(var_name) is None and m.group(2) is None:
                     field_hint = path.split(".")[-1] if path else "value"
                     warnings.warn(
                         f"{var_name} unset — referenced in {filename}"
