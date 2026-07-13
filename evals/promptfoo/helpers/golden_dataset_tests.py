@@ -45,7 +45,7 @@ def _verdict_assert(expected_verdict: str) -> dict:
         "value": f"""
 import json
 
-def assert_verdict(output, context):
+def get_assert(output, context):
     text = output.strip()
     if text.startswith("```"):
         text = text.split("\\n", 1)[1] if "\\n" in text else text[3:]
@@ -73,7 +73,7 @@ import json
 
 _REQUIRED_FIELDS = {"verdict", "weighted_score", "named_gaps", "confidence"}
 
-def assert_json_schema(output, context):
+def get_assert(output, context):
     text = output.strip()
     if text.startswith("```"):
         text = text.split("\\n", 1)[1] if "\\n" in text else text[3:]
