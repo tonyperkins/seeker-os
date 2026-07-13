@@ -30,19 +30,66 @@ _JUDGE_USER_TEMPLATE = (
 
 
 def _load_golden_dataset() -> list[dict]:
-    """Load active cases from the golden dataset."""
+    """Load active cases from the golden dataset.
+
+    If EVAL_TEST_LIMIT env var is set, return only that many cases
+    (spread across verdict categories for representative coverage).
+    """
     if not _GOLDEN_DATASET.exists():
         return []
     with open(_GOLDEN_DATASET) as f:
         data = yaml.safe_load(f) or {}
-    return [c for c in data.get("cases", []) if c.get("status", "active") == "active"]
+    cases = [c for c in data.get("cases", []) if c.get("status", "active") == "active"]
+
+    limit = os.environ.get("EVAL_TEST_LIMIT")
+    if limit:
+        limit = int(limit)
+        if limit > 0 and limit < len(cases):
+            # Spread across verdicts: take proportional samples from each category
+            from collections import defaultdict
+            by_verdict = defaultdict(list)
+            for c in cases:
+                by_verdict[c["expected_verdict"]].append(c)
+            result = []
+            per_verdict = max(1, limit // len(by_verdict))
+            for verdict, group in by_verdict.items():
+                result.extend(group[:per_verdict])
+            return result[:limit]
+    return cases
 
 
-def _verdict_assert(expected_verdict: str) -> dict:
-    """Build a verdict exact-match assertion."""
-    return {
-        "type": "python",
-        "value": f"""
+def _extract_json(text: str) -> str:
+    """Extract JSON from model output, handling markdown fences and reasoning prefixes.
+
+    Some models (Qwen, DeepSeek) prepend 'Thinking: ...' reasoning before the JSON.
+    Some wrap in ```json ... ``` fences.
+    """
+    text = text.strip()
+    # Strip markdown code fences
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+    # If it starts with { or [, assume it's already JSON
+    if text and text[0] in "{[":
+        return text
+    # Try to find JSON object/array in the text (handles reasoning prefixes)
+    for marker in ["{", "["]:
+        idx = text.find(marker)
+        if idx >= 0:
+            # Find the matching closing bracket
+            return text[idx:]
+    return text
+
+
+def _json_extract_code() -> str:
+    """Python code snippet to extract JSON from model output.
+
+    Handles markdown fences and reasoning/thinking prefixes (Qwen, DeepSeek).
+    This is injected into assertion 'value' fields.
+    """
+    return '''
 import json
 
 text = output.strip()
@@ -51,7 +98,47 @@ if text.startswith("```"):
     if text.endswith("```"):
         text = text[:-3]
     text = text.strip()
-try:
+# Handle reasoning/thinking prefixes (Qwen, DeepSeek, etc.)
+# Find the last valid JSON object in the text
+if text and text[0] not in "{[":
+    # Try last fenced block first
+    fence_idx = text.rfind("```")
+    if fence_idx > 0:
+        before = text[:fence_idx]
+        open_fence = before.rfind("```")
+        if open_fence >= 0:
+            inner = text[open_fence+3:fence_idx].strip()
+            if inner and inner[0] in "{[":
+                text = inner
+    # Fall back: scan backwards for a brace that starts valid JSON
+    if text[0] not in "{[":
+        search_pos = len(text)
+        found = False
+        while search_pos > 0 and not found:
+            idx = text.rfind("{", 0, search_pos)
+            if idx < 0:
+                break
+            candidate = text[idx:].rstrip("` \\n\\r")
+            if candidate.endswith("```"):
+                candidate = candidate[:-3].strip()
+            try:
+                json.loads(candidate)
+                text = candidate
+                found = True
+            except json.JSONDecodeError:
+                search_pos = idx
+        if not found:
+            idx = text.find("{")
+            if idx >= 0:
+                text = text[idx:]
+'''
+
+
+def _verdict_assert(expected_verdict: str) -> dict:
+    """Build a verdict exact-match assertion."""
+    return {
+        "type": "python",
+        "value": _json_extract_code() + f'''try:
     data = json.loads(text)
 except json.JSONDecodeError as e:
     return {{"pass": False, "score": 0, "reason": f"Invalid JSON: {{e}}"}}
@@ -59,7 +146,7 @@ verdict = data.get("verdict", "")
 if verdict == "{expected_verdict}":
     return {{"pass": True, "score": 1, "reason": f"Verdict match: {{verdict}}"}}
 return {{"pass": False, "score": 0, "reason": f"Expected {expected_verdict}, got {{verdict}}"}}
-""",
+''',
     }
 
 
@@ -67,17 +154,8 @@ def _json_schema_assert() -> dict:
     """Build a valid-JSON + required-fields assertion."""
     return {
         "type": "python",
-        "value": """
-import json
-
+        "value": _json_extract_code() + '''
 _REQUIRED_FIELDS = {"verdict", "weighted_score", "named_gaps", "confidence"}
-
-text = output.strip()
-if text.startswith("```"):
-    text = text.split("\\n", 1)[1] if "\\n" in text else text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
 try:
     data = json.loads(text)
 except json.JSONDecodeError as e:
@@ -86,7 +164,7 @@ missing = _REQUIRED_FIELDS - set(data.keys())
 if missing:
     return {"pass": False, "score": 0, "reason": f"Missing required fields: {missing}"}
 return {"pass": True, "score": 1, "reason": "Valid JSON with all required fields"}
-""",
+''',
     }
 
 

@@ -50,7 +50,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RESULTS_DIR="$REPO_ROOT/evals/results"
 
 PROVIDER="${PROVIDER:-anthropic}"
-EVAL_CONFIGS="${EVAL_CONFIGS:-jd_analysis,resume_generation}"
+EVAL_CONFIGS="${EVAL_CONFIGS:-jd_analysis}"
+EVAL_TEST_LIMIT="${EVAL_TEST_LIMIT:-0}"
+PARALLEL_MODELS="${PARALLEL_MODELS:-1}"
 SEEKER_OS_CONFIG_DIR="${SEEKER_OS_CONFIG_DIR:-config}"
 
 # Default model lists per provider
@@ -68,7 +70,14 @@ else
   PROMPTFOO_API_KEY_ENV="ANTHROPIC_API_KEY"
 fi
 
-EVAL_MODELS="${EVAL_MODELS:-$DEFAULT_MODELS}"
+# --- Resolve model list ---
+if [ -n "${EVAL_MODELS:-}" ]; then
+  MODEL_LIST="$EVAL_MODELS"
+elif [ -n "${EVAL_MODELS_FILE:-}" ] && [ -f "$EVAL_MODELS_FILE" ]; then
+  MODEL_LIST=$(grep -v '^#' "$EVAL_MODELS_FILE" | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+else
+  MODEL_LIST="$DEFAULT_MODELS"
+fi
 
 # --- Validate env ---
 API_KEY="${!API_KEY_VAR:-}"
@@ -86,7 +95,7 @@ fi
 mkdir -p "$RESULTS_DIR"
 
 # Parse comma-separated lists
-IFS=',' read -ra MODELS <<< "$EVAL_MODELS"
+IFS=',' read -ra MODELS <<< "$MODEL_LIST"
 IFS=',' read -ra CONFIGS <<< "$EVAL_CONFIGS"
 
 echo ""
@@ -95,10 +104,21 @@ echo "║          Model Comparison — promptfoo evals                  ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
 echo "║  Provider:  $PROVIDER"
 echo "║  API:       $API_BASE_URL"
-echo "║  Models:    ${#MODELS[@]} → ${EVAL_MODELS}"
+echo "║  Models:    ${#MODELS[@]} models"
 echo "║  Configs:   ${#CONFIGS[@]} → ${EVAL_CONFIGS}"
 echo "║  Total runs: $((${#MODELS[@]} * ${#CONFIGS[@]}))"
+if [ "$EVAL_TEST_LIMIT" -gt 0 ]; then
+  echo "║  Tests:     ${EVAL_TEST_LIMIT} per model (subset)"
+else
+  echo "║  Tests:     all golden dataset cases"
+fi
+echo "║  Parallel:  $PARALLEL_MODELS models at a time"
 echo "╚══════════════════════════════════════════════════════════════╝"
+echo ""
+echo "Models to test:"
+for i in "${!MODELS[@]}"; do
+  printf "  %2d. %s\n" $((i+1)) "${MODELS[$i]}"
+done
 echo ""
 
 # Summary file
@@ -114,7 +134,9 @@ for model in "${MODELS[@]}"; do
       continue
     fi
 
-    output_file="$RESULTS_DIR/${config_name}_${model//\//_}.json"
+    safe_model="${model//\//_}"
+    safe_model="${safe_model//:/_}"
+    output_file="$RESULTS_DIR/${config_name}_${safe_model}.json"
     label="$config_name / $model"
 
     echo "── Running: $label ──"
@@ -122,12 +144,13 @@ for model in "${MODELS[@]}"; do
     # Set env vars for promptfoo
     export EVAL_MODEL="$model"
     export "$PROMPTFOO_API_KEY_ENV"="$API_KEY"
+    export EVAL_TEST_LIMIT="$EVAL_TEST_LIMIT"
 
     # For Kilo, override the provider prefix and judge to use Kilo gateway
     if [ "$PROVIDER" = "kilo" ]; then
       # Create a temp config with Kilo provider
-      temp_config=$(mktemp /tmp/promptfoo_${config_name}_XXXXXX.yaml)
-      sed "s|anthropic:messages:|${PROVIDER_PREFIX}:|g; s|api.anthropic.com|${API_BASE_URL}|g" "$config_file" > "$temp_config"
+      temp_config="$REPO_ROOT/evals/promptfoo/_tmp_${config_name}_${safe_model}.yaml"
+      sed "s|anthropic:messages:|${PROVIDER_PREFIX}:|g; s|https://api.anthropic.com|${API_BASE_URL}|g; s|ANTHROPIC_API_KEY|OPENAI_API_KEY|g" "$config_file" > "$temp_config"
       # Also route the llm-rubric judge through Kilo
       export JUDGE_PROVIDER_ID="${PROVIDER_PREFIX}:${model}"
       export JUDGE_API_BASE_URL="$API_BASE_URL"
@@ -146,8 +169,8 @@ for model in "${MODELS[@]}"; do
       --no-cache \
       --output "$output_file" \
       --max-concurrency 3 \
-      2>&1 | tail -5
-    eval_exit=$?
+      2>&1 | grep -E '^[[:space:]]*[✓✗]|Evaluation|passed|Error|error|FAIL|PASS|%' || true
+    eval_exit=${PIPESTATUS[0]}
     set -e
     end_time=$(date +%s)
     duration=$((end_time - start_time))
@@ -284,6 +307,13 @@ for entry in entries:
     tokens = usage.get("total", 0)
     in_tokens = usage.get("prompt", 0) or usage.get("input", 0)
     out_tokens = usage.get("completion", 0) or usage.get("output", 0)
+    # If no aggregate usage, sum from individual test results
+    if not tokens:
+        for t in tests:
+            tu = t.get("tokenUsage", {})
+            tokens += tu.get("total", 0)
+            in_tokens += tu.get("prompt", 0)
+            out_tokens += tu.get("completion", 0)
     status = "PASS" if rate >= 85 else "FAIL"
 
     # Compute cost
