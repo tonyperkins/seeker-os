@@ -2,25 +2,7 @@
 # Lines starting with # are comments. Edit this file to trim/expand.
 # Used by: EVAL_MODELS_FILE=evals/model_list.txt ./evals/compare_models.sh
 
-# ── Anthropic (via Kilo) ──
-anthropic/claude-sonnet-5
-anthropic/claude-opus-4.8
-anthropic/claude-opus-4.8-fast
-stealth/claude-opus-4.8
-
-# ── OpenAI (via Kilo) ──
-openai/gpt-5.6-sol
-openai/gpt-5.6-sol-pro
-openai/gpt-5.6-terra
-openai/gpt-5.6-terra-pro
-openai/gpt-5.6-luna
-openai/gpt-5.6-luna-pro
-
-# ── Google (via Kilo) ──
-google/gemini-3.5-flash
-google/gemini-3.1-pro-preview
-
-# ── Other models ──
+# ── Budget models (no Anthropic/OpenAI/Google) ──
 z-ai/glm-5.2
 qwen/qwen3.7-plus
 stepfun/step-3.7-flash

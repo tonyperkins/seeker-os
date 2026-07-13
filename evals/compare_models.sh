@@ -171,7 +171,7 @@ for model in "${MODELS[@]}"; do
       run_config="$config_file"
     fi
 
-    # Run promptfoo eval
+    # Run promptfoo eval (line-buffer grep for live output)
     start_time=$(date +%s)
     set +e
     promptfoo eval \
@@ -179,7 +179,7 @@ for model in "${MODELS[@]}"; do
       --no-cache \
       --output "$output_file" \
       --max-concurrency 3 \
-      2>&1 | grep -E '^[[:space:]]*[✓✗]|Evaluation|passed|Error|error|FAIL|PASS|%' || true
+      2>&1 | grep --line-buffered -E '^[[:space:]]*[✓✗]|Eval complete|passed|failed|Error|error|FAIL|PASS|%' || true
     eval_exit=${PIPESTATUS[0]}
     set -e
     end_time=$(date +%s)
