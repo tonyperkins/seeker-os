@@ -42,7 +42,7 @@ def _verdict_assert(expected_verdict: str) -> dict:
     """Build a verdict exact-match assertion."""
     return {
         "type": "python",
-        "code": f"""
+        "value": f"""
 import json
 
 def assert_verdict(output, context):
@@ -68,7 +68,7 @@ def _json_schema_assert() -> dict:
     """Build a valid-JSON + required-fields assertion."""
     return {
         "type": "python",
-        "code": """
+        "value": """
 import json
 
 _REQUIRED_FIELDS = {"verdict", "weighted_score", "named_gaps", "confidence"}
@@ -134,10 +134,10 @@ def _faithfulness_judge_assert() -> dict:
             "Respond with PASS or FAIL and a brief reason."
         ),
         "provider": {
-            "id": "anthropic:messages:claude-haiku-4-5-20251001",
+            "id": "anthropic:messages:claude-haiku-4-5",
             "config": {
                 "apiBaseUrl": "https://api.anthropic.com",
-                "apiKey": "${ANTHROPIC_API_KEY}",
+                "apiKey": "{{ env.ANTHROPIC_API_KEY }}",
                 "temperature": 0.0,
                 "max_tokens": 4096,
             },
