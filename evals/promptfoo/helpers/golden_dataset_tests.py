@@ -119,7 +119,22 @@ def _faithfulness_judge_assert() -> dict:
     The judge prompt is reused from validation/prompts/traceability_judge_system.txt.
     Any unsupported or overstated claim = failure (matches TraceabilityChecker
     severity in traceability.py:254-269).
+
+    The judge provider is configurable via env vars:
+      JUDGE_PROVIDER_ID — full promptfoo provider id (default: anthropic:messages:claude-haiku-4-5)
+      JUDGE_API_BASE_URL — API base URL (default: https://api.anthropic.com)
+      JUDGE_API_KEY — API key env var name in nunjucks syntax (default: {{ env.ANTHROPIC_API_KEY }})
     """
+    judge_provider_id = os.environ.get(
+        "JUDGE_PROVIDER_ID", "anthropic:messages:claude-haiku-4-5"
+    )
+    judge_api_base = os.environ.get(
+        "JUDGE_API_BASE_URL", "https://api.anthropic.com"
+    )
+    judge_api_key = os.environ.get(
+        "JUDGE_API_KEY", "{{ env.ANTHROPIC_API_KEY }}"
+    )
+
     return {
         "type": "llm-rubric",
         "value": (
@@ -132,10 +147,10 @@ def _faithfulness_judge_assert() -> dict:
             "Respond with PASS or FAIL and a brief reason."
         ),
         "provider": {
-            "id": "anthropic:messages:claude-haiku-4-5",
+            "id": judge_provider_id,
             "config": {
-                "apiBaseUrl": "https://api.anthropic.com",
-                "apiKey": "{{ env.ANTHROPIC_API_KEY }}",
+                "apiBaseUrl": judge_api_base,
+                "apiKey": judge_api_key,
                 "temperature": 0.0,
                 "max_tokens": 4096,
             },
