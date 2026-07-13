@@ -43,6 +43,7 @@ jobs:
       MODE: ${{ needs.detect-mode.outputs.mode }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       SEEKER_OS_CONFIG_DIR: config
+      EVAL_MODEL: ${{ needs.detect-mode.outputs.mode == 'full' && 'claude-sonnet-4-6' || 'claude-haiku-4-5' }}
     steps:
       - uses: actions/checkout@v4
 

@@ -14,6 +14,7 @@
 # Environment:
 #   ANTHROPIC_API_KEY — required for the provider
 #   SEEKER_OS_CONFIG_DIR — path to config/ directory (default: config/)
+#   EVAL_MODEL — Anthropic model ID (default: claude-haiku-4-5)
 
 description: "JD Analysis — verdict accuracy against golden dataset"
 
@@ -23,8 +24,8 @@ prompts:
   - file://helpers/build_jd_analysis_prompt.py:buildPrompts
 
 providers:
-  - id: anthropic:messages:claude-sonnet-4-6
-    label: "Claude Sonnet (production tier for jd_analysis)"
+  - id: anthropic:messages:{{ env.EVAL_MODEL | default('claude-haiku-4-5') }}
+    label: "Claude (jd_analysis eval)"
     config:
       apiBaseUrl: https://api.anthropic.com
       apiKey: ${ANTHROPIC_API_KEY}

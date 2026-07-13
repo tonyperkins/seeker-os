@@ -14,6 +14,7 @@
 #
 # Environment:
 #   ANTHROPIC_API_KEY — required for the provider
+#   EVAL_MODEL — Anthropic model ID (default: claude-haiku-4-5)
 
 description: "Resume Generation — traceability faithfulness via LLM-as-judge"
 
@@ -22,8 +23,8 @@ prompts:
   - file://helpers/build_resume_generation_prompt.py:buildPrompts
 
 providers:
-  - id: anthropic:messages:claude-sonnet-4-6
-    label: "Claude Sonnet (production tier for resume_generation)"
+  - id: anthropic:messages:{{ env.EVAL_MODEL | default('claude-haiku-4-5') }}
+    label: "Claude (resume_generation eval)"
     config:
       apiBaseUrl: https://api.anthropic.com
       apiKey: ${ANTHROPIC_API_KEY}
