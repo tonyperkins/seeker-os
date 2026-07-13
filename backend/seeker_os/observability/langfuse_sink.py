@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 
 _sink: LangfuseSink | None = None
 _warned_init = False
+_connection_ok = False
+_warned_connection = False
+
+# Suppress noisy OTel exporter retry/timeout logs — these fire on every
+# failed span export and are not actionable. We surface connection issues
+# via our own warning in init_sink() and the status endpoint instead.
+logging.getLogger("opentelemetry.exporter.otlp.proto.http.trace_exporter").setLevel(
+    logging.CRITICAL
+)
 
 
 class LangfuseSink:
@@ -53,6 +62,7 @@ class LangfuseSink:
 
         self._capture_content = capture_content
         self._public_key = public_key
+        self._base_url = base_url
         self._active: dict[str, Any] = {}
         self._lock = threading.Lock()
         self._client = Langfuse(
@@ -252,6 +262,7 @@ def init_sink(settings: Any) -> None:
             "langfuse_sink_initialized: base_url=%s, capture_content=%s",
             lf.base_url, lf.capture_content,
         )
+        _check_connection(lf.base_url, lf.public_key, lf.secret_key)
     except ImportError:
         if not _warned_init:
             logger.warning(
@@ -297,6 +308,7 @@ def get_status() -> dict:
             "base_url": "",
             "capture_content": False,
             "keys_configured": False,
+            "connection_ok": False,
         }
 
     lf = obs.langfuse
@@ -306,4 +318,54 @@ def get_status() -> dict:
         "base_url": lf.base_url,
         "capture_content": lf.capture_content,
         "keys_configured": bool(lf.public_key and lf.secret_key),
+        "connection_ok": _connection_ok,
     }
+
+
+def _check_connection(base_url: str, public_key: str, secret_key: str) -> None:
+    """Best-effort health check against the Langfuse server.
+
+    Logs a single clear warning if the server is unreachable or keys are
+    invalid. Does not block — the sink still initializes and will retry
+    on its own. The OTel exporter logs are suppressed so the user only
+    sees this one message instead of repeated retry spam.
+    """
+    global _connection_ok, _warned_connection
+    import urllib.request
+    import urllib.error
+
+    _connection_ok = False
+    health_url = base_url.rstrip("/") + "/api/public/health"
+    try:
+        req = urllib.request.Request(health_url)
+        req.add_header("Authorization", "Basic " + _basic_auth(public_key, secret_key))
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status == 200:
+                _connection_ok = True
+                _warned_connection = False
+                logger.info("langfuse_connection_ok: %s", base_url)
+            else:
+                _warn_connection(base_url, f"HTTP {resp.status}")
+    except urllib.error.HTTPError as exc:
+        _warn_connection(base_url, f"HTTP {exc.code} — check API keys")
+    except Exception as exc:
+        _warn_connection(base_url, str(exc))
+
+
+def _warn_connection(base_url: str, detail: str) -> None:
+    """Log a one-time warning about Langfuse connection failure."""
+    global _warned_connection
+    if not _warned_connection:
+        logger.warning(
+            "langfuse_connection_failed: %s — %s. "
+            "Tracing will retry in the background but traces may not appear. "
+            "Check base_url and API keys. This warning will not repeat.",
+            base_url, detail,
+        )
+        _warned_connection = True
+
+
+def _basic_auth(public_key: str, secret_key: str) -> str:
+    import base64
+    creds = f"{public_key}:{secret_key}"
+    return base64.b64encode(creds.encode()).decode()

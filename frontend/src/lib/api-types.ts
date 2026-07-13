@@ -465,6 +465,7 @@ export interface LangfuseStatusResponse {
   base_url: string;
   capture_content: boolean;
   keys_configured: boolean;
+  connection_ok: boolean;
 }
 
 export interface SLOMetric {

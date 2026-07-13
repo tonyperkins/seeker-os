@@ -121,9 +121,9 @@ export function SettingsClient({
           description="Langfuse tracing status. Configure in config/observability.yml."
         >
           <div className="flex flex-wrap items-center gap-3">
-            <Badge variant={langfuseStatus.initialized ? "default" : langfuseStatus.enabled ? "destructive" : "secondary"}>
+            <Badge variant={langfuseStatus.initialized ? (langfuseStatus.connection_ok ? "default" : "destructive") : langfuseStatus.enabled ? "destructive" : "secondary"}>
               {langfuseStatus.initialized
-                ? "Initialized"
+                ? (langfuseStatus.connection_ok ? "Connected" : "Connection failed")
                 : langfuseStatus.enabled
                   ? "Config error"
                   : "Disabled"}
@@ -141,6 +141,11 @@ export function SettingsClient({
             {langfuseStatus.enabled && !langfuseStatus.keys_configured && (
               <span className="text-xs text-destructive">
                 Keys not configured — set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env
+              </span>
+            )}
+            {langfuseStatus.initialized && !langfuseStatus.connection_ok && (
+              <span className="text-xs text-destructive">
+                Server unreachable or keys invalid — check base_url and API keys
               </span>
             )}
           </div>

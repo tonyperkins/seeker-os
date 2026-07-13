@@ -383,6 +383,7 @@ class LangfuseStatusResponse(BaseModel):
     base_url: str = ""
     capture_content: bool = False
     keys_configured: bool = False
+    connection_ok: bool = False
 
 
 class SLOMetric(BaseModel):
