@@ -1,0 +1,40 @@
+# Promptfoo eval config — JD Analysis verdict accuracy
+#
+# Runs the JD analysis system prompt + user template against each golden
+# dataset case. Asserts:
+#   1. Response is valid JSON matching the output schema
+#   2. Verdict exact match (APPLY/CONDITIONAL/MONITOR/SKIP)
+#
+# Profile/identity/accuracy rules are injected at eval time from config/*.yml
+# using the same loaders as jd_analyzer.py.
+#
+# Usage:
+#   promptfoo eval --config evals/promptfoo/jd_analysis.yaml
+#
+# Environment:
+#   ANTHROPIC_API_KEY — required for the provider
+#   SEEKER_OS_CONFIG_DIR — path to config/ directory (default: config/)
+
+description: "JD Analysis — verdict accuracy against golden dataset"
+
+prompts:
+  # Build the full prompt pair by reading the prompt files and injecting
+  # config context, exactly as jd_analyzer.py does in production.
+  - file://evals/promptfoo/helpers/build_jd_analysis_prompt.py:buildPrompts
+
+providers:
+  - id: anthropic:messages:claude-sonnet-4-6-20250514
+    label: "Claude Sonnet (production tier for jd_analysis)"
+    config:
+      apiBaseUrl: https://api.anthropic.com
+      apiKey: ${ANTHROPIC_API_KEY}
+      temperature: 0.3
+      max_tokens: 4096
+
+tests:
+  - file://evals/promptfoo/helpers/golden_dataset_tests.py:jdAnalysisTests
+
+# Thresholds — eval fails if verdict accuracy drops below this.
+# Configured in evals/eval_config.yml; promptfoo reads it here.
+evaluateOptions:
+  maxConcurrent: 3

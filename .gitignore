@@ -51,6 +51,7 @@ data/retrieval_cache/
 data/checkpoint.json
 data/resumes/
 data/master_resume.*
+!data/master_resume.example.md
 data/.anthropic_oauth.json
 **/data/seeker.db
 **/backend/seeker.db

@@ -1,0 +1,40 @@
+# Promptfoo eval config — Resume Generation faithfulness
+#
+# Runs the resume generation system prompt + user template against golden
+# dataset cases with APPLY/CONDITIONAL verdicts. Asserts:
+#   1. LLM-as-judge faithfulness using the existing traceability judge prompt
+#   2. Any unsupported or overstated claim = failure (matches TraceabilityChecker
+#      severity in traceability.py:254-269)
+#
+# The judge prompt is reused from validation/prompts/traceability_judge_system.txt
+# — no new judge prompt is written.
+#
+# Usage:
+#   promptfoo eval --config evals/promptfoo/resume_generation.yaml
+#
+# Environment:
+#   ANTHROPIC_API_KEY — required for the provider
+
+description: "Resume Generation — traceability faithfulness via LLM-as-judge"
+
+prompts:
+  # Step 1: Generate the tailored resume using the production prompt files
+  - file://evals/promptfoo/helpers/build_resume_generation_prompt.py:buildPrompts
+
+providers:
+  - id: anthropic:messages:claude-sonnet-4-6-20250514
+    label: "Claude Sonnet (production tier for resume_generation)"
+    config:
+      apiBaseUrl: https://api.anthropic.com
+      apiKey: ${ANTHROPIC_API_KEY}
+      temperature: 0.7
+      max_tokens: 16000
+
+# The faithfulness assertion runs as a separate LLM call using the
+# traceability judge system prompt. This is configured as a "model-graded"
+# assertion in the test cases.
+tests:
+  - file://evals/promptfoo/helpers/golden_dataset_tests.py:resumeGenerationTests
+
+evaluateOptions:
+  maxConcurrent: 2
