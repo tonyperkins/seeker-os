@@ -419,7 +419,7 @@ def create_job_service(body: JobCreate) -> JobCreateResponse:
         if settings.providers:
             try:
                 from seeker_os.observability.llm_ledger import attach_artifact
-                attach_artifact(metadata_op_id, "job", int(job_id))
+                attach_artifact(metadata_op_id, "job", int(job_id), db=db)
             except Exception:
                 logging.getLogger(__name__).exception(
                     "llm_artifact_link_failed", extra={"operation_id": metadata_op_id}

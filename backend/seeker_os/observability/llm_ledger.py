@@ -178,8 +178,19 @@ def finish_call(
     logger.debug("finish_call DB write took %.3fs (call_id=%s)", time.monotonic() - _t0, call_id)
 
 
-def attach_artifact(operation_id: str, artifact_type: str, artifact_id: int) -> None:
-    db = get_connection()
+def attach_artifact(
+    operation_id: str, artifact_type: str, artifact_id: int, db=None
+) -> None:
+    """Attach an artifact to all calls/evaluations of an operation.
+
+    Pass the caller's connection via ``db`` when running inside an open write
+    transaction — opening a second connection there self-deadlocks on SQLite's
+    write lock, waits out busy_timeout (5s), and fails. With ``db`` provided
+    the caller controls the transaction (no commit here).
+    """
+    own = db is None
+    if own:
+        db = get_connection()
     try:
         db.execute(
             "UPDATE llm_calls SET artifact_type = ?, artifact_id = ? WHERE operation_id = ?",
@@ -189,9 +200,11 @@ def attach_artifact(operation_id: str, artifact_type: str, artifact_id: int) -> 
             "UPDATE llm_evaluations SET artifact_type = ?, artifact_id = ? WHERE operation_id = ?",
             (artifact_type, artifact_id, operation_id),
         )
-        db.commit()
+        if own:
+            db.commit()
     finally:
-        db.close()
+        if own:
+            db.close()
 
 
 def record_evaluation(
