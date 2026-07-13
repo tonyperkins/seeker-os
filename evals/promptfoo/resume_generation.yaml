@@ -27,7 +27,7 @@ providers:
     label: "Claude (resume_generation eval)"
     config:
       apiBaseUrl: https://api.anthropic.com
-      apiKey: ${ANTHROPIC_API_KEY}
+      apiKey: {{ env.ANTHROPIC_API_KEY }}
       temperature: 0.7
       max_tokens: 16000
 

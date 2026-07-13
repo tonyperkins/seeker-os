@@ -28,7 +28,7 @@ providers:
     label: "Claude (jd_analysis eval)"
     config:
       apiBaseUrl: https://api.anthropic.com
-      apiKey: ${ANTHROPIC_API_KEY}
+      apiKey: {{ env.ANTHROPIC_API_KEY }}
       temperature: 0.3
       max_tokens: 4096
 
