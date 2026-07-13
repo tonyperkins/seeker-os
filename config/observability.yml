@@ -10,14 +10,14 @@
 
 # ── Langfuse LLM Tracing ──
 # Two modes: disabled (default, zero overhead) and external (URL + keys).
-# "External" covers the vendored self-hosted stack (deploy/langfuse/),
-# Langfuse Cloud, and any other self-hosted instance — all configured
+# "External" covers the self-hosted stack (docker/langfuse/ in the homelab
+# repo), Langfuse Cloud, and any other self-hosted instance — all configured
 # identically via base_url + keys.
 #
 # Keys are resolved from env vars via ${VAR_NAME} references. Create the
 # keys in the Langfuse UI (Project Settings → API Keys).
 langfuse:
-  enabled: true
+  enabled: ${LANGFUSE_ENABLED:-false}
   # URL of the Langfuse server. Set LANGFUSE_BASE_URL in .env to override
   # per environment (e.g. http://langfuse-web:3000 for Docker, 
   # https://langfuse.perkinslab.com for Caddy proxy).

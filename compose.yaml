@@ -13,6 +13,10 @@ services:
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - SEEKER_TELEMETRY_HMAC_KEY=${SEEKER_TELEMETRY_HMAC_KEY:-}
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-http://langfuse-web:3000}
+      - LANGFUSE_CAPTURE_CONTENT=${LANGFUSE_CAPTURE_CONTENT:-false}
+      - LANGFUSE_FLUSH_INTERVAL=${LANGFUSE_FLUSH_INTERVAL:-1.0}
       # API keys are NOT passed through here. When the host var is unset,
       # ${VAR:-} evaluates to empty string, and load_dotenv(override=False)
       # treats that as "already set" — blocking the real key in data/.env.
