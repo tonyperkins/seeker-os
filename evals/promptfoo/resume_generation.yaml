@@ -19,7 +19,7 @@ description: "Resume Generation — traceability faithfulness via LLM-as-judge"
 
 prompts:
   # Step 1: Generate the tailored resume using the production prompt files
-  - file://evals/promptfoo/helpers/build_resume_generation_prompt.py:buildPrompts
+  - file://helpers/build_resume_generation_prompt.py:buildPrompts
 
 providers:
   - id: anthropic:messages:claude-sonnet-4-6-20250514
@@ -34,7 +34,7 @@ providers:
 # traceability judge system prompt. This is configured as a "model-graded"
 # assertion in the test cases.
 tests:
-  - file://evals/promptfoo/helpers/golden_dataset_tests.py:resumeGenerationTests
+  - file://helpers/golden_dataset_tests.py:resumeGenerationTests
 
 evaluateOptions:
   maxConcurrent: 2

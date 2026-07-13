@@ -1,5 +1,9 @@
 name: Promptfoo Evals
 
+permissions:
+  contents: read
+  pull-requests: write
+
 on:
   pull_request:
     paths:
@@ -44,7 +48,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install promptfoo
         run: npm install -g promptfoo
