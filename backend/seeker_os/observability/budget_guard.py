@@ -82,18 +82,26 @@ def check_budget(adapter_type: str, daily_cap: int, monthly_cap: int) -> bool:
 
 
 def record_call(adapter_type: str, query: str, status: str, error: str | None = None) -> None:
-    """Record a retrieval call in the tracking table."""
+    """Record a retrieval call in the tracking table.
+
+    Never raises — a telemetry failure must not affect the retrieval pipeline.
+    """
     try:
         db = get_connection()
+    except Exception:
+        logger.debug("record_call_failed", exc_info=True)
+        return
+    try:
         db.execute(
             "INSERT INTO retrieval_calls (adapter_type, query, status, error_message, called_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (adapter_type, query, status, error, datetime.now(UTC).isoformat()),
         )
         db.commit()
-        db.close()
     except Exception:
         logger.debug("record_call_failed", exc_info=True)
+    finally:
+        db.close()
 
 
 def get_usage(adapter_type: str = "tavily") -> dict:
