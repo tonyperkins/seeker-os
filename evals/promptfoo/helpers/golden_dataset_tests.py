@@ -246,7 +246,9 @@ def _faithfulness_judge_assert() -> dict:
             "If ANY claim in the generated resume is 'unsupported' or 'overstated' "
             "per the judge's verdict (comparing against the master resume above), "
             "the test FAILS. Only 'supported' claims pass. "
-            "Respond with PASS or FAIL and a brief reason."
+            "IMPORTANT: Output ONLY the JSON verdict object with no thinking, "
+            "no reasoning, and no text before or after the JSON. "
+            "Format: {\"reason\": \"...\", \"pass\": true/false, \"score\": 1.0/0.0}"
         ),
         "provider": {
             "id": judge_provider_id,
