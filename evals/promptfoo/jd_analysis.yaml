@@ -24,11 +24,11 @@ prompts:
   - file://helpers/build_jd_analysis_prompt.py:buildPrompts
 
 providers:
-  - id: anthropic:messages:{{ env.EVAL_MODEL | default('claude-haiku-4-5') }}
+  - id: "anthropic:messages:{{ env.EVAL_MODEL | default('claude-haiku-4-5') }}"
     label: "Claude (jd_analysis eval)"
     config:
       apiBaseUrl: https://api.anthropic.com
-      apiKey: {{ env.ANTHROPIC_API_KEY }}
+      apiKey: "{{ env.ANTHROPIC_API_KEY }}"
       temperature: 0.3
       max_tokens: 4096
 

@@ -23,11 +23,11 @@ prompts:
   - file://helpers/build_resume_generation_prompt.py:buildPrompts
 
 providers:
-  - id: anthropic:messages:{{ env.EVAL_MODEL | default('claude-haiku-4-5') }}
+  - id: "anthropic:messages:{{ env.EVAL_MODEL | default('claude-haiku-4-5') }}"
     label: "Claude (resume_generation eval)"
     config:
       apiBaseUrl: https://api.anthropic.com
-      apiKey: {{ env.ANTHROPIC_API_KEY }}
+      apiKey: "{{ env.ANTHROPIC_API_KEY }}"
       temperature: 0.7
       max_tokens: 16000
 
