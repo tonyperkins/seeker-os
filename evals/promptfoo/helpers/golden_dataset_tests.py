@@ -45,21 +45,20 @@ def _verdict_assert(expected_verdict: str) -> dict:
         "value": f"""
 import json
 
-def get_assert(output, context):
-    text = output.strip()
-    if text.startswith("```"):
-        text = text.split("\\n", 1)[1] if "\\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as e:
-        return {{"pass": False, "score": 0, "reason": f"Invalid JSON: {{e}}"}}
-    verdict = data.get("verdict", "")
-    if verdict == "{expected_verdict}":
-        return {{"pass": True, "score": 1, "reason": f"Verdict match: {{verdict}}"}}
-    return {{"pass": False, "score": 0, "reason": f"Expected {expected_verdict}, got {{verdict}}"}}
+text = output.strip()
+if text.startswith("```"):
+    text = text.split("\\n", 1)[1] if "\\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+try:
+    data = json.loads(text)
+except json.JSONDecodeError as e:
+    return {{"pass": False, "score": 0, "reason": f"Invalid JSON: {{e}}"}}
+verdict = data.get("verdict", "")
+if verdict == "{expected_verdict}":
+    return {{"pass": True, "score": 1, "reason": f"Verdict match: {{verdict}}"}}
+return {{"pass": False, "score": 0, "reason": f"Expected {expected_verdict}, got {{verdict}}"}}
 """,
     }
 
@@ -73,21 +72,20 @@ import json
 
 _REQUIRED_FIELDS = {"verdict", "weighted_score", "named_gaps", "confidence"}
 
-def get_assert(output, context):
-    text = output.strip()
-    if text.startswith("```"):
-        text = text.split("\\n", 1)[1] if "\\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as e:
-        return {"pass": False, "score": 0, "reason": f"Invalid JSON: {e}"}
-    missing = _REQUIRED_FIELDS - set(data.keys())
-    if missing:
-        return {"pass": False, "score": 0, "reason": f"Missing required fields: {missing}"}
-    return {"pass": True, "score": 1, "reason": "Valid JSON with all required fields"}
+text = output.strip()
+if text.startswith("```"):
+    text = text.split("\\n", 1)[1] if "\\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+try:
+    data = json.loads(text)
+except json.JSONDecodeError as e:
+    return {"pass": False, "score": 0, "reason": f"Invalid JSON: {e}"}
+missing = _REQUIRED_FIELDS - set(data.keys())
+if missing:
+    return {"pass": False, "score": 0, "reason": f"Missing required fields: {missing}"}
+return {"pass": True, "score": 1, "reason": "Valid JSON with all required fields"}
 """,
     }
 
