@@ -17,11 +17,12 @@ services:
       - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-http://langfuse-web:3000}
       - LANGFUSE_CAPTURE_CONTENT=${LANGFUSE_CAPTURE_CONTENT:-false}
       - LANGFUSE_FLUSH_INTERVAL=${LANGFUSE_FLUSH_INTERVAL:-1.0}
-      # API keys are NOT passed through here. When the host var is unset,
-      # ${VAR:-} evaluates to empty string, and load_dotenv(override=False)
-      # treats that as "already set" — blocking the real key in data/.env.
-      # Instead, keys live in data/.env (mounted volume, persists across
-      # rebuilds) and are loaded by load_dotenv at startup.
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      # API keys (KILO_API_KEY, ANTHROPIC_DIRECT_API_KEY, etc.) are NOT
+      # passed through here — they live in data/.env (mounted volume),
+      # loaded by load_dotenv at startup. If you manage all env vars via
+      # an external orchestrator (e.g. Dockhand), add those keys here too.
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
