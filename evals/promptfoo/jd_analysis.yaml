@@ -23,7 +23,7 @@ prompts:
   - file://helpers/build_jd_analysis_prompt.py:buildPrompts
 
 providers:
-  - id: anthropic:messages:claude-sonnet-4-6-20250514
+  - id: anthropic:messages:claude-sonnet-4-6
     label: "Claude Sonnet (production tier for jd_analysis)"
     config:
       apiBaseUrl: https://api.anthropic.com

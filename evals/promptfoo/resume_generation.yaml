@@ -22,7 +22,7 @@ prompts:
   - file://helpers/build_resume_generation_prompt.py:buildPrompts
 
 providers:
-  - id: anthropic:messages:claude-sonnet-4-6-20250514
+  - id: anthropic:messages:claude-sonnet-4-6
     label: "Claude Sonnet (production tier for resume_generation)"
     config:
       apiBaseUrl: https://api.anthropic.com
