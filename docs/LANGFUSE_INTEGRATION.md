@@ -4,6 +4,93 @@ Seeker OS optionally integrates with [Langfuse](https://langfuse.com) for
 LLM tracing — a visual trace UI and prompt management layer on top of the
 built-in SQLite LLM ledger.
 
+## Local Stack Runbook — Bring Up Everything
+
+This section covers bringing up the complete stack (Seeker OS + Langfuse)
+for local testing. If you've already done the first-time setup, jump to
+[Day-to-day](#day-to-day).
+
+### First-time setup
+
+**1. Langfuse stack secrets** (its own `.env`, separate from the app's):
+
+```bash
+cd deploy/langfuse
+cp .env.example .env
+# Replace every placeholder:
+#   openssl rand -base64 32   (for secrets)
+#   openssl rand -base64 24   (for passwords)
+cd ../..
+```
+
+**2. App-side observability config:**
+
+```bash
+cp config/observability.example.yml config/observability.yml
+# Leave enabled: false for now — you flip it after you have keys
+```
+
+**3. Bring up the stacks** — order matters:
+
+```bash
+docker compose up -d                                    # main stack first — creates the seekeros network
+docker compose -f deploy/langfuse/compose.yaml up -d    # then Langfuse (6 containers; ClickHouse takes ~30s)
+```
+
+The main stack must come first because the Langfuse compose declares
+`seekeros` as an external network. If you ever want Langfuse up without
+the app, `docker network create seekeros` substitutes.
+
+**4. Get keys and enable:**
+
+1. Open `http://localhost:3001`, create the admin account, an org, and a project
+2. **Project Settings → API Keys** → copy both keys into the main app's `.env`:
+   ```
+   LANGFUSE_PUBLIC_KEY=pk-lf-...
+   LANGFUSE_SECRET_KEY=sk-lf-...
+   ```
+3. In `config/observability.yml`: set `enabled: true` (leave `base_url` at its
+   default `http://langfuse-web:3000` — that's container DNS on the shared
+   network, correct for this setup)
+4. Restart the backend or hit **Reload Config** in Settings — the Langfuse
+   status chip on the Settings page should flip to **initialized**
+
+**5. Verify:**
+
+Run one JD analysis and check `http://localhost:3001` for the trace.
+
+### Day-to-day
+
+After first-time setup, it's just the two `up -d` commands; keys and config
+persist:
+
+```bash
+docker compose up -d
+docker compose -f deploy/langfuse/compose.yaml up -d
+```
+
+Stop Langfuse independently (volumes keep its data):
+
+```bash
+docker compose -f deploy/langfuse/compose.yaml down
+```
+
+The app degrades gracefully while Langfuse is down — the sink logs a warning
+and the SQLite ledger carries on.
+
+### Notes
+
+- **Capture content:** Traces are metadata-only by default. For full
+  prompts/responses in the trace UI while testing locally, set
+  `capture_content: true` in `observability.yml` and reload. Remember it's
+  sending your resume/JD content to the Langfuse containers on your machine.
+- **Headless init:** The vendored compose passes through Langfuse's
+  `LANGFUSE_INIT_*` env vars — set org/project/user/keys in
+  `deploy/langfuse/.env` and the stack provisions itself headlessly on first
+  boot. Worth wiring up for public deployment; overkill for local testing.
+
+---
+
 ## How it relates to the SQLite ledger
 
 The SQLite LLM ledger (`seeker_os/observability/llm_ledger.py`, landed in #108)
