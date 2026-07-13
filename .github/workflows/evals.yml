@@ -59,7 +59,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install pyyaml pydantic
+          pip install pyyaml pydantic python-dotenv
 
       - name: Seed config from example templates
         run: |
