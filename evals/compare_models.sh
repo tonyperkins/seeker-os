@@ -161,8 +161,9 @@ for model in "${MODELS[@]}"; do
       # Create a temp config with Kilo provider
       temp_config="$REPO_ROOT/evals/promptfoo/_tmp_${config_name}_${safe_model}.yaml"
       sed "s|anthropic:messages:|${PROVIDER_PREFIX}:|g; s|https://api.anthropic.com|${API_BASE_URL}|g; s|ANTHROPIC_API_KEY|OPENAI_API_KEY|g" "$config_file" > "$temp_config"
-      # Also route the llm-rubric judge through Kilo
-      export JUDGE_PROVIDER_ID="${PROVIDER_PREFIX}:${model}"
+      # Route the llm-rubric judge through Kilo using a non-reasoning model
+      # (reasoning models spend all tokens thinking, leaving no visible output)
+      export JUDGE_PROVIDER_ID="${PROVIDER_PREFIX}:${JUDGE_MODEL:-kilo-auto/efficient}"
       export JUDGE_API_BASE_URL="$API_BASE_URL"
       export JUDGE_API_KEY="{{ env.OPENAI_API_KEY }}"
       run_config="$temp_config"
