@@ -55,7 +55,7 @@ SEEKER_OS_CONFIG_DIR="${SEEKER_OS_CONFIG_DIR:-config}"
 
 # Default model lists per provider
 if [ "$PROVIDER" = "kilo" ]; then
-  DEFAULT_MODELS="qwen-coder-32b,glm-4-flash,deepseek-chat"
+  DEFAULT_MODELS="qwen/qwen3.7-plus,z-ai/glm-5.2,deepseek/deepseek-v4-flash"
   API_KEY_VAR="KILO_API_KEY"
   API_BASE_URL="https://api.kilo.ai/api/gateway"
   PROVIDER_PREFIX="openai:chat"
@@ -209,6 +209,8 @@ done
 
 echo "]" >> "$SUMMARY_FILE"
 export SUMMARY_FILE
+export PROVIDER
+export KILO_API_KEY="${KILO_API_KEY:-}"
 
 # --- Print summary table ---
 echo ""
@@ -218,11 +220,42 @@ echo "════════════════════════�
 echo ""
 
 python3 - <<'PYEOF'
-import json, os, sys
+import json, os, sys, urllib.request
 
 summary_file = os.environ.get("SUMMARY_FILE")
+provider = os.environ.get("PROVIDER", "anthropic")
+kilo_api_key = os.environ.get("KILO_API_KEY", "")
+
 with open(summary_file) as f:
     entries = json.load(f)
+
+# Fetch pricing from Kilo API if using Kilo
+kilo_pricing = {}
+if provider == "kilo" and kilo_api_key:
+    try:
+        req = urllib.request.Request(
+            "https://api.kilo.ai/api/gateway/models",
+            headers={"Authorization": f"Bearer {kilo_api_key}"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.load(resp)
+        for m in data.get("data", []):
+            mid = m.get("id", "")
+            p = m.get("pricing", {})
+            kilo_pricing[mid] = {
+                "in": float(p.get("prompt", 0)) * 1_000_000,
+                "out": float(p.get("completion", 0)) * 1_000_000,
+            }
+    except Exception as e:
+        print(f"  WARNING: Could not fetch Kilo pricing: {e}", file=sys.stderr)
+
+# Anthropic direct pricing (per MTok)
+anthropic_pricing = {
+    "claude-haiku-4-5": {"in": 1.00, "out": 5.00},
+    "claude-sonnet-4-6": {"in": 3.00, "out": 15.00},
+    "claude-sonnet-5": {"in": 2.00, "out": 10.00},
+    "claude-opus-4-8": {"in": 5.00, "out": 25.00},
+}
 
 # Collect results from each entry's result file
 results = []
@@ -230,14 +263,14 @@ for entry in entries:
     rf = entry["result_file"]
     model = entry["model"]
     config = entry["config"]
-    provider = entry["provider"]
     duration = entry["duration_seconds"]
 
     if not os.path.exists(rf):
         results.append({
-            "model": model, "config": config, "provider": provider,
-            "passed": 0, "total": 0, "rate": 0, "tokens": 0, "duration": duration,
-            "status": "NO RESULTS",
+            "model": model, "config": config,
+            "passed": 0, "total": 0, "rate": 0,
+            "tokens": 0, "in_tokens": 0, "out_tokens": 0,
+            "cost": 0, "duration": duration, "status": "NO RESULTS",
         })
         continue
 
@@ -249,12 +282,26 @@ for entry in entries:
     rate = (passed / total * 100) if total > 0 else 0
     usage = data.get("results", {}).get("usage", {})
     tokens = usage.get("total", 0)
+    in_tokens = usage.get("prompt", 0) or usage.get("input", 0)
+    out_tokens = usage.get("completion", 0) or usage.get("output", 0)
     status = "PASS" if rate >= 85 else "FAIL"
 
+    # Compute cost
+    pricing = None
+    if provider == "kilo":
+        pricing = kilo_pricing.get(model)
+    else:
+        pricing = anthropic_pricing.get(model)
+
+    cost = 0.0
+    if pricing:
+        cost = (in_tokens / 1_000_000 * pricing["in"]) + (out_tokens / 1_000_000 * pricing["out"])
+
     results.append({
-        "model": model, "config": config, "provider": provider,
+        "model": model, "config": config,
         "passed": passed, "total": total, "rate": rate,
-        "tokens": tokens, "duration": duration, "status": status,
+        "tokens": tokens, "in_tokens": in_tokens, "out_tokens": out_tokens,
+        "cost": cost, "duration": duration, "status": status,
     })
 
 # Group by config, print table
@@ -265,25 +312,29 @@ for r in results:
 
 for config, rows in sorted(by_config.items()):
     print(f"\n  ── {config} ──")
-    print(f"  {'Model':<30} {'Pass Rate':>12} {'Tokens':>10} {'Time':>8} {'Status':>8}")
-    print(f"  {'─'*30} {'─'*12} {'─'*10} {'─'*8} {'─'*8}")
+    print(f"  {'Model':<35} {'Pass Rate':>12} {'Tokens':>10} {'Cost':>8} {'Time':>7} {'Status':>7}")
+    print(f"  {'─'*35} {'─'*12} {'─'*10} {'─'*8} {'─'*7} {'─'*7}")
     for r in sorted(rows, key=lambda x: -x["rate"]):
         rate_str = f"{r['passed']}/{r['total']} ({r['rate']:.1f}%)"
         tok_str = f"{r['tokens']:,}" if r["tokens"] else "—"
+        cost_str = f"${r['cost']:.4f}" if r["cost"] > 0 else "—"
         time_str = f"{r['duration']}s"
-        print(f"  {r['model']:<30} {rate_str:>12} {tok_str:>10} {time_str:>8} {r['status']:>8}")
+        print(f"  {r['model']:<35} {rate_str:>12} {tok_str:>10} {cost_str:>8} {time_str:>7} {r['status']:>7}")
 
 # Overall best model
-print(f"\n  {'═'*72}")
+print(f"\n  {'═'*82}")
 all_rates = defaultdict(list)
+all_costs = defaultdict(float)
 for r in results:
     all_rates[r["model"]].append(r["rate"])
+    all_costs[r["model"]] += r["cost"]
 print(f"  Overall (avg across configs):")
-print(f"  {'Model':<30} {'Avg Pass Rate':>15}")
-print(f"  {'─'*30} {'─'*15}")
+print(f"  {'Model':<35} {'Avg Pass Rate':>15} {'Total Cost':>12}")
+print(f"  {'─'*35} {'─'*15} {'─'*12}")
 for model, rates in sorted(all_rates.items(), key=lambda x: -sum(x[1])/len(x[1])):
     avg = sum(rates) / len(rates)
-    print(f"  {model:<30} {avg:>14.1f}%")
+    cost_str = f"${all_costs[model]:.4f}" if all_costs[model] > 0 else "—"
+    print(f"  {model:<35} {avg:>14.1f}% {cost_str:>12}")
 
 print(f"\n  Full results: {summary_file}")
 PYEOF
