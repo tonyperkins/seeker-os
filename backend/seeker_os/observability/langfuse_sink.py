@@ -182,6 +182,17 @@ class LangfuseSink:
             self._client.shutdown()
         except Exception:
             logger.debug("langfuse_shutdown_failed", exc_info=True)
+        # Shut down the OTel tracer provider that the Langfuse SDK created.
+        # Without this, the background exporter thread persists as a global
+        # singleton and keeps retrying against the old URL after a config
+        # reload changes base_url.
+        try:
+            from opentelemetry.trace import get_tracer_provider
+            provider = get_tracer_provider()
+            if hasattr(provider, "shutdown"):
+                provider.shutdown()
+        except Exception:
+            logger.debug("otel_provider_shutdown_failed", exc_info=True)
         # The SDK caches its resource manager (background workers, queues)
         # per public_key and shutdown() does NOT deregister it — a later
         # client with the same key would get back the dead instance, whose
