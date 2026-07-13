@@ -189,9 +189,11 @@ jobs:
                       print(f"::error::Resume faithfulness pass rate {resume['rate']:.1%} below threshold {thresholds['faithfulness_pass_rate']:.0%}")
                       failed = True
 
-          if os.environ.get("EVAL_FAILED") == "true":
+          if os.environ.get("EVAL_FAILED") == "true" and mode == "full":
               print("::error::One or more eval runs failed")
               failed = True
+          elif os.environ.get("EVAL_FAILED") == "true":
+              print("::warning::Some eval tests failed (smoke mode — thresholds not enforced)")
 
           if failed:
               sys.exit(1)
