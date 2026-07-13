@@ -29,6 +29,26 @@ _JUDGE_USER_TEMPLATE = (
 ).read_text(encoding="utf-8")
 
 
+def _load_master_resume_for_judge() -> str:
+    """Load master resume text for inclusion in the judge rubric.
+
+    The llm-rubric judge only sees the model output, not the original prompt.
+    We need to include the master resume in the rubric so the judge can
+    verify traceability.
+    """
+    sys.path.insert(0, str(_repo_root / "backend"))
+    from seeker_os.config import get_settings
+    config_dir = os.environ.get("SEEKER_OS_CONFIG_DIR", str(_repo_root / "config"))
+    os.environ.setdefault("SEEKER_OS_CONFIG_DIR", config_dir)
+    settings = get_settings()
+    if not settings.profile or not settings.profile.resume:
+        return "(no master resume configured)"
+    master_path = Path(settings.profile.resume.master_path).expanduser()
+    if not master_path.exists():
+        return f"(master resume not found at {master_path})"
+    return master_path.read_text()
+
+
 def _load_golden_dataset() -> list[dict]:
     """Load active cases from the golden dataset.
 
@@ -219,9 +239,13 @@ def _faithfulness_judge_assert() -> dict:
             "Judge the generated resume for traceability. Use the following "
             "system prompt as the rubric:\n\n"
             + _JUDGE_SYSTEM_PROMPT
-            + "\n\nThe master resume to check against is provided in the user prompt. "
+            + "\n\n=== MASTER RESUME (source of truth) ===\n"
+            + _load_master_resume_for_judge()
+            + "\n\n=== END MASTER RESUME ===\n\n"
+            "The generated resume is the model output below. "
             "If ANY claim in the generated resume is 'unsupported' or 'overstated' "
-            "per the judge's verdict, the test FAILS. Only 'supported' claims pass. "
+            "per the judge's verdict (comparing against the master resume above), "
+            "the test FAILS. Only 'supported' claims pass. "
             "Respond with PASS or FAIL and a brief reason."
         ),
         "provider": {
@@ -230,7 +254,7 @@ def _faithfulness_judge_assert() -> dict:
                 "apiBaseUrl": judge_api_base,
                 "apiKey": judge_api_key,
                 "temperature": 0.0,
-                "max_tokens": 4096,
+                "max_tokens": 16000,
             },
         },
     }
