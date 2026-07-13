@@ -49,9 +49,12 @@ the app, `docker network create seekeros` substitutes.
    LANGFUSE_PUBLIC_KEY=pk-lf-...
    LANGFUSE_SECRET_KEY=sk-lf-...
    ```
-3. In `config/observability.yml`: set `enabled: true` (leave `base_url` at its
-   default `http://langfuse-web:3000` — that's container DNS on the shared
-   network, correct for this setup)
+3. In `config/observability.yml`: set `enabled: true`
+   - If running via `dev.sh` (app on host, not Docker): set
+     `base_url: "http://localhost:3001"` (the Langfuse host port mapping)
+   - If running via `docker compose up -d` (app in Docker): leave
+     `base_url: "http://langfuse-web:3000"` (container DNS on the shared
+     network)
 4. Restart the backend or hit **Reload Config** in Settings — the Langfuse
    status chip on the Settings page should flip to **initialized**
 

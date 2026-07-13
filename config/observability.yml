@@ -1,0 +1,57 @@
+# Observability Configuration
+#
+# Umbrella config for LLM observability: Langfuse tracing, paid-call budget
+# caps, and SLO targets. All fields are optional — defaults apply when the
+# file or individual sections are absent.
+#
+# Langfuse is purely additive to the SQLite LLM ledger (#108). The ledger
+# remains the canonical record for cost/token/latency data. Langfuse provides
+# a visual trace UI and prompt management.
+
+# ── Langfuse LLM Tracing ──
+# Two modes: disabled (default, zero overhead) and external (URL + keys).
+# "External" covers the vendored self-hosted stack (deploy/langfuse/),
+# Langfuse Cloud, and any other self-hosted instance — all configured
+# identically via base_url + keys.
+#
+# Keys are resolved from env vars via ${VAR_NAME} references. Create the
+# keys in the Langfuse UI (Project Settings → API Keys).
+langfuse:
+  enabled: true
+  # URL of the Langfuse server. Default is the vendored stack's container
+  # name (reachable via Docker network DNS). For Langfuse Cloud, use
+  # https://cloud.langfuse.com. For a remote self-hosted instance, use
+  # its URL.
+  base_url: "http://localhost:3001"
+  # API keys — set via env vars, never literal values in this file.
+  public_key: ${LANGFUSE_PUBLIC_KEY}
+  secret_key: ${LANGFUSE_SECRET_KEY}
+  # When false (default), traces carry metadata only: operation_id, task,
+  # provider, model, tokens, latency, cost, route reason. No prompt text,
+  # response text, job titles, company names, or resume content.
+  # Set to true for local debugging to capture full prompt/response content.
+  # WARNING: enabling this sends PII to the Langfuse server.
+  capture_content: false
+  # How often the SDK flushes traces to the server (seconds).
+  flush_interval_seconds: 1.0
+
+# ── Paid Retrieval Budget Caps ──
+# Daily/monthly limits for Tavily calls. When a cap is exceeded, the
+# retrieval adapter returns empty results and logs a WARNING.
+# Set to 0 for unlimited (no cap). Counts are SQLite-backed.
+budget_caps:
+  tavily_daily_cap: 0       # max Tavily calls per calendar day (0 = unlimited)
+  tavily_monthly_cap: 0     # max Tavily calls per calendar month (0 = unlimited)
+
+# ── SLO Targets ──
+# Used by /api/analytics/slo-status to compare actuals vs targets.
+# All values are configurable — never hardcoded in application code.
+#
+# Pipeline availability: fraction of distinct operation_ids over the SLO
+# window whose LLM calls all completed without error (computed from ledger
+# error rows). Window is in hours.
+slo:
+  analysis_latency_p95_ms: 30000       # target p95 for jd_analysis calls
+  pipeline_availability_target: 0.99   # 99% of operations error-free
+  daily_spend_budget_usd: 5.0          # max USD spend per day on LLM calls
+  slo_window_hours: 24                 # rolling window for SLO computation
