@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "google/gemini-3.5-flash",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_google_gemini-3.5-flash.json",
+  "duration_seconds": 121,
+  "exit_code": 100
+}
+]

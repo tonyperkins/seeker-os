@@ -275,6 +275,12 @@ Tested via `PROVIDER=anthropic` against Anthropic's direct API. Full dataset (34
 |-------|----------|---------|-------------|----------|------|
 | claude-haiku-4.5 | Anthropic | 13/34 (38.2%) | 13/14 (92.9%) | 26/48 (54.2%) | ~$0.26 |
 | deepseek-v4-flash | Kilo | 21/34 (61.8%) | 6/14 (42.9%) | 27/48 (56.2%) | $0.21 |
+| ~google/gemini-pro-latest | Kilo | 22/34 (64.7%) | 7/14 (50.0%) | 29/48 (60.4%) | $3.55 |
+| google/gemini-3.5-flash | Kilo | 21/34 (61.8%) | 8/14 (57.1%) | 29/48 (60.4%) | $1.50 |
+| google/gemini-2.5-flash | Kilo | 17/34 (50.0%) | 7/14 (50.0%) | 24/48 (50.0%) | $0.85 |
+| mistralai/mistral-medium-3.1 | Kilo | 23/34 (67.6%) | 6/14 (42.9%) | 29/48 (60.4%) | $0.44 |
+| moonshotai/kimi-k2 | Kilo | 25/34 (73.5%) | 8/14 (57.1%) | 33/48 (68.8%) | $0.59 |
+| meta-llama/llama-4-maverick | Kilo | 16/34 (47.1%) | 7/14 (50.0%) | 23/48 (47.9%) | $0.13 |
 | GLM-5.2 | Kilo | 21/34 (61.8%) | 10/14 (71.4%) | 31/48 (64.6%) | $2.67 |
 | gpt-5.6-sol | OpenAI | 22/34 (64.7%) | 12/14 (85.7%) | 34/48 (70.8%) | $5.91 |
 | gpt-5.6-luna | OpenAI | 23/34 (67.6%) | 14/14 (100%) | 37/48 (77.1%) | $1.31 |
@@ -289,7 +295,194 @@ Tested via `PROVIDER=anthropic` against Anthropic's direct API. Full dataset (34
 | Model | Provider | Status |
 |-------|----------|--------|
 | grok-4.3 / grok-4.5 | xAI | Not run (~$11-25 per run) |
-| google/gemini-3-pro | Google | Not run |
+
+---
+
+## Non-Frontier Model Results — Mistral (Kilo Gateway)
+
+Tested via `PROVIDER=kilo` with `mistralai/mistral-medium-3.1`. Full dataset (34 JD + 14 resume).
+
+| Model | JD Analysis | Resume Gen | Combined | Tokens (JD) | Tokens (Resume) |
+|-------|-------------|------------|----------|-------------|-----------------|
+| mistralai/mistral-medium-3.1 | 23/34 (67.6%) | 6/14 (42.9%) | 29/48 (60.4%) | 491,625 | 150,355 |
+
+### JD Analysis — Mistral Failure Breakdown
+
+**mistralai/mistral-medium-3.1 (11 failures, 0 errors):**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| APPLY → CONDITIONAL | 3x | Medium (under-applied) |
+| SKIP → parse_fail | 3x | Parse error (markdown fences) |
+| CONDITIONAL → APPLY | 2x | **High** (false positive) |
+| SKIP → CONDITIONAL | 2x | Low (over-review) |
+| CONDITIONAL → SKIP | 1x | Medium |
+
+> 2 high-risk false positives — better than Gemini (4-11) but worse than terra (0). 3 JSON parse failures from markdown-wrapped output.
+
+### Resume Generation — Mistral Failure Breakdown
+
+**mistralai/mistral-medium-3.1: 8 failures (42.9%):**
+Same fabrication pattern as deepseek-flash. Not suitable for resume generation.
+
+### Key Mistral Findings
+
+1. **Best budget JD analysis score** — 67.6% beats deepseek/GLM (61.8%) at only $0.34
+2. **Resume generation is poor** — 42.9%, same as deepseek-flash, fabricates claims
+3. **3 JSON parse failures** — Mistral wraps output in markdown fences, causing parse issues in production
+4. **Potential JD analysis candidate for hybrid config** — 67.6% at $0.34 is the best price/accuracy ratio for JD analysis
+
+### Kimi K2 Results
+
+| Model | JD Analysis | Resume Gen | Combined | Cost |
+|-------|-------------|------------|----------|------|
+| moonshotai/kimi-k2 | 25/34 (73.5%) | 8/14 (57.1%) | 33/48 (68.8%) | $0.59 |
+
+**JD Analysis — 9 failures, 0 errors:**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| SKIP → CONDITIONAL | 4x | Low (over-review) |
+| APPLY → CONDITIONAL | 1x | Medium (under-applied) |
+| CONDITIONAL → SKIP | 1x | Medium |
+| CONDITIONAL → MONITOR | 1x | Low |
+| CONDITIONAL → parse_fail | 1x | Parse error |
+| CONDITIONAL → APPLY | 1x | **High** (false positive) |
+
+> **Safest budget model failure pattern** — only 1 high-risk false positive. Dominant failure is SKIP→CONDITIONAL (safe over-review). 73.5% is the best budget JD score, approaching frontier territory (Sonnet-5: 70.6%, Luna: 67.6%).
+
+**Resume Generation — 6 failures (57.1%):**
+Fabricates claims but less than deepseek/Mistral (42.9%). Ties Tencent Hy3:free.
+
+### Key Kimi K2 Findings
+
+1. **Best budget model overall** — 68.8% combined at $0.59, beating GLM-5.2 (64.6% at $2.67) on both accuracy and cost
+2. **73.5% JD analysis** — highest non-frontier score, surpassing Sonnet-5 (70.6%) and Luna (67.6%)
+3. **Safest budget failure pattern** — only 1 high-risk false positive; dominant failure is safe over-review
+4. **Resume gen is mediocre** — 57.1%, not suitable for resume generation but better than deepseek/Mistral
+5. **Strong JD analysis candidate for hybrid config** — 73.5% at $0.41 is exceptional value
+6. **Slow** — 18m total, slowest model tested, but acceptable for batch processing
+
+### Llama 4 Maverick Results
+
+| Model | JD Analysis | Resume Gen | Combined | Cost |
+|-------|-------------|------------|----------|------|
+| meta-llama/llama-4-maverick | 16/34 (47.1%) | 7/14 (50.0%) | 23/48 (47.9%) | $0.13 |
+
+**JD Analysis — 18 failures, 0 errors (worst JD score):**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| SKIP → CONDITIONAL | 14x | Low (over-review) |
+| APPLY → CONDITIONAL | 4x | Medium (under-applied) |
+
+> **Zero false positives** — every failure is over-reviewing. Llama 4 is extremely conservative: it never says APPLY when it shouldn't, but it also rarely says APPLY when it should. 14 SKIP→CONDITIONAL means it would flag too many jobs for manual review. Not useful as a filter.
+
+**Resume Generation — 7 failures (50.0%):**
+Same fabrication pattern. $0.03 per run is cheapest but quality matches the price.
+
+### Key Llama 4 Findings
+
+1. **Worst combined score** — 47.9%, below Gemini 2.5 Flash (50.0%)
+2. **Cheapest model** — $0.13 total, but you get what you pay for
+3. **Zero false positives** — only model with no high-risk failures, but over-reviews everything
+4. **Not useful as a filter** — 14 SKIP→CONDITIONAL means too many jobs flagged for manual review
+5. **Not recommended for any task**
+
+---
+
+## Frontier Model Results — Google (Kilo Gateway)
+
+Tested via `PROVIDER=kilo` with `~google/gemini-pro-latest`. Full dataset (34 JD + 14 resume).
+
+| Model | JD Analysis | Resume Gen | Combined | Tokens (JD) | Tokens (Resume) |
+|-------|-------------|------------|----------|-------------|-----------------|
+| ~google/gemini-pro-latest | 22/34 (64.7%) | 7/14 (50.0%) | 29/48 (60.4%) | 530,058 | 198,988 |
+
+### JD Analysis — Gemini Pro Failure Breakdown
+
+**~google/gemini-pro-latest (12 failures, 0 errors):**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| CONDITIONAL → SKIP | 3x | Medium (missed opportunity) |
+| CONDITIONAL → APPLY | 2x | **High** (false positive) |
+| SKIP → CONDITIONAL | 2x | Low (over-review) |
+| SKIP → APPLY | 2x | **High** (false positive) |
+| APPLY → SKIP | 1x | Medium (missed good job) |
+| APPLY → CONDITIONAL | 1x | Medium (under-applied) |
+| CONDITIONAL → MONITOR | 1x | Low |
+
+> Gemini Pro is scattered — 4 high-risk false positives (recommending APPLY for SKIP/CONDITIONAL jobs). Fails in all directions, not a safe failure pattern like terra or deepseek.
+
+### Resume Generation — Gemini Pro Failure Breakdown
+
+**~google/gemini-pro-latest: 7 failures (50.0%):**
+Failed on 7 of 14 cases with unsupported/overstated claims — same fabrication pattern as budget models.
+
+### Key Google Findings
+
+1. **Gemini Pro is not competitive** — 60.4% combined is below GLM-5.2 (64.6%) and far below terra (87.5%)
+2. **4 dangerous false positives on JD analysis** — worst high-risk failure count of any model tested
+3. **50% resume generation** — fabricates claims on half the cases, worse than GLM-5.2 (71.4%)
+4. **Priced like a frontier model but performs like a budget model** — $3.55 for results comparable to deepseek ($0.21)
+5. **Zero JSON parse errors** — at least the output format was reliable
+
+### Gemini 3.5 Flash Results
+
+| Model | JD Analysis | Resume Gen | Combined | Cost |
+|-------|-------------|------------|----------|------|
+| google/gemini-3.5-flash | 21/34 (61.8%) | 8/14 (57.1%) | 29/48 (60.4%) | $1.50 |
+
+**JD Analysis — 13 failures, 0 errors:**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| CONDITIONAL → APPLY | 8x | **High** (false positive) |
+| SKIP → APPLY | 3x | **High** (false positive) |
+| CONDITIONAL → SKIP | 1x | Medium |
+| SKIP → CONDITIONAL | 1x | Low |
+
+> **11 of 13 failures are false positives** — the most aggressive over-promoter of any model tested. Worse than Haiku (11/21 false positives). Not suitable for JD analysis.
+
+**Resume Generation — 6 failures (57.1%):**
+Same fabrication pattern as other budget models. Ties Tencent Hy3:free at 57.1%.
+
+### Key Gemini Findings (Both Models)
+
+1. **Both Gemini models score 60.4% combined** — identical despite different pricing tiers
+2. **Gemini 3.5 Flash is the most dangerous JD model** — 11 high-risk false positives, recommending APPLY for SKIP/CONDITIONAL jobs
+3. **Neither Gemini model is competitive** — same combined score as each other, below GLM-5.2 (64.6%), far below terra (87.5%)
+4. **Gemini 3.5 Flash is fast** — 2 min per config vs 6-10 min for other models
+5. **Not recommended for any task in the pipeline**
+
+### Gemini 2.5 Flash Results
+
+| Model | JD Analysis | Resume Gen | Combined | Cost |
+|-------|-------------|------------|----------|------|
+| google/gemini-2.5-flash | 17/34 (50.0%) | 7/14 (50.0%) | 24/48 (50.0%) | $0.85 |
+
+**JD Analysis — 17 failures, 0 errors (worst JD score of any model):**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| CONDITIONAL → APPLY | 4x | **High** (false positive) |
+| CONDITIONAL → SKIP | 4x | Medium (missed opportunity) |
+| SKIP → CONDITIONAL | 3x | Low (over-review) |
+| APPLY → SKIP | 1x | Medium |
+| APPLY → CONDITIONAL | 1x | Medium |
+| SKIP → APPLY | 1x | **High** (false positive) |
+| CONDITIONAL → parse_fail | 1x | Parse error |
+| 2 other (verdict matched, other field failed) | 2x | — |
+
+> Scattered in all directions — 5 false positives, 4 missed opportunities, 1 JSON parse failure. Worst JD analysis score of any model tested.
+
+**Resume Generation — 7 failures (50.0%):**
+Same fabrication pattern. Ties Gemini Pro at 50%.
+
+### Gemini Family Summary
+
+| Model | JD (34) | Resume (14) | Combined | Cost |
+|-------|---------|-------------|----------|------|
+| ~google/gemini-pro-latest | 22/34 (64.7%) | 7/14 (50.0%) | 29/48 (60.4%) | $3.55 |
+| google/gemini-3.5-flash | 21/34 (61.8%) | 8/14 (57.1%) | 29/48 (60.4%) | $1.50 |
+| google/gemini-2.5-flash | 17/34 (50.0%) | 7/14 (50.0%) | 24/48 (50.0%) | $0.85 |
+
+> **Verdict: No Gemini model is recommended for any task in the pipeline.** All three land at the bottom of the leaderboard. The pro tier costs 4x more than 2.5 Flash and scores the same combined. The flash models have dangerous false-positive rates on JD analysis. Resume generation fabricates claims at budget-model rates despite frontier pricing.
 
 ---
 

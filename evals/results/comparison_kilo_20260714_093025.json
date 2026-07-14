@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "~google/gemini-pro-latest",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_~google_gemini-pro-latest.json",
+  "duration_seconds": 324,
+  "exit_code": 100
+}
+]

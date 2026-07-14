@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "meta-llama/llama-4-maverick",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_meta-llama_llama-4-maverick.json",
+  "duration_seconds": 129,
+  "exit_code": 100
+}
+]

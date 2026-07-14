@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "mistralai/mistral-medium-3.1",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_mistralai_mistral-medium-3.1.json",
+  "duration_seconds": 130,
+  "exit_code": 100
+}
+]

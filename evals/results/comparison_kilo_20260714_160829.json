@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "meta-llama/llama-4-maverick",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_meta-llama_llama-4-maverick.json",
+  "duration_seconds": 126,
+  "exit_code": 100
+}
+]
