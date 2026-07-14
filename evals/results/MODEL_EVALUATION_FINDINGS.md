@@ -1,6 +1,6 @@
 # Model Evaluation Findings
 
-**Date:** July 13, 2026
+**Date:** July 13–14, 2026
 **Provider:** Kilo Gateway (`https://api.kilo.ai/api/gateway`)
 **Framework:** promptfoo with golden dataset (34 JD analysis cases, 14 resume generation cases)
 **Judge model:** `minimax/minimax-m3` (non-reasoning, produces reliable JSON verdicts)
@@ -9,22 +9,22 @@
 
 ## Current Recommended Models
 
-> **Updated as new leaders are found. Last updated: July 13, 2026.**
+> **Updated as new leaders are found. Last updated: July 14, 2026.**
 
 | Task | Recommended Model | Provider | Accuracy | Cost/Run | Notes |
 |------|-------------------|----------|----------|----------|-------|
 | **JD Analysis (best)** | `gpt-5.6-terra` | OpenAI | 82.4% | ~$3.02 | Best JD accuracy; safe failure mode (SKIP→CONDITIONAL) |
-| **JD Analysis (budget)** | `deepseek/deepseek-v4-flash` | Kilo | 61.8% | ~$0.16 | Same accuracy as GLM at 14x lower cost |
+| **JD Analysis (budget)** | `mistralai/mistral-large-2512` | Kilo | 76.5% | ~$0.29 | 2nd best JD score overall; only 1 false positive; zero parse errors |
+| **JD Analysis (budget alt)** | `moonshotai/kimi-k2` | Kilo | 73.5% | ~$0.41 | Safest budget failure pattern; only 1 false positive |
 | **Resume Generation (best)** | `gpt-5.6-terra`, `gpt-5.6-luna`, or `claude-sonnet-5` | OpenAI/Anthropic | **100%** | $0.82-1.44 | Three-way tie at perfect score |
 | **Resume Generation (value)** | `claude-haiku-4-5` | Anthropic | 92.9% | ~$0.26 | Near-perfect at lowest frontier cost |
 | **Resume Generation (budget)** | `z-ai/glm-5.2` | Kilo | 71.4% | ~$0.39 | Best budget accuracy for customer-facing output |
 | **Resume Generation (free)** | `tencent/hy3:free` | Kilo | 57.1% | $0.00 | Free; use for high-volume/non-critical |
 | **Judge model (Kilo)** | `minimax/minimax-m3` | Kilo | — | — | Non-reasoning; reliable JSON output |
-| **Judge model (Anthropic)** | `claude-haiku-4-5` | Anthropic | — | — | Non-reasoning; fast and cheap |
+| **Judge model (Anthropic)** | `claude-haiku-4-5` | Anthropic | — | — | Non-reasoning; fast and cheap (not yet measured as judge) |
 
 ### Pending Results
 - Grok 4.3/4.5 (xAI) — not yet tested (~$11-25 per run)
-- Gemini 3 Pro (Google) — not yet tested
 
 ---
 
@@ -97,7 +97,7 @@
 | stepfun/step-3.7-flash:free | 2/6 (33.3%) |
 | anthropic/claude-sonnet-5 | 0/6 (0.0%) |
 
-> **Note:** The 6-test screen is not representative — deepseek and GLM both scored 83.3% on 6 tests but dropped to 61.8% on the full 34. The small sample over-represents easy cases.
+> **Note:** The 6-test screen is not representative — three models scored 83.3% on 6 tests (deepseek-v4-flash:discounted, deepseek-v4-pro:discounted, tencent/hy3:free), but deepseek-v4-flash dropped to 61.8% on the full 34. GLM-5.2 was not in the 6-test screen. The small sample over-represents easy cases.
 
 ---
 
@@ -151,7 +151,7 @@ At 71.4%, GLM-5.2 is significantly more accurate than all other models tested. I
 Despite costing more and being labeled "pro", the pro variant scored 28.6% on resume generation — worse than the flash variant's 42.9%. More reasoning tokens don't help with accuracy rules.
 
 ### 5. Reasoning tokens are a double-edged sword
-Models with high reasoning token usage (GLM-5.2: 52% reasoning, deepseek-pro: 31% reasoning) don't necessarily produce better output. The reasoning tokens are spent on internal thinking, not on following accuracy rules. deepseek-flash uses only 14% reasoning and scores similarly on JD analysis.
+Models with high reasoning token usage (GLM-5.2: ~85% of completion tokens on reasoning, deepseek-pro: 31% reasoning) don't necessarily produce better output. The reasoning tokens are spent on internal thinking, not on following accuracy rules. deepseek-flash uses only 14% reasoning and scores similarly on JD analysis.
 
 ### 6. All models struggle with accuracy rules
 Every model tested produces unsupported/overstated claims. This is the core challenge — models naturally want to embellish resumes to match job descriptions, which is exactly what the accuracy rules exist to prevent. Even the best model (GLM-5.2) fails 28.6% of the time.
@@ -182,14 +182,14 @@ Tested via `PROVIDER=openai` against OpenAI's direct API. Full dataset (34 JD + 
 
 > 7 errors were API errors (likely rate limiting on the sol tier).
 
-**gpt-5.6-terra (6 failures: 3 verdict, 3 errors):**
+**gpt-5.6-terra (6 failures: 6 verdict, 0 errors):**
 | Expected → Got | Count |
 |----------------|-------|
 | SKIP → CONDITIONAL | 3x |
 | APPLY → CONDITIONAL | 2x |
 | SKIP → MONITOR | 1x |
 
-**gpt-5.6-luna (11 failures: 5 verdict, 6 errors):**
+**gpt-5.6-luna (11 failures: 11 verdict, 0 errors):**
 | Expected → Got | Count |
 |----------------|-------|
 | SKIP → CONDITIONAL | 6x |
@@ -198,7 +198,7 @@ Tested via `PROVIDER=openai` against OpenAI's direct API. Full dataset (34 JD + 
 | CONDITIONAL → APPLY | 1x |
 | SKIP → MONITOR | 1x |
 
-> **Note:** All three models had API errors (rate limiting) that counted as failures. The actual verdict accuracy is likely higher than shown — terra's 3 verdict mismatches out of 31 non-error tests = 90.3% true accuracy.
+> **Note:** gpt-5.6-sol had 7 API errors (rate limiting) that counted as failures. Terra and luna had 0 API errors — all their failures are verdict mismatches.
 
 ### Resume Generation — Frontier Failure Breakdown
 
@@ -213,10 +213,10 @@ Tested via `PROVIDER=openai` against OpenAI's direct API. Full dataset (34 JD + 
 
 1. **gpt-5.6-terra is the overall winner** — 82.4% JD + 100% resume = 87.5% combined, far ahead of all budget models
 2. **Resume generation is solved by frontier models** — terra and luna both scored 100%, meaning zero unsupported/overstated claims across all 14 test cases
-3. **JD analysis still struggles with SKIP → CONDITIONAL** — even terra's 3 verdict errors were all SKIP → CONDITIONAL (too cautious, safe failure)
+3. **JD analysis still struggles with SKIP → CONDITIONAL** — terra's 6 verdict errors were 3x SKIP→CONDITIONAL, 2x APPLY→CONDITIONAL, 1x SKIP→MONITOR (all safe failures, no false positives)
 4. **gpt-5.6-sol underperforms terra** — despite being a higher tier, sol had more errors and lower accuracy on both tasks
 5. **Frontier models are 100x more accurate on resume generation** — from 42.9% (deepseek) to 100% (terra/luna) for the same test suite
-6. **API errors affected all models** — rate limiting caused 3-7 errors per model on JD analysis; true accuracy is higher than reported
+6. **API errors affected only gpt-5.6-sol** — rate limiting caused 7 errors on sol; terra and luna had 0 API errors
 
 ---
 
@@ -619,12 +619,21 @@ The full seeker-os pipeline makes **4 LLM calls per job** that passes filtering:
 | Stage | Model | Cost/Job | Accuracy |
 |-------|-------|----------|----------|
 | Company Research | `deepseek-v4-flash` (Kilo) | $0.002 | Not tested (dossier quality) |
-| JD Analysis | `deepseek-v4-flash` (Kilo) | $0.002 | 61.8% |
+| JD Analysis | `mistralai/mistral-large-2512` (Kilo) | $0.004 | 76.5% |
 | Resume Generation | `gpt-5.6-luna` (OpenAI) | $0.011 | 100% |
 | Traceability Judge | `claude-haiku-4-5` (Anthropic) | $0.009 | — |
-| **Total** | | **$0.024** | **100% resume, 61.8% JD** |
+| **Total** | | **$0.026** | **100% resume, 76.5% JD** |
 
-> This hybrid costs $0.024/job — 6.5x cheaper than all-terra ($0.155) while maintaining 100% resume accuracy. JD analysis accuracy drops to 61.8% but that's a safe-failure mode (over-reviews rather than misses jobs).
+> This hybrid costs ~$0.026/job — 6x cheaper than all-terra ($0.155) while maintaining 100% resume accuracy. JD analysis at 76.5% is only 6 points behind terra, with only 1 false positive. The previous hybrid using deepseek-v4-flash for JD analysis ($0.024/job, 61.8% JD) remains the ultra-budget option.
+
+### Alternative Hybrid Configurations
+
+| Config | JD Model | Resume Model | JD Accuracy | Cost/Job |
+|-------|----------|--------------|-------------|----------|
+| **Recommended** | mistral-large-2512 | gpt-5.6-luna | 76.5% | ~$0.026 |
+| Ultra-budget | deepseek-v4-flash | gpt-5.6-luna | 61.8% | ~$0.024 |
+| Best accuracy | gpt-5.6-terra | gpt-5.6-terra | 82.4% | ~$0.155 |
+| Budget alt | kimi-k2 | gpt-5.6-luna | 73.5% | ~$0.027 |
 
 ---
 
