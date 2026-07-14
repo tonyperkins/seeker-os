@@ -5,22 +5,22 @@ permissions:
   pull-requests: write
 
 on:
-  pull_request:
-    paths:
-      - 'backend/seeker_os/analysis/prompts/**'
-      - 'backend/seeker_os/resume/prompts/**'
-      - 'backend/seeker_os/validation/prompts/**'
-      - 'config/providers*.yml'
-      - 'config/accuracy_rules*.yml'
-      - 'config/identity_rules*.yml'
-      - 'config/scoring_rubric*.yml'
-      - 'config/channel_rules*.yml'
-      - 'evals/**'
-  push:
-    branches: [main]
+  # MANUAL ONLY — do not add auto triggers (pull_request, push, schedule).
+  # Promptfoo evals make real API calls that cost real money ($1-16 per run).
+  # This is a personal project; automated evals cannot be justified.
+  # To run: GitHub Actions tab → "Promptfoo Evals" → Run workflow.
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Eval scope: smoke (6 tests, ~$0.05) or full (all tests, ~$1-6)'
+        required: false
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - full
 
 jobs:
-  # Detect whether to run smoke or full eval
   detect-mode:
     runs-on: ubuntu-latest
     outputs:
@@ -28,13 +28,9 @@ jobs:
     steps:
       - id: mode
         run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "mode=full" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'full-eval') }}" == "true" ]]; then
-            echo "mode=full" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=smoke" >> "$GITHUB_OUTPUT"
-          fi
+          MODE="${{ github.event.inputs.mode || 'smoke' }}"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "Running in $MODE mode"
 
   evals:
     needs: detect-mode
