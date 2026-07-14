@@ -1,0 +1,18 @@
+[
+{
+  "provider": "kilo",
+  "model": "anthropic/claude-sonnet-5",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_anthropic_claude-sonnet-5.json",
+  "duration_seconds": 94,
+  "exit_code": 0
+}
+,
+{
+  "provider": "kilo",
+  "model": "anthropic/claude-opus-4.8",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_anthropic_claude-opus-4.8.json",
+  "duration_seconds": 76,
+  "exit_code": 0
+}

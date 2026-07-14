@@ -1,0 +1,9 @@
+[
+{
+  "provider": "kilo",
+  "model": "anthropic/claude-sonnet-5",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_anthropic_claude-sonnet-5.json",
+  "duration_seconds": 53,
+  "exit_code": 0
+}

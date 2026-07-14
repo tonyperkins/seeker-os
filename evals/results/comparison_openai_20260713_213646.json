@@ -1,0 +1,55 @@
+[
+{
+  "provider": "openai",
+  "model": "gpt-5.6-sol",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_gpt-5.6-sol.json",
+  "duration_seconds": 91,
+  "exit_code": 0
+}
+,
+{
+  "provider": "openai",
+  "model": "gpt-5.6-sol",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_gpt-5.6-sol.json",
+  "duration_seconds": 228,
+  "exit_code": 100
+}
+,
+{
+  "provider": "openai",
+  "model": "gpt-5.6-terra",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_gpt-5.6-terra.json",
+  "duration_seconds": 232,
+  "exit_code": 100
+}
+,
+{
+  "provider": "openai",
+  "model": "gpt-5.6-terra",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_gpt-5.6-terra.json",
+  "duration_seconds": 111,
+  "exit_code": 0
+}
+,
+{
+  "provider": "openai",
+  "model": "gpt-5.6-luna",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_gpt-5.6-luna.json",
+  "duration_seconds": 221,
+  "exit_code": 100
+}
+,
+{
+  "provider": "openai",
+  "model": "gpt-5.6-luna",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_gpt-5.6-luna.json",
+  "duration_seconds": 95,
+  "exit_code": 0
+}
+]

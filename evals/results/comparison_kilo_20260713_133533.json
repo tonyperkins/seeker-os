@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "qwen/qwen3.7-plus",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_qwen_qwen3.7-plus.json",
+  "duration_seconds": 114,
+  "exit_code": 0
+}
+]

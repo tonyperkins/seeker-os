@@ -1,0 +1,28 @@
+[
+{
+  "provider": "kilo",
+  "model": "tencent/hy3:free",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_tencent_hy3_free.json",
+  "duration_seconds": 962,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "poolside/laguna-m.1",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_poolside_laguna-m.1.json",
+  "duration_seconds": 217,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-pro:discounted",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_deepseek_deepseek-v4-pro_discounted.json",
+  "duration_seconds": 525,
+  "exit_code": 100
+}
+]

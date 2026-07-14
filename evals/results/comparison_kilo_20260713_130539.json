@@ -1,0 +1,235 @@
+[
+{
+  "provider": "kilo",
+  "model": "anthropic/claude-sonnet-5",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_anthropic_claude-sonnet-5.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "anthropic/claude-opus-4.8",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_anthropic_claude-opus-4.8.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "anthropic/claude-opus-4.8-fast",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_anthropic_claude-opus-4.8-fast.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "stealth/claude-opus-4.8",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_stealth_claude-opus-4.8.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "openai/gpt-5.6-sol",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_openai_gpt-5.6-sol.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "openai/gpt-5.6-sol-pro",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_openai_gpt-5.6-sol-pro.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "openai/gpt-5.6-terra",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_openai_gpt-5.6-terra.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "openai/gpt-5.6-terra-pro",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_openai_gpt-5.6-terra-pro.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "openai/gpt-5.6-luna",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_openai_gpt-5.6-luna.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "openai/gpt-5.6-luna-pro",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_openai_gpt-5.6-luna-pro.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "google/gemini-3.5-flash",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_google_gemini-3.5-flash.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "google/gemini-3.1-pro-preview",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_google_gemini-3.1-pro-preview.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "z-ai/glm-5.2",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_z-ai_glm-5.2.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "qwen/qwen3.7-plus",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_qwen_qwen3.7-plus.json",
+  "duration_seconds": 5,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "stepfun/step-3.7-flash",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_stepfun_step-3.7-flash.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "stepfun/step-3.7-flash:free",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_stepfun_step-3.7-flash:free.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "tencent/hy3",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_tencent_hy3.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "tencent/hy3:free",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_tencent_hy3:free.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "tencent/hy3-preview",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_tencent_hy3-preview.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "poolside/laguna-m.1",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_poolside_laguna-m.1.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "poolside/laguna-m.1:free",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_poolside_laguna-m.1:free.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-pro",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_deepseek_deepseek-v4-pro.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-pro:discounted",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_deepseek_deepseek-v4-pro:discounted.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-flash",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_deepseek_deepseek-v4-flash.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-flash:discounted",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_deepseek_deepseek-v4-flash:discounted.json",
+  "duration_seconds": 2,
+  "exit_code": 1
+}
+,
+{
+  "provider": "kilo",
+  "model": "minimax/minimax-m3",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_minimax_minimax-m3.json",
+  "duration_seconds": 1,
+  "exit_code": 1
+}
+]

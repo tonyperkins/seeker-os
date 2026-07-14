@@ -1,0 +1,19 @@
+[
+{
+  "provider": "kilo",
+  "model": "z-ai/glm-5.2",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_z-ai_glm-5.2.json",
+  "duration_seconds": 96,
+  "exit_code": 130
+}
+,
+{
+  "provider": "kilo",
+  "model": "z-ai/glm-5.2",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_z-ai_glm-5.2.json",
+  "duration_seconds": 628,
+  "exit_code": 100
+}
+]

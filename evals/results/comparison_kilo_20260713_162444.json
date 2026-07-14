@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-flash",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_deepseek_deepseek-v4-flash.json",
+  "duration_seconds": 681,
+  "exit_code": 100
+}
+]
