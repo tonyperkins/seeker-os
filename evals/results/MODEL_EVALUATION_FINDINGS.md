@@ -293,6 +293,77 @@ Tested via `PROVIDER=anthropic` against Anthropic's direct API. Full dataset (34
 
 ---
 
+## Per-Job Cost Analysis
+
+### Pipeline LLM Calls
+
+The full seeker-os pipeline makes **4 LLM calls per job** that passes filtering:
+
+| Stage | LLM Call | Task Name | Measured? |
+|-------|----------|-----------|-----------|
+| Discovery → Filter → Score | (deterministic, no LLM) | — | — |
+| Company Research | 1 call: dossier generation | `company_dossier_generation` | Estimated from prompt sizes |
+| JD Analysis | 1 call: verdict + scoring | `jd_analysis` | Measured from eval |
+| Resume Generation | 1 call: resume generation | `resume_generation_standard` | Measured from eval |
+| Traceability Check | 1 call: claim verification judge | `accuracy_validation` | Measured from eval (grading) |
+
+### Measured Token Usage (gpt-5.6-terra, per job)
+
+| Call | Prompt Tokens | Completion Tokens | Total |
+|------|---------------|-------------------|-------|
+| JD Analysis | 11,158 | 2,451 | 13,608 |
+| Resume Generation | 722 | 1,770 | 2,492 |
+| Traceability Judge | 7,735 | 715 | 8,450 |
+| Company Research (est.) | ~6,200 | ~2,500 | ~8,700 |
+| **Total per job** | **~25,815** | **~7,436** | **~33,250** |
+
+> Company research tokens are estimated from system prompt size (~1.2K tokens) + typical user prompt (company name + JD text + retrieval snippets ~5K tokens). Actual usage may vary ±50% depending on JD length and retrieval results.
+
+### Per-Job Cost by Model
+
+| Model | Company Research | JD Analysis | Resume Gen | Trace Judge | **Total/Job** |
+|-------|-----------------|-------------|------------|-------------|---------------|
+| gpt-5.6-terra | $0.053 | $0.065 | $0.028 | $0.009 | **$0.155** |
+| claude-sonnet-5 | $0.056 | $0.070 | $0.029 | $0.009 | **$0.164** |
+| gpt-5.6-luna | $0.021 | $0.026 | $0.011 | $0.009 | **$0.068** |
+| claude-haiku-4-5 | $0.015 | $0.019 | $0.008 | $0.009 | **$0.050** |
+| GLM-5.2 (Kilo) | $0.009 | $0.012 | $0.004 | $0.009 | **$0.035** |
+| deepseek-v4-flash (Kilo) | $0.002 | $0.002 | $0.001 | $0.009 | **$0.014** |
+
+> **Note:** Traceability judge always uses `claude-haiku-4-5` ($0.80/$4.00 per M tokens) regardless of main model, since it needs reliable JSON output. This adds a fixed ~$0.009/job to all configurations.
+
+### Volume Projections
+
+| Volume | gpt-5.6-terra | claude-haiku-4.5 | deepseek-v4-flash | GLM-5.2 |
+|--------|---------------|------------------|-------------------|---------|
+| 10 jobs | $1.55 | $0.50 | $0.13 | $0.35 |
+| 50 jobs | $7.75 | $2.52 | $0.67 | $1.74 |
+| 100 jobs | $15.51 | $5.04 | $1.35 | $3.47 |
+| 500 jobs | $77.53 | $25.19 | $6.73 | $17.34 |
+| 1,000 jobs | $155.06 | $50.39 | $13.46 | $34.68 |
+
+### Key Cost Insights
+
+1. **Traceability judge is a fixed cost** — ~$0.009/job regardless of main model, because it always uses Haiku. This is 65% of the total cost when using deepseek-v4-flash.
+2. **gpt-5.6-terra costs $0.155/job** — at 100 jobs/week, that's ~$15.50/week or ~$67/month
+3. **deepseek-v4-flash costs $0.014/job** — 11x cheaper than terra, but with 56% accuracy vs 87.5%
+4. **Hybrid approach is optimal** — use deepseek for JD analysis ($0.002) and terra/sonnet for resume gen ($0.029), totaling ~$0.04/job with frontier-quality resumes
+5. **Company research is the biggest unknown** — token estimate is rough; actual usage depends on JD length and retrieval snippet count
+
+### Recommended Hybrid Configuration
+
+| Stage | Model | Cost/Job | Accuracy |
+|-------|-------|----------|----------|
+| Company Research | `deepseek-v4-flash` (Kilo) | $0.002 | Not tested (dossier quality) |
+| JD Analysis | `deepseek-v4-flash` (Kilo) | $0.002 | 61.8% |
+| Resume Generation | `gpt-5.6-luna` (OpenAI) | $0.011 | 100% |
+| Traceability Judge | `claude-haiku-4-5` (Anthropic) | $0.009 | — |
+| **Total** | | **$0.024** | **100% resume, 61.8% JD** |
+
+> This hybrid costs $0.024/job — 6.5x cheaper than all-terra ($0.155) while maintaining 100% resume accuracy. JD analysis accuracy drops to 61.8% but that's a safe-failure mode (over-reviews rather than misses jobs).
+
+---
+
 ## Evaluation Infrastructure
 
 ### Files Modified
