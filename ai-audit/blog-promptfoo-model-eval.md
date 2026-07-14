@@ -16,7 +16,7 @@ First I needed a golden dataset. I exported 34 JD analysis cases from my scan hi
 
 Then I wrote the promptfoo configs. JD analysis was straightforward: run the model, parse the JSON, check if the verdict matches. No judge needed — it's a pure assertion. Resume generation was harder: I needed an LLM judge that reads the generated resume alongside my master resume and flags any unsupported or overstated claims. Any fabricated metric, any embellished skill, any invented technology = fail.
 
-I pointed it at Kilo Gateway and let it rip across their budget models: deepseek-v4-flash, GLM-5.2, Qwen, Tencent Hy3, Poolside Laguna, Minimax. Thirteen models on a 6-test quick screen, then the top performers on the full 34+14 dataset.
+I pointed it at Kilo Gateway and let it rip across their budget models: deepseek-v4-flash, Qwen, Tencent Hy3, Poolside Laguna, Minimax. Thirteen models on a 6-test quick screen, then the top performers — plus GLM-5.2, which went straight to the full run — on the full 34+14 dataset.
 
 The results were... sobering.
 
@@ -66,7 +66,7 @@ The frontier models had won. But I still didn't have a budget option I felt good
 
 ## Act IV: The Non-Frontier Surprise
 
-I wasn't done. The frontier models were clear winners, but I wanted to know if any non-frontier model could close the gap at budget prices. I tested nine more models through Kilo Gateway: Mistral Medium 3.1, Mistral Large 2512, Kimi K2, Kimi K2 Thinking, Cohere Command A, Meta Llama 4 Maverick, and the three Gemini variants (Pro, 3.5 Flash, 2.5 Flash).
+I wasn't done. I tested nine more models through Kilo Gateway: Mistral Medium 3.1, Mistral Large 2512, Kimi K2, Kimi K2 Thinking, Cohere Command A, Meta Llama 4 Maverick, and the three Gemini variants (Pro, 3.5 Flash, 2.5 Flash).
 
 The results were surprising.
 
@@ -98,7 +98,7 @@ Here's the complete leaderboard — all 16 models that ran the full 34+14 datase
 | moonshotai/kimi-k2 | 73.5% | 57.1% | 68.8% | $0.59 |
 | GLM-5.2 | 61.8% | 71.4% | 64.6% | $2.67 |
 | moonshotai/kimi-k2-thinking | 70.6% | 42.9% | 62.5% | $1.03 |
-| ~google/gemini-pro-latest | 64.7% | 50.0% | 60.4% | $3.55 |
+| google/gemini-pro-latest | 64.7% | 50.0% | 60.4% | $3.55 |
 | google/gemini-3.5-flash | 61.8% | 57.1% | 60.4% | $1.50 |
 | mistralai/mistral-medium-3.1 | 67.6% | 42.9% | 60.4% | $0.44 |
 | deepseek-v4-flash | 61.8% | 42.9% | 56.2% | $0.21 |
