@@ -206,6 +206,10 @@ for model in "${MODELS[@]}"; do
     if [ "$PROVIDER" != "anthropic" ]; then
       temp_config="$REPO_ROOT/evals/promptfoo/_tmp_${config_name}_${safe_model}.yaml"
       sed "s|anthropic:messages:|${PROVIDER_PREFIX}:|g; s|https://api.anthropic.com|${API_BASE_URL}|g; s|ANTHROPIC_API_KEY|OPENAI_API_KEY|g" "$config_file" > "$temp_config"
+      # Override max_tokens if the model requires a lower limit (e.g. Cohere Command A: 8192)
+      if [ -n "${MAX_TOKENS:-}" ]; then
+        sed -i "s/max_tokens: [0-9]*/max_tokens: ${MAX_TOKENS}/g" "$temp_config"
+      fi
       # Route the llm-rubric judge through the same provider
       # Use a non-reasoning model as judge when available (reasoning models produce no visible output)
       if [ -n "${JUDGE_MODEL:-${JUDGE_DEFAULT}}" ]; then

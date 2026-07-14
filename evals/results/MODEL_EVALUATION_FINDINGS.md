@@ -280,6 +280,9 @@ Tested via `PROVIDER=anthropic` against Anthropic's direct API. Full dataset (34
 | google/gemini-2.5-flash | Kilo | 17/34 (50.0%) | 7/14 (50.0%) | 24/48 (50.0%) | $0.85 |
 | mistralai/mistral-medium-3.1 | Kilo | 23/34 (67.6%) | 6/14 (42.9%) | 29/48 (60.4%) | $0.44 |
 | moonshotai/kimi-k2 | Kilo | 25/34 (73.5%) | 8/14 (57.1%) | 33/48 (68.8%) | $0.59 |
+| mistralai/mistral-large-2512 | Kilo | 26/34 (76.5%) | 8/14 (57.1%) | 34/48 (70.8%) | $0.39 |
+| cohere/command-a | Kilo | 21/34 (61.8%) | 6/14 (42.9%) | 27/48 (56.2%) | $1.86 |
+| moonshotai/kimi-k2-thinking | Kilo | 24/34 (70.6%) | 6/14 (42.9%) | 30/48 (62.5%) | $1.03 |
 | meta-llama/llama-4-maverick | Kilo | 16/34 (47.1%) | 7/14 (50.0%) | 23/48 (47.9%) | $0.13 |
 | GLM-5.2 | Kilo | 21/34 (61.8%) | 10/14 (71.4%) | 31/48 (64.6%) | $2.67 |
 | gpt-5.6-sol | OpenAI | 22/34 (64.7%) | 12/14 (85.7%) | 34/48 (70.8%) | $5.91 |
@@ -385,6 +388,74 @@ Same fabrication pattern. $0.03 per run is cheapest but quality matches the pric
 3. **Zero false positives** — only model with no high-risk failures, but over-reviews everything
 4. **Not useful as a filter** — 14 SKIP→CONDITIONAL means too many jobs flagged for manual review
 5. **Not recommended for any task**
+
+### Mistral Large 2512 Results
+
+| Model | JD Analysis | Resume Gen | Combined | Cost |
+|-------|-------------|------------|----------|------|
+| mistralai/mistral-large-2512 | 26/34 (76.5%) | 8/14 (57.1%) | 34/48 (70.8%) | $0.39 |
+
+**JD Analysis — 8 failures, 0 errors:**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| APPLY → CONDITIONAL | 3x | Medium (under-applied) |
+| SKIP → CONDITIONAL | 3x | Low (over-review) |
+| CONDITIONAL → MONITOR | 1x | Low |
+| CONDITIONAL → APPLY | 1x | **High** (false positive) |
+
+> **2nd best JD score ever** (76.5%), only 6 points behind terra (82.4%). Only 1 high-risk false positive. Zero parse failures — fixed the markdown fencing issue from Medium 3.1. At $0.29, it's the best price/accuracy ratio of any model tested.
+
+**Resume Generation — 6 failures (57.1%):**
+Same budget-tier ceiling. Fabricates claims but better than deepseek/Mistral Medium (42.9%).
+
+### Cohere Command A Results
+
+| Model | JD Analysis | Resume Gen | Combined | Cost |
+|-------|-------------|------------|----------|------|
+| cohere/command-a | 21/34 (61.8%) | 6/14 (42.9%) | 27/48 (56.2%) | $1.86 |
+
+**JD Analysis — 13 failures, 1 error:**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| APPLY → CONDITIONAL | 4x | Medium |
+| CONDITIONAL → SKIP | 3x | Medium |
+| SKIP → APPLY | 2x | **High** (false positive) |
+| SKIP → CONDITIONAL | 2x | Low |
+| CONDITIONAL → parse_fail | 1x | Parse error |
+| CONDITIONAL → APPLY | 1x | **High** (false positive) |
+
+> 3 high-risk false positives, 1 parse failure. Structured-output reputation didn't translate. Not competitive.
+
+**Resume Generation — 8 failures (42.9%):**
+Same fabrication pattern as budget models. 1 error.
+
+### Kimi K2 Thinking Results
+
+| Model | JD Analysis | Resume Gen | Combined | Cost |
+|-------|-------------|------------|----------|------|
+| moonshotai/kimi-k2-thinking | 24/34 (70.6%) | 6/14 (42.9%) | 30/48 (62.5%) | $1.03 |
+
+**JD Analysis — 10 failures, 0 errors:**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| APPLY → parse_fail | 2x | Parse error (reasoning text) |
+| CONDITIONAL → SKIP | 2x | Medium |
+| CONDITIONAL → parse_fail | 2x | Parse error |
+| SKIP → parse_fail | 2x | Parse error |
+| APPLY → SKIP | 1x | Medium |
+| SKIP → CONDITIONAL | 1x | Low |
+
+> 6 parse failures from reasoning text prepended to JSON output. Zero false positives but reasoning made the model worse: 70.6% vs regular K2's 73.5%, at 2x cost ($0.75 vs $0.41) and 2x time (22m vs 10m).
+
+**Resume Generation — 8 failures (42.9%):**
+Worse than regular K2 (57.1%). Reasoning didn't help with anti-fabrication rules.
+
+### Key Findings — Non-Frontier Round 2
+
+1. **Mistral Large 2512 is the new budget champion** — 76.5% JD at $0.29, 70.8% combined at $0.39. Ties gpt-5.6-sol ($5.91) at 1/15th the cost.
+2. **Cohere Command A is overpriced and underperforms** — 56.2% combined at $1.86, worse than deepseek ($0.21)
+3. **Reasoning makes Kimi K2 worse** — K2 Thinking scored lower on both tasks (62.5% vs 68.8%), cost more ($1.03 vs $0.59), took longer (36m vs 18m), and had 6 parse failures
+4. **Reasoning tokens are a net negative for this pipeline** — confirmed across Gemini 2.5 Flash, Gemini Pro, and Kimi K2 Thinking. They add cost, latency, and parse failures without improving instruction-following.
 
 ---
 

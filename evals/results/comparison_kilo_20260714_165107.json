@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "moonshotai/kimi-k2-thinking",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_moonshotai_kimi-k2-thinking.json",
+  "duration_seconds": 1370,
+  "exit_code": 100
+}
+]

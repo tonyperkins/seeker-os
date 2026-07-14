@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "cohere/command-a",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_cohere_command-a.json",
+  "duration_seconds": 155,
+  "exit_code": 100
+}
+]
