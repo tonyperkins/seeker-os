@@ -1,6 +1,6 @@
 # The Quest for the Right LLM: A Promptfoo Story in Four Acts
 
-> How I benchmarked 20 models across 48 test cases to find the best LLM for each job in my job-hunt tool — and what I learned about reasoning models, judge bias, and the price of accuracy.
+> How I benchmarked 19 models across 48 test cases to find the best LLM for each job in my job-hunt tool — and what I learned about reasoning models, judge bias, and the price of accuracy.
 
 ---
 
@@ -60,37 +60,17 @@ Then I ran Anthropic. Claude Sonnet 5 scored 70.6% on JD analysis and 100% on re
 
 Sonnet 5 had an interesting failure pattern: it was too conservative, downgrading CONDITIONAL jobs to SKIP. The opposite of GPT models, which upgrade SKIP to CONDITIONAL. Same net effect (safe failure) but from the other direction.
 
-Here's the final leaderboard:
-
-| Model | JD Analysis | Resume Gen | Combined | Eval Cost |
-|-------|-------------|------------|----------|----------|
-| gpt-5.6-terra | 82.4% | 100% | 87.5% | $3.02 |
-| claude-sonnet-5 | 70.6% | 100% | 79.2% | $5.95 |
-| gpt-5.6-luna | 67.6% | 100% | 77.1% | $1.31 |
-| mistralai/mistral-large-2512 | 76.5% | 57.1% | 70.8% | $0.39 |
-| gpt-5.6-sol | 64.7% | 85.7% | 70.8% | $5.91 |
-| moonshotai/kimi-k2 | 73.5% | 57.1% | 68.8% | $0.59 |
-| GLM-5.2 | 61.8% | 71.4% | 64.6% | $2.67 |
-| deepseek-v4-flash | 61.8% | 42.9% | 56.2% | $0.21 |
-| claude-haiku-4.5 | 38.2% | 92.9% | 54.2% | $0.26 |
-
-> Eval Cost = total token cost of running both eval configs (34 JD tests + 14 resume tests) for that model. Not per-job production cost.
-
-The cost analysis is where it gets interesting. My pipeline makes 4 LLM calls per job. At gpt-5.6-terra for everything, that's $0.155 per job. At deepseek-v4-flash, it's $0.014. But I don't have to use the same model for everything.
-
-The recommended hybrid: deepseek for company research ($0.002), Mistral Large 2512 for JD analysis ($0.004), gpt-5.6-luna for resume generation ($0.011), claude-haiku for the traceability judge ($0.009). Total: ~$0.026 per job. That's 6x cheaper than all-terra while maintaining 100% resume accuracy. JD analysis at 76.5% — only 6 points behind terra, with just 1 false positive.
-
-At 100 jobs per week, the hybrid costs $2.60. The all-terra approach costs $15.50. For a personal project, that's the difference between "I can run this every day" and "I should think twice before scanning."
+The frontier models had won. But I still didn't have a budget option I felt good about — and I wanted to know if any non-frontier model could close the gap.
 
 ---
 
 ## Act IV: The Non-Frontier Surprise
 
-I wasn't done. The frontier models were clear winners, but I wanted to know if any non-frontier model could close the gap at budget prices. I tested seven more models through Kilo Gateway: Mistral Medium 3.1, Mistral Large 2512, Kimi K2, Kimi K2 Thinking, Cohere Command A, Meta Llama 4 Maverick, and the three Gemini variants (Pro, 3.5 Flash, 2.5 Flash).
+I wasn't done. The frontier models were clear winners, but I wanted to know if any non-frontier model could close the gap at budget prices. I tested nine more models through Kilo Gateway: Mistral Medium 3.1, Mistral Large 2512, Kimi K2, Kimi K2 Thinking, Cohere Command A, Meta Llama 4 Maverick, and the three Gemini variants (Pro, 3.5 Flash, 2.5 Flash).
 
 The results were surprising.
 
-**Mistral Large 2512 scored 76.5% on JD analysis** — second only to terra (82.4%), beating Sonnet-5 (70.6%) and Luna (67.6%). At $0.29 per eval run, it ties gpt-5.6-sol ($5.91) at 1/15th the cost. Only 1 false positive. Zero parse failures. This is the model that changed my hybrid config.
+**Mistral Large 2512 scored 76.5% on JD analysis** — second only to terra (82.4%), beating Sonnet-5 (70.6%) and Luna (67.6%). At $0.39 per eval run, it ties gpt-5.6-sol ($5.91) at 1/15th the cost. Only 1 false positive. Zero parse failures. This is the model that changed my hybrid config.
 
 **Kimi K2 scored 73.5% on JD analysis** at $0.41 — third-best non-frontier, with the safest budget failure pattern I've seen (1 false positive, dominant failure is SKIP→CONDITIONAL over-review).
 
@@ -101,6 +81,39 @@ The results were surprising.
 **Cohere Command A was overpriced and underperformed** — 56.2% combined at $1.86, worse than deepseek ($0.21). Its structured-output reputation didn't translate.
 
 **Llama 4 Maverick was the cheapest ($0.13) and worst (47.9%).** Zero false positives — it never said APPLY when it shouldn't — but it also rarely said APPLY when it should. 14 of 18 failures were SKIP→CONDITIONAL. Not useful as a filter when it flags everything for review.
+
+---
+
+## The Verdict
+
+Here's the complete leaderboard — all 16 models that ran the full 34+14 dataset, sorted by combined accuracy:
+
+| Model | JD Analysis | Resume Gen | Combined | Eval Cost |
+|-------|-------------|------------|----------|----------|
+| gpt-5.6-terra | 82.4% | 100% | 87.5% | $3.02 |
+| claude-sonnet-5 | 70.6% | 100% | 79.2% | $5.95 |
+| gpt-5.6-luna | 67.6% | 100% | 77.1% | $1.31 |
+| mistralai/mistral-large-2512 | 76.5% | 57.1% | 70.8% | $0.39 |
+| gpt-5.6-sol | 64.7% | 85.7% | 70.8% | $5.91 |
+| moonshotai/kimi-k2 | 73.5% | 57.1% | 68.8% | $0.59 |
+| GLM-5.2 | 61.8% | 71.4% | 64.6% | $2.67 |
+| moonshotai/kimi-k2-thinking | 70.6% | 42.9% | 62.5% | $1.03 |
+| ~google/gemini-pro-latest | 64.7% | 50.0% | 60.4% | $3.55 |
+| google/gemini-3.5-flash | 61.8% | 57.1% | 60.4% | $1.50 |
+| mistralai/mistral-medium-3.1 | 67.6% | 42.9% | 60.4% | $0.44 |
+| deepseek-v4-flash | 61.8% | 42.9% | 56.2% | $0.21 |
+| cohere/command-a | 61.8% | 42.9% | 56.2% | $1.86 |
+| claude-haiku-4.5 | 38.2% | 92.9% | 54.2% | $0.26 |
+| google/gemini-2.5-flash | 50.0% | 50.0% | 50.0% | $0.85 |
+| meta-llama/llama-4-maverick | 47.1% | 50.0% | 47.9% | $0.13 |
+
+> Eval Cost = total token cost of running both eval configs (34 JD tests + 14 resume tests) for that model. Not per-job production cost. Three additional models (Tencent Hy3:free, Poolside Laguna, DeepSeek v4 Pro:discounted) ran resume generation only and are omitted from this table.
+
+The cost analysis is where it gets interesting. My pipeline makes 4 LLM calls per job. At gpt-5.6-terra for everything, that's $0.155 per job. At deepseek-v4-flash, it's $0.014. But I don't have to use the same model for everything.
+
+The recommended hybrid: deepseek for company research ($0.002), Mistral Large 2512 for JD analysis ($0.004), gpt-5.6-luna for resume generation ($0.011), claude-haiku for the traceability judge ($0.009). Total: ~$0.026 per job. That's 6x cheaper than all-terra while maintaining 100% resume accuracy. JD analysis at 76.5% — only 6 points behind terra, with just 1 false positive.
+
+At 100 jobs per week, the hybrid costs $2.60. The all-terra approach costs $15.50. For a personal project, that's the difference between "I can run this every day" and "I should think twice before scanning."
 
 ---
 
@@ -118,6 +131,8 @@ The results were surprising.
 
 **Promptfoo is a pre-deployment gate, not a runtime cost.** The eval cost $0-6 per model to run the full dataset. In production, that same $6 covers 38 jobs with terra or 428 jobs with deepseek. You run promptfoo when something changes — model, prompt, rules, resume — not on every job.
 
-The infrastructure is in place. The findings are documented. The CI workflow is locked to manual-only because I'm not paying for automated evals on a personal project. When I'm ready to test Grok, the script supports it — I just need API keys and a willingness to spend $11-25 per run.
+The infrastructure is in place. The findings are documented. The CI workflow is locked to manual-only because I'm not paying for automated evals on a personal project. When I'm ready to test Grok, the script supports it — I just need API keys and a willingness to spend more than any model tested so far.
+
+The known open item: validating Haiku's accuracy as a traceability judge. Its 92.9% resume generation score proves it understands the content — but judge accuracy is a different skill that requires its own eval. That's the next test on the backlog.
 
 For now, the hybrid configuration gives me frontier-quality resumes at budget prices. Mistral Large for JD analysis, Luna for resume generation. That's the sweet spot for a job hunt tool that runs daily but doesn't need to be perfect on every analytical edge case.
