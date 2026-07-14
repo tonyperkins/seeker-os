@@ -3,12 +3,14 @@
 # Local model comparison — runs promptfoo evals against multiple models
 # and prints a summary table showing pass rates for each.
 #
-# Supports two backends:
+# Supports four backends:
 #   1. Anthropic direct (ANTHROPIC_API_KEY)
-#   2. Kilo Gateway (KILO_API_KEY) — OpenAI-compatible, access to Qwen, GLM, etc.
+#   2. OpenAI direct (OPENAI_API_KEY)
+#   3. Grok / xAI direct (XAI_API_KEY)
+#   4. Kilo Gateway (KILO_API_KEY) — OpenAI-compatible, access to Qwen, GLM, etc.
 #
 # Usage:
-#   # Compare default model set (Anthropic + Kilo)
+#   # Compare default model set (Anthropic)
 #   ./evals/compare_models.sh
 #
 #   # Compare specific models via Anthropic
@@ -17,6 +19,12 @@
 #   # Compare models via Kilo Gateway
 #   PROVIDER=kilo EVAL_MODELS="qwen-coder-32b,glm-4-flash" ./evals/compare_models.sh
 #
+#   # Compare models via OpenAI direct
+#   PROVIDER=openai EVAL_MODELS="gpt-5.6-sol,gpt-5.6-terra" ./evals/compare_models.sh
+#
+#   # Compare models via Grok / xAI direct
+#   PROVIDER=grok EVAL_MODELS="grok-4" ./evals/compare_models.sh
+#
 #   # Only run JD analysis (skip resume generation)
 #   EVAL_CONFIGS="jd_analysis" ./evals/compare_models.sh
 #
@@ -24,11 +32,14 @@
 #   EVAL_CONFIGS="resume_generation" ./evals/compare_models.sh
 #
 # Environment:
-#   PROVIDER          — "anthropic" (default) or "kilo"
+#   PROVIDER          — "anthropic" (default), "openai", "grok", or "kilo"
 #   EVAL_MODELS       — comma-separated model IDs (defaults below per provider)
 #   EVAL_CONFIGS      — comma-separated eval configs to run (default: both)
 #   ANTHROPIC_API_KEY — required if PROVIDER=anthropic
+#   OPENAI_API_KEY    — required if PROVIDER=openai
+#   XAI_API_KEY       — required if PROVIDER=grok
 #   KILO_API_KEY      — required if PROVIDER=kilo
+#   JUDGE_MODEL       — override judge model (default depends on provider)
 #   SEEKER_OS_CONFIG_DIR — path to config/ (default: config)
 #
 # Examples:
@@ -38,8 +49,16 @@
 #   # Kilo gateway — test cheap models
 #   PROVIDER=kilo EVAL_MODELS="qwen-coder-32b,glm-4-flash,deepseek-chat" ./evals/compare_models.sh
 #
-#   # Full comparison across both providers
+#   # OpenAI direct — frontier models
+#   PROVIDER=openai EVAL_MODELS="gpt-5.6-sol,gpt-5.6-terra" ./evals/compare_models.sh
+#
+#   # Grok direct
+#   PROVIDER=grok EVAL_MODELS="grok-4" ./evals/compare_models.sh
+#
+#   # Full comparison across providers
 #   PROVIDER=anthropic EVAL_MODELS="claude-haiku-4-5,claude-sonnet-4-6" ./evals/compare_models.sh
+#   PROVIDER=openai EVAL_MODELS="gpt-5.6-sol,gpt-5.6-terra" ./evals/compare_models.sh
+#   PROVIDER=grok EVAL_MODELS="grok-4" ./evals/compare_models.sh
 #   PROVIDER=kilo EVAL_MODELS="qwen-coder-32b,glm-4-flash" ./evals/compare_models.sh
 #   # Then check evals/results/comparison_*.json for the breakdown
 
@@ -56,20 +75,47 @@ PARALLEL_MODELS="${PARALLEL_MODELS:-1}"
 FAIL_FAST="${FAIL_FAST:-3}"
 SEEKER_OS_CONFIG_DIR="${SEEKER_OS_CONFIG_DIR:-config}"
 
-# Default model lists per provider
-if [ "$PROVIDER" = "kilo" ]; then
-  DEFAULT_MODELS="qwen/qwen3.7-plus,z-ai/glm-5.2,deepseek/deepseek-v4-flash"
-  API_KEY_VAR="KILO_API_KEY"
-  API_BASE_URL="https://api.kilo.ai/api/gateway"
-  PROVIDER_PREFIX="openai:chat"
-  PROMPTFOO_API_KEY_ENV="OPENAI_API_KEY"
-else
-  DEFAULT_MODELS="claude-haiku-4-5,claude-sonnet-4-6"
-  API_KEY_VAR="ANTHROPIC_API_KEY"
-  API_BASE_URL="https://api.anthropic.com"
-  PROVIDER_PREFIX="anthropic:messages"
-  PROMPTFOO_API_KEY_ENV="ANTHROPIC_API_KEY"
-fi
+# Default model lists and config per provider
+#   PROVIDER_PREFIX: promptfoo provider type prefix
+#     - anthropic:messages  → Anthropic Messages API
+#     - openai:chat         → OpenAI Chat Completions API (also used by Kilo, Grok)
+#   PROMPTFOO_API_KEY_ENV: which env var promptfoo reads for the API key
+#   JUDGE_DEFAULT: default judge model for llm-rubric (overridable via JUDGE_MODEL)
+#
+case "$PROVIDER" in
+  kilo)
+    DEFAULT_MODELS="qwen/qwen3.7-plus,z-ai/glm-5.2,deepseek/deepseek-v4-flash"
+    API_KEY_VAR="KILO_API_KEY"
+    API_BASE_URL="https://api.kilo.ai/api/gateway"
+    PROVIDER_PREFIX="openai:chat"
+    PROMPTFOO_API_KEY_ENV="OPENAI_API_KEY"
+    JUDGE_DEFAULT="minimax/minimax-m3"
+    ;;
+  openai)
+    DEFAULT_MODELS="gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna"
+    API_KEY_VAR="OPENAI_API_KEY"
+    API_BASE_URL="https://api.openai.com/v1"
+    PROVIDER_PREFIX="openai:chat"
+    PROMPTFOO_API_KEY_ENV="OPENAI_API_KEY"
+    JUDGE_DEFAULT="gpt-5.6-luna"
+    ;;
+  grok)
+    DEFAULT_MODELS="grok-4"
+    API_KEY_VAR="XAI_API_KEY"
+    API_BASE_URL="https://api.x.ai/v1"
+    PROVIDER_PREFIX="openai:chat"
+    PROMPTFOO_API_KEY_ENV="OPENAI_API_KEY"
+    JUDGE_DEFAULT="grok-4"
+    ;;
+  anthropic|*)
+    DEFAULT_MODELS="claude-haiku-4-5,claude-sonnet-4-6"
+    API_KEY_VAR="ANTHROPIC_API_KEY"
+    API_BASE_URL="https://api.anthropic.com"
+    PROVIDER_PREFIX="anthropic:messages"
+    PROMPTFOO_API_KEY_ENV="ANTHROPIC_API_KEY"
+    JUDGE_DEFAULT=""
+    ;;
+esac
 
 # --- Resolve model list ---
 if [ -n "${EVAL_MODELS:-}" ]; then
@@ -156,16 +202,17 @@ for model in "${MODELS[@]}"; do
     export "$PROMPTFOO_API_KEY_ENV"="$API_KEY"
     export EVAL_TEST_LIMIT="$EVAL_TEST_LIMIT"
 
-    # For Kilo, override the provider prefix and judge to use Kilo gateway
-    if [ "$PROVIDER" = "kilo" ]; then
-      # Create a temp config with Kilo provider
+    # For non-Anthropic providers, rewrite the config to use the OpenAI-compatible API
+    if [ "$PROVIDER" != "anthropic" ]; then
       temp_config="$REPO_ROOT/evals/promptfoo/_tmp_${config_name}_${safe_model}.yaml"
       sed "s|anthropic:messages:|${PROVIDER_PREFIX}:|g; s|https://api.anthropic.com|${API_BASE_URL}|g; s|ANTHROPIC_API_KEY|OPENAI_API_KEY|g" "$config_file" > "$temp_config"
-      # Route the llm-rubric judge through Kilo using a non-reasoning model
-      # (reasoning models spend all tokens thinking, leaving no visible output)
-      export JUDGE_PROVIDER_ID="${PROVIDER_PREFIX}:${JUDGE_MODEL:-minimax/minimax-m3}"
-      export JUDGE_API_BASE_URL="$API_BASE_URL"
-      export JUDGE_API_KEY="{{ env.OPENAI_API_KEY }}"
+      # Route the llm-rubric judge through the same provider
+      # Use a non-reasoning model as judge when available (reasoning models produce no visible output)
+      if [ -n "${JUDGE_MODEL:-${JUDGE_DEFAULT}}" ]; then
+        export JUDGE_PROVIDER_ID="${PROVIDER_PREFIX}:${JUDGE_MODEL:-${JUDGE_DEFAULT}}"
+        export JUDGE_API_BASE_URL="$API_BASE_URL"
+        export JUDGE_API_KEY="{{ env.OPENAI_API_KEY }}"
+      fi
       run_config="$temp_config"
     else
       unset JUDGE_PROVIDER_ID JUDGE_API_BASE_URL JUDGE_API_KEY 2>/dev/null || true
