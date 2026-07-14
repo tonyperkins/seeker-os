@@ -7,6 +7,27 @@
 
 ---
 
+## Current Recommended Models
+
+> **Updated as new leaders are found. Last updated: July 13, 2026.**
+
+| Task | Recommended Model | Provider | Accuracy | Cost/Run | Notes |
+|------|-------------------|----------|----------|----------|-------|
+| **JD Analysis (best)** | `gpt-5.6-terra` | OpenAI | 82.4% | ~$3.02 | Best JD accuracy; safe failure mode (SKIP→CONDITIONAL) |
+| **JD Analysis (budget)** | `deepseek/deepseek-v4-flash` | Kilo | 61.8% | ~$0.16 | Same accuracy as GLM at 14x lower cost |
+| **Resume Generation (best)** | `gpt-5.6-terra`, `gpt-5.6-luna`, or `claude-sonnet-5` | OpenAI/Anthropic | **100%** | $0.82-1.44 | Three-way tie at perfect score |
+| **Resume Generation (value)** | `claude-haiku-4-5` | Anthropic | 92.9% | ~$0.26 | Near-perfect at lowest frontier cost |
+| **Resume Generation (budget)** | `z-ai/glm-5.2` | Kilo | 71.4% | ~$0.39 | Best budget accuracy for customer-facing output |
+| **Resume Generation (free)** | `tencent/hy3:free` | Kilo | 57.1% | $0.00 | Free; use for high-volume/non-critical |
+| **Judge model (Kilo)** | `minimax/minimax-m3` | Kilo | — | — | Non-reasoning; reliable JSON output |
+| **Judge model (Anthropic)** | `claude-haiku-4-5` | Anthropic | — | — | Non-reasoning; fast and cheap |
+
+### Pending Results
+- Grok 4.3/4.5 (xAI) — not yet tested (~$11-25 per run)
+- Gemini 3 Pro (Google) — not yet tested
+
+---
+
 ## Methodology
 
 ### JD Analysis Eval
@@ -140,18 +161,6 @@ Models that scored 83.3% on the 6-test screen dropped to 61.8% on the full 34-te
 
 ---
 
-## Recommended Model Assignments
-
-| Pipeline Stage | Recommended Model | Cost/Job | Accuracy | Rationale |
-|----------------|-------------------|----------|----------|-----------|
-| JD Analysis (budget) | `deepseek/deepseek-v4-flash` | ~$0.005 | 61.8% | Same accuracy as GLM at 14x lower cost; safe failure mode (over-reviews) |
-| JD Analysis (frontier) | `gpt-5.6-terra` | ~$0.01 | 82.4% | Best JD accuracy; 20+ point improvement over budget models |
-| Resume Generation (budget) | `z-ai/glm-5.2` | ~$0.03 | 71.4% | Best budget accuracy; resume output is customer-facing |
-| Resume Generation (frontier) | `gpt-5.6-terra` or `gpt-5.6-luna` | ~$0.01 | **100%** | Perfect score on resume generation |
-| Budget fallback | `tencent/hy3:free` | $0.00 | 57.1% | Free; use for high-volume or non-critical resume generation |
-
----
-
 ## Frontier Model Results — OpenAI Direct
 
 Tested via `PROVIDER=openai` against OpenAI's direct API. Full dataset (34 JD + 14 resume).
@@ -200,7 +209,7 @@ Tested via `PROVIDER=openai` against OpenAI's direct API. Full dataset (34 JD + 
 1. Unsupported claim: "building engineering teams" — master resume says "led 23-member team" but not "built" it
 2. Overstated: associated full 25+ years with AWS infrastructure, but master only claims "broad familiarity"
 
-### Key Frontier Findings
+### Key OpenAI Findings
 
 1. **gpt-5.6-terra is the overall winner** — 82.4% JD + 100% resume = 87.5% combined, far ahead of all budget models
 2. **Resume generation is solved by frontier models** — terra and luna both scored 100%, meaning zero unsupported/overstated claims across all 14 test cases
@@ -211,26 +220,75 @@ Tested via `PROVIDER=openai` against OpenAI's direct API. Full dataset (34 JD + 
 
 ---
 
+## Frontier Model Results — Anthropic Direct
+
+Tested via `PROVIDER=anthropic` against Anthropic's direct API. Full dataset (34 JD + 14 resume).
+
+| Model | JD Analysis | Resume Gen | Combined | Tokens (JD) | Tokens (Resume) |
+|-------|-------------|------------|----------|-------------|-----------------|
+| **claude-sonnet-5** | **24/34 (70.6%)** | **14/14 (100%)** | **38/48 (79.2%)** | 952,503 | 304,103 |
+| claude-haiku-4-5 | 13/34 (38.2%) | 13/14 (92.9%) | 26/48 (54.2%) | 540,620 | 174,797 |
+
+### JD Analysis — Anthropic Failure Breakdown
+
+**claude-sonnet-5 (10 failures, 0 errors):**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| CONDITIONAL → SKIP | 5x | Medium (missed opportunity) |
+| APPLY → CONDITIONAL | 3x | Medium (under-applied) |
+| CONDITIONAL → MONITOR | 1x | Low |
+| SKIP → CONDITIONAL | 1x | Low (over-review) |
+
+> Sonnet-5's dominant failure is **CONDITIONAL → SKIP** (5x) — it's too conservative, skipping borderline cases that should be reviewed. This is the opposite pattern from deepseek/GPT which tend to over-promote to CONDITIONAL.
+
+**claude-haiku-4-5 (21 failures, 0 errors):**
+| Expected → Got | Count | Risk |
+|----------------|-------|------|
+| CONDITIONAL → APPLY | 8x | **High** (false positive) |
+| SKIP → CONDITIONAL | 8x | Low (over-review) |
+| SKIP → APPLY | 3x | **High** (false positive) |
+| CONDITIONAL → SKIP | 1x | Medium |
+
+> Haiku is too aggressive — 11 of 21 failures are false positives (recommending APPLY for SKIP/CONDITIONAL cases). Not suitable for JD analysis.
+
+### Resume Generation — Anthropic Failure Breakdown
+
+**claude-sonnet-5: 0 failures (100%)** — Perfect score.
+
+**claude-haiku-4-5: 1 failure (92.9%):**
+1. Resume was incomplete — omitted the Marriott work experience entirely. No unsupported claims, but missing required content.
+
+### Key Anthropic Findings
+
+1. **claude-sonnet-5 joins the 100% resume club** — three models now score perfect on resume generation (terra, luna, sonnet-5)
+2. **claude-sonnet-5 is the best value frontier for resume gen** — $1.44 vs terra's $0.82, but both are 100%
+3. **claude-haiku-4-5 is the best value overall for resume gen** — 92.9% at only ~$0.26, the cheapest frontier option
+4. **Haiku is terrible at JD analysis** — 38.2% is worse than every budget model tested. It over-promotes SKIP to APPLY/CONDITIONAL
+5. **Sonnet-5 JD pattern is unique** — it's too conservative (CONDITIONAL → SKIP), opposite of GPT models which are too cautious the other way (SKIP → CONDITIONAL)
+6. **No API errors for Anthropic** — unlike OpenAI, no rate limiting issues were encountered
+
+---
+
 ## Full Comparison Table: All Models Tested
 
 | Model | Provider | JD (34) | Resume (14) | Combined | Cost |
 |-------|----------|---------|-------------|----------|------|
+| claude-haiku-4.5 | Anthropic | 13/34 (38.2%) | 13/14 (92.9%) | 26/48 (54.2%) | ~$0.26 |
 | deepseek-v4-flash | Kilo | 21/34 (61.8%) | 6/14 (42.9%) | 27/48 (56.2%) | $0.21 |
 | GLM-5.2 | Kilo | 21/34 (61.8%) | 10/14 (71.4%) | 31/48 (64.6%) | $2.67 |
+| gpt-5.6-sol | OpenAI | 22/34 (64.7%) | 12/14 (85.7%) | 34/48 (70.8%) | $5.91 |
+| gpt-5.6-luna | OpenAI | 23/34 (67.6%) | 14/14 (100%) | 37/48 (77.1%) | $1.31 |
+| claude-sonnet-5 | Anthropic | 24/34 (70.6%) | 14/14 (100%) | 38/48 (79.2%) | $5.95 |
+| **gpt-5.6-terra** | **OpenAI** | **28/34 (82.4%)** | **14/14 (100%)** | **42/48 (87.5%)** | $3.02 |
 | tencent/hy3:free | Kilo | — | 8/14 (57.1%) | — | $0.00 |
 | poolside/laguna-m.1 | Kilo | — | 6/14 (42.9%) | — | $0.04 |
 | deepseek-v4-pro:discounted | Kilo | — | 4/14 (28.6%) | — | $0.14 |
-| gpt-5.6-sol | OpenAI | 22/34 (64.7%) | 12/14 (85.7%) | 34/48 (70.8%) | — |
-| **gpt-5.6-terra** | **OpenAI** | **28/34 (82.4%)** | **14/14 (100%)** | **42/48 (87.5%)** | — |
-| gpt-5.6-luna | OpenAI | 23/34 (67.6%) | 14/14 (100%) | 37/48 (77.1%) | — |
 
 ### Still Pending
 
 | Model | Provider | Status |
 |-------|----------|--------|
-| anthropic/claude-sonnet-5 | Anthropic | Not run (needs max_tokens fix from 4096 → 16000) |
-| anthropic/claude-opus-4.8 | Anthropic | Not run |
-| grok-4 | xAI | Not run |
+| grok-4.3 / grok-4.5 | xAI | Not run (~$11-25 per run) |
 | google/gemini-3-pro | Google | Not run |
 
 ---
