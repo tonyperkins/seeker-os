@@ -72,7 +72,7 @@ The results were surprising.
 
 **Mistral Large 2512 scored 76.5% on JD analysis** — second only to terra (82.4%), beating Sonnet-5 (70.6%) and Luna (67.6%). At $0.39 per eval run, it ties gpt-5.6-sol ($5.91) at 1/15th the cost. Only 1 false positive. Zero parse failures. This is the model that changed my hybrid config.
 
-**Kimi K2 scored 73.5% on JD analysis** at $0.41 — third-best non-frontier, with the safest budget failure pattern I've seen (1 false positive, dominant failure is SKIP→CONDITIONAL over-review).
+**Kimi K2 scored 73.5% on JD analysis** at $0.41 — second-best non-frontier, with the safest budget failure pattern I've seen (1 false positive, dominant failure is SKIP→CONDITIONAL over-review).
 
 **Gemini was a disaster across all three tiers.** Gemini Pro scored 60.4% combined at $3.55 — worse than GLM-5.2 ($2.67). Gemini 3.5 Flash had 11 false positives on 13 JD failures — the most dangerous model tested. Gemini 2.5 Flash scored 50.0% combined, barely above Llama 4 Maverick (47.9%). Priced like frontier models, performed like budget models.
 
