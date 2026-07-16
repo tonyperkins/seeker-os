@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "moonshotai/kimi-k2-thinking",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_moonshotai_kimi-k2-thinking.json",
+  "duration_seconds": 851,
+  "exit_code": 100
+}
+]

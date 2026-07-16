@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 import logging
 
+from seeker_os.llm.json_utils import extract_json_text
+
 from pydantic import BaseModel, field_validator
 
 from seeker_os.config import Settings, get_settings
@@ -82,17 +84,6 @@ class ExtractedMetadata(BaseModel):
         return int(round(float(v)))
 
 
-def _strip_code_fences(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        return "\n".join(lines)
-    return text
-
-
 def extract_metadata_from_jd(
     jd_text: str,
     title: str = "",
@@ -155,7 +146,7 @@ def extract_metadata_from_jd(
             logger.warning("LLM metadata extraction failed: %s", e)
         return ExtractedMetadata()
 
-    text = _strip_code_fences(response.text)
+    text = extract_json_text(response.text)
     try:
         data = json.loads(text)
     except json.JSONDecodeError:

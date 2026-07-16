@@ -19,6 +19,7 @@ from pathlib import Path
 
 import httpx
 
+from seeker_os.llm.json_utils import extract_json_text
 from seeker_os.research.models import (
     CompanyResearchResult,
     FitDossier,
@@ -252,33 +253,6 @@ _PROMPTS_DIR = Path(__file__).parent / "prompts"
 DOSSIER_SYSTEM_PROMPT = (_PROMPTS_DIR / "company_dossier_system.txt").read_text(encoding="utf-8")
 
 
-def _strip_code_fences(text: str) -> str:
-    """Strip markdown code fences from LLM response text."""
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-    return text
-
-
-def _loads_dossier_json(text: str) -> dict:
-    """Parse dossier JSON, with a bounded repair for minor malformation.
-
-    Models occasionally emit a stray prefix/suffix around the JSON object (a
-    lead-in sentence, a trailing note). On a decode failure, retry once against
-    the substring spanning the outermost braces before giving up. Raises
-    json.JSONDecodeError if the text still can't be parsed.
-    """
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end > start:
-            return json.loads(text[start:end + 1])  # may re-raise JSONDecodeError
-        raise
 
 
 def fetch_llm_dossier(
@@ -386,9 +360,9 @@ Produce the dossier now. Return ONLY valid JSON matching the output schema."""
     # Parse the response separately so a malformed model reply (recoverable, and
     # distinct from a programming error) is diagnosable — and salvageable via a
     # bounded repair — rather than being swallowed by one broad except.
-    text = _strip_code_fences(response.text)
+    text = extract_json_text(response.text)
     try:
-        data = _loads_dossier_json(text)
+        data = json.loads(text)
     except json.JSONDecodeError as e:
         logger.error(
             "LLM dossier JSON parse failed for company='%s': %s. "

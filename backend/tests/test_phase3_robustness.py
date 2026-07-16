@@ -22,8 +22,8 @@ import pytest
 
 class TestDossierJsonParse:
     def _load(self, text):
-        from seeker_os.research.company_research import _loads_dossier_json
-        return _loads_dossier_json(text)
+        from seeker_os.llm.json_utils import extract_json_text
+        return json.loads(extract_json_text(text))
 
     def test_clean_json(self):
         assert self._load('{"a": 1}') == {"a": 1}

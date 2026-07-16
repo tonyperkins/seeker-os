@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from seeker_os.api.schemas import ContactInfoSchema, MessageResponse, ResumeParseResult
 from seeker_os.database import get_connection
+from seeker_os.llm.json_utils import extract_json_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/resumes", tags=["resumes"])
@@ -230,11 +231,7 @@ def parse_master_resume():
         )
 
         # Parse the JSON response
-        import re
-        text = response.text.strip()
-        # Strip markdown code fences if present
-        text = re.sub(r'^```(?:json)?\s*', '', text)
-        text = re.sub(r'\s*```$', '', text)
+        text = extract_json_text(response.text)
         data = json.loads(text)
 
         result = ResumeParseResult(
