@@ -13,11 +13,11 @@ import yaml
 
 from seeker_os.config import Settings, CONFIG_DIR
 from seeker_os.validation import ValidationResult, Violation
+from seeker_os.llm.json_utils import extract_json_text
 from seeker_os.validation.traceability import (
     TraceabilityChecker,
     TraceabilityResult,
     ClaimJudgment,
-    _extract_json,
 )
 
 
@@ -306,69 +306,81 @@ class TestTraceabilityChecker:
 
 
 class TestExtractJson:
-    """Tests for the _extract_json parser — handles real-world LLM response variants."""
+    """Tests for the extract_json_text parser — handles real-world LLM response variants."""
 
     def test_plain_json(self):
         """Plain JSON with no fences or preamble."""
         raw = '{"claims": [{"claim": "test", "verdict": "supported"}]}'
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         assert json.loads(result) == json.loads(raw)
 
     def test_json_with_whitespace(self):
         """JSON surrounded by whitespace."""
         raw = '  \n  {"claims": []}  \n  '
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         assert json.loads(result) == {"claims": []}
 
     def test_markdown_json_fences(self):
         """JSON wrapped in ```json ... ``` fences."""
         raw = '```json\n{"claims": [{"claim": "test", "verdict": "supported"}]}\n```'
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         assert json.loads(result) == {"claims": [{"claim": "test", "verdict": "supported"}]}
 
     def test_markdown_bare_fences(self):
         """JSON wrapped in bare ``` ... ``` fences (no language tag)."""
         raw = '```\n{"claims": []}\n```'
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         assert json.loads(result) == {"claims": []}
 
     def test_prose_preamble(self):
         """Prose preamble before the JSON object."""
         raw = 'Here is the analysis:\n\n{"claims": [{"claim": "test", "verdict": "unsupported"}]}'
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         assert json.loads(result) == {"claims": [{"claim": "test", "verdict": "unsupported"}]}
 
     def test_prose_preamble_and_fences(self):
         """Prose preamble AND markdown fences — the worst case."""
         raw = 'I have analyzed the claims.\n\n```json\n{"claims": [{"claim": "5 years Go", "verdict": "supported"}]}\n```'
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         assert json.loads(result) == {"claims": [{"claim": "5 years Go", "verdict": "supported"}]}
 
     def test_trailing_text_after_json(self):
         """Text after the JSON object should be stripped."""
         raw = '{"claims": []}\n\nLet me know if you need more details.'
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         assert json.loads(result) == {"claims": []}
 
     def test_empty_response(self):
         """Empty string → returns empty (will cause JSONDecodeError in caller)."""
-        result = _extract_json("")
+        result = extract_json_text("")
         assert result == ""
 
     def test_no_json_object(self):
         """No JSON object found → returns original text (will cause JSONDecodeError)."""
-        result = _extract_json("This is not JSON at all.")
+        result = extract_json_text("This is not JSON at all.")
         assert "This is not JSON" in result
 
     def test_nested_objects(self):
         """Nested JSON objects with braces inside strings."""
         raw = '{"claims": [{"claim": "Has {skill}", "verdict": "supported", "explanation": "Found in resume"}]}'
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         assert json.loads(result)["claims"][0]["claim"] == "Has {skill}"
 
     def test_truncated_json(self):
         """Truncated JSON (missing closing brace) → returns partial (will cause JSONDecodeError)."""
         raw = '{"claims": [{"claim": "test", "verdict": "sup'
-        result = _extract_json(raw)
+        result = extract_json_text(raw)
         # Should return the partial JSON starting from {
         assert result.startswith("{")
+
+    def test_reasoning_prefix(self):
+        """Reasoning text before JSON (DeepSeek/Qwen/GLM style)."""
+        raw = 'Thinking about this...\nThe candidate has 5 years of Go.\n{"claims": [{"claim": "5 years Go", "verdict": "supported"}]}'
+        result = extract_json_text(raw)
+        assert json.loads(result) == {"claims": [{"claim": "5 years Go", "verdict": "supported"}]}
+
+    def test_reasoning_prefix_with_stray_braces(self):
+        """Reasoning text containing stray braces before the real JSON."""
+        raw = 'Let me analyze {the claims} here.\n{"claims": [{"claim": "Rust expert", "verdict": "unsupported"}]}'
+        result = extract_json_text(raw)
+        assert json.loads(result) == {"claims": [{"claim": "Rust expert", "verdict": "unsupported"}]}

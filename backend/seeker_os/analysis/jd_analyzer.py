@@ -21,21 +21,12 @@ import yaml
 
 from seeker_os.config import Settings
 from seeker_os.database import get_connection, json_decode
+from seeker_os.llm.json_utils import extract_json_text
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 SYSTEM_PROMPT = (_PROMPTS_DIR / "jd_analysis_system.txt").read_text(encoding="utf-8")
 _USER_PROMPT_TEMPLATE = (_PROMPTS_DIR / "jd_analysis_user_template.txt").read_text(encoding="utf-8")
 
-
-def _strip_code_fences(text: str) -> str:
-    """Strip markdown code fences from LLM response text."""
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-    return text
 
 
 def _load_master_resume(settings: Settings) -> str:
@@ -391,7 +382,7 @@ def analyze_job(
         ) from e
 
     # 5. Parse JSON response
-    text = _strip_code_fences(response.text)
+    text = extract_json_text(response.text)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:

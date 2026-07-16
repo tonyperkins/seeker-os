@@ -24,6 +24,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from seeker_os.config import Settings
+from seeker_os.llm.json_utils import extract_json_text
 from seeker_os.validation import ValidationResult, Violation
 
 logger = logging.getLogger(__name__)
@@ -66,64 +67,6 @@ def _build_judge_user_prompt(artifact_text: str, master_resume: str, artifact_ty
     )
 
 
-def _extract_json(text: str) -> str:
-    """Extract the JSON object from an LLM response.
-
-    Handles:
-    - Markdown code fences (```json ... ``` or ``` ... ```)
-    - Prose preamble before the JSON object
-    - Trailing text after the JSON object
-    - Plain JSON with surrounding whitespace
-    """
-    text = text.strip()
-
-    # Strip markdown code fences if present
-    if text.startswith("```"):
-        lines = text.split("\n")
-        # Remove first line (```json or ```)
-        lines = lines[1:]
-        # Remove trailing ``` if present
-        if lines and lines[-1].strip().startswith("```"):
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-
-    # If it starts with {, still use brace matching to find the end
-    # (there may be trailing text after the JSON object)
-    if text.startswith("{"):
-        start = 0
-    else:
-        # Extract the first JSON object using brace matching
-        # This handles prose preamble like "Here is the analysis:\n{...}"
-        start = text.find("{")
-        if start == -1:
-            return text  # No JSON object found — let json.loads raise
-
-    # Find the matching closing brace
-    depth = 0
-    in_string = False
-    escape = False
-    for i in range(start, len(text)):
-        ch = text[i]
-        if escape:
-            escape = False
-            continue
-        if ch == "\\":
-            escape = True
-            continue
-        if ch == '"':
-            in_string = not in_string
-            continue
-        if in_string:
-            continue
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start:i + 1]
-
-    # Truncated JSON — return what we have
-    return text[start:]
 
 
 class TraceabilityChecker:
@@ -225,7 +168,7 @@ class TraceabilityChecker:
                 checked_at=datetime.now(UTC).isoformat(),
             )
 
-        text = _extract_json(response.text)
+        text = extract_json_text(response.text)
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
