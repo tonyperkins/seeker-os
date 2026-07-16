@@ -1,0 +1,37 @@
+[
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-5",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_claude-sonnet-5.json",
+  "duration_seconds": 1087,
+  "exit_code": 100
+}
+,
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-5",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_claude-sonnet-5.json",
+  "duration_seconds": 313,
+  "exit_code": 0
+}
+,
+{
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_claude-haiku-4-5-20251001.json",
+  "duration_seconds": 382,
+  "exit_code": 100
+}
+,
+{
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_claude-haiku-4-5-20251001.json",
+  "duration_seconds": 201,
+  "exit_code": 100
+}
+]

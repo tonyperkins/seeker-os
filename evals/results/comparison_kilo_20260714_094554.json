@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "google/gemini-3.5-flash",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_google_gemini-3.5-flash.json",
+  "duration_seconds": 126,
+  "exit_code": 100
+}
+]

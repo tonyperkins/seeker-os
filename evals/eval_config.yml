@@ -1,0 +1,49 @@
+# Seeker OS — Promptfoo Eval Configuration
+#
+# Thresholds and mode settings for automated prompt evaluations.
+# Used by .github/workflows/evals.yml to gate merges and report results.
+#
+# Modes:
+#   smoke  — subset of golden dataset (5-10 cases), light tier model (cheap).
+#            Pass/fail only. Runs on every qualifying PR.
+#   full   — full golden dataset, production tier models. Threshold-gated.
+#            Runs on PRs labeled 'full-eval' or on main merges.
+
+# Thresholds — full eval mode only. Smoke mode is pass/fail only.
+thresholds:
+  verdict_accuracy: 0.85        # JD analysis verdict exact-match rate
+  faithfulness_pass_rate: 1.0   # Resume generation: 100% of cases must pass traceability
+
+# Smoke mode settings
+smoke:
+  max_cases: 8                  # subset of golden dataset for smoke runs
+  # Task tier overrides for smoke mode — use cheap models
+  task_tiers:
+    jd_analysis: light
+    resume_generation_standard: light
+    accuracy_validation: light
+
+# Full mode settings
+full:
+  # Production tier models (from config/providers.yml)
+  task_tiers:
+    jd_analysis: moderate
+    resume_generation_standard: heavy
+    accuracy_validation: light
+
+# Eval configs to run (relative to repo root)
+eval_configs:
+  - evals/promptfoo/jd_analysis.yaml
+  - evals/promptfoo/resume_generation.yaml
+
+# Paths that trigger evals on PR
+trigger_paths:
+  - backend/seeker_os/analysis/prompts/
+  - backend/seeker_os/resume/prompts/
+  - backend/seeker_os/validation/prompts/
+  - config/providers*.yml
+  - config/accuracy_rules*.yml
+  - config/identity_rules*.yml
+  - config/scoring_rubric*.yml
+  - config/channel_rules*.yml
+  - evals/

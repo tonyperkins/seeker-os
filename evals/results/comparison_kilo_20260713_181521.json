@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "z-ai/glm-5.2",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_z-ai_glm-5.2.json",
+  "duration_seconds": 1449,
+  "exit_code": 100
+}
+]

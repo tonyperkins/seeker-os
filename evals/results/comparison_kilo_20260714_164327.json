@@ -1,0 +1,10 @@
+[
+{
+  "provider": "kilo",
+  "model": "cohere/command-a",
+  "config": "resume_generation",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/resume_generation_cohere_command-a.json",
+  "duration_seconds": 207,
+  "exit_code": 100
+}
+]

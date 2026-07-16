@@ -1,0 +1,127 @@
+[
+{
+  "provider": "kilo",
+  "model": "z-ai/glm-5.2",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_z-ai_glm-5.2.json",
+  "duration_seconds": 285,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "qwen/qwen3.7-plus",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_qwen_qwen3.7-plus.json",
+  "duration_seconds": 254,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "stepfun/step-3.7-flash",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_stepfun_step-3.7-flash.json",
+  "duration_seconds": 181,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "stepfun/step-3.7-flash:free",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_stepfun_step-3.7-flash_free.json",
+  "duration_seconds": 177,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "tencent/hy3",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_tencent_hy3.json",
+  "duration_seconds": 104,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "tencent/hy3:free",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_tencent_hy3_free.json",
+  "duration_seconds": 324,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "tencent/hy3-preview",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_tencent_hy3-preview.json",
+  "duration_seconds": 331,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "poolside/laguna-m.1",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_poolside_laguna-m.1.json",
+  "duration_seconds": 109,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "poolside/laguna-m.1:free",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_poolside_laguna-m.1_free.json",
+  "duration_seconds": 185,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-pro",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_deepseek_deepseek-v4-pro.json",
+  "duration_seconds": 197,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-pro:discounted",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_deepseek_deepseek-v4-pro_discounted.json",
+  "duration_seconds": 216,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-flash",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_deepseek_deepseek-v4-flash.json",
+  "duration_seconds": 89,
+  "exit_code": 0
+}
+,
+{
+  "provider": "kilo",
+  "model": "deepseek/deepseek-v4-flash:discounted",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_deepseek_deepseek-v4-flash_discounted.json",
+  "duration_seconds": 125,
+  "exit_code": 100
+}
+,
+{
+  "provider": "kilo",
+  "model": "minimax/minimax-m3",
+  "config": "jd_analysis",
+  "result_file": "/home/tonyperkins/projects/seeker-os/evals/results/jd_analysis_minimax_minimax-m3.json",
+  "duration_seconds": 74,
+  "exit_code": 100
+}
+]

@@ -1,0 +1,19 @@
+# Model comparison list — one model ID per line
+# Lines starting with # are comments. Edit this file to trim/expand.
+# Used by: EVAL_MODELS_FILE=evals/model_list.txt ./evals/compare_models.sh
+
+# ── Budget models (no Anthropic/OpenAI/Google) ──
+z-ai/glm-5.2
+qwen/qwen3.7-plus
+stepfun/step-3.7-flash
+stepfun/step-3.7-flash:free
+tencent/hy3
+tencent/hy3:free
+tencent/hy3-preview
+poolside/laguna-m.1
+poolside/laguna-m.1:free
+deepseek/deepseek-v4-pro
+deepseek/deepseek-v4-pro:discounted
+deepseek/deepseek-v4-flash
+deepseek/deepseek-v4-flash:discounted
+minimax/minimax-m3
