@@ -169,6 +169,7 @@ def create_job_service(body: JobCreate) -> JobCreateResponse:
         gh_comp_max = None
         gh_comp_source = None
         gh_workplace_type = None
+        gh_parsed = None
         ats_source = None
         ats_board_token = None
         ats_job_id = None
