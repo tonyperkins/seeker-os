@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { RunStrip } from "@/components/run-strip";
 import { ActionQueue } from "@/components/action-queue";
 import { MetricCards } from "@/components/metric-cards";
-import { ActiveApplicationsContent, PipelineFunnel, Considering, StaleAlerts } from "@/components/dashboard-post-ready";
+import { PipelineFunnel, Considering, StaleAlerts } from "@/components/dashboard-post-ready";
+import { RankedApplications } from "@/components/ranked-applications";
 import { MovementFeedContent } from "@/components/movement-feed";
 import { SignalQualityContent } from "@/components/signal-quality-card";
 import { CollapsibleCard } from "@/components/collapsible-card";
@@ -163,7 +164,7 @@ export default async function DashboardPage() {
       >
         <div className="flex flex-col gap-2 min-h-0">
           <h4 className="text-sm font-semibold text-muted-foreground">Active Applications</h4>
-          <ActiveApplicationsContent jobs={activeJobs} />
+          <RankedApplications jobs={activeJobs} />
         </div>
         <div className="flex flex-col gap-2 min-h-0 border-l border-border pl-4">
           <h4 className="text-sm font-semibold text-muted-foreground">Movement</h4>

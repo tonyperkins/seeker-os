@@ -129,6 +129,7 @@ export const api = {
       notes?: string;
       is_pinned?: boolean;
       ai_policy?: string;
+      preference_rank?: number;
       title?: string;
       company?: string;
       location?: string;
@@ -155,6 +156,11 @@ export const api = {
       }),
     apply: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}/apply`, { method: "POST" }),
+    reorder: (jobIds: number[]) =>
+      fetchAPI<{ message: string }>(`/api/jobs/reorder`, {
+        method: "POST",
+        body: JSON.stringify({ job_ids: jobIds }),
+      }),
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/jobs/${id}`, { method: "DELETE" }),
     addRecruiter: (jobId: number, data: {

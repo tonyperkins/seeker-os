@@ -41,6 +41,7 @@ from seeker_os.api.schemas import (
     JobDetail,
     JobOverride,
     JobReject,
+    JobReorderRequest,
     JobSkip,
     JobUpdate,
     MessageResponse,
@@ -98,7 +99,7 @@ def list_jobs(
     exclude_status: str | None = Query(None, description="Comma-separated statuses to exclude (e.g. 'rejected,skipped')"),
     recruiter_source: str | None = Query(None, description="Filter by recruiter contact source (e.g. 'LinkedIn', 'email')"),
     has_recruiter: bool | None = Query(None, description="Filter to jobs with (true) or without (false) recruiter contacts"),
-    sort_by: Literal["score", "net_score", "status", "run_id", "title", "company", "comp", "location", "ats"] | None = Query(
+    sort_by: Literal["score", "net_score", "status", "run_id", "title", "company", "comp", "location", "ats", "preference"] | None = Query(
         None,
         description="Sort field. Defaults to net_score for ready jobs and score otherwise.",
     ),
@@ -202,6 +203,45 @@ def create_job(body: JobCreate):
     return create_job_service(body)
 
 
+@router.post("/reorder", response_model=MessageResponse)
+def reorder_jobs(body: JobReorderRequest):
+    """Assign preference_rank 1..N to the given job ids, in list order (most preferred first).
+
+    This is the candidate's own priority among jobs — independent of the
+    system's score/net_score. Used by drag-and-drop reordering in the UI.
+    """
+    if not body.job_ids:
+        raise HTTPException(status_code=422, detail="job_ids must not be empty")
+    if len(set(body.job_ids)) != len(body.job_ids):
+        raise HTTPException(status_code=422, detail="job_ids must not contain duplicates")
+
+    db = get_connection()
+    try:
+        placeholders = ",".join("?" for _ in body.job_ids)
+        existing_ids = {
+            r["id"] for r in db.execute(
+                f"SELECT id FROM jobs WHERE id IN ({placeholders})", body.job_ids,
+            ).fetchall()
+        }
+        missing = [jid for jid in body.job_ids if jid not in existing_ids]
+        if missing:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job(s) not found: {', '.join(str(m) for m in missing)}",
+            )
+
+        now = datetime.now(UTC).isoformat()
+        for rank, job_id in enumerate(body.job_ids, start=1):
+            db.execute(
+                "UPDATE jobs SET preference_rank=?, updated_at=? WHERE id=?",
+                (rank, now, job_id),
+            )
+        db.commit()
+        return MessageResponse(message=f"Reordered {len(body.job_ids)} job(s)")
+    finally:
+        db.close()
+
+
 @router.post("/{job_id}/override", response_model=MessageResponse)
 def override_job(job_id: int, body: JobOverride):
     """Override a rejected job — auditable, not a silent status flip."""
@@ -275,6 +315,8 @@ def update_job(job_id: int, update: JobUpdate):
             if update.ai_policy not in valid_policies:
                 raise HTTPException(status_code=422, detail=f"ai_policy must be one of: {', '.join(valid_policies)}")
             db.execute("UPDATE jobs SET ai_policy=?, updated_at=? WHERE id=?", (update.ai_policy, now, job_id))
+        if update.preference_rank is not None:
+            db.execute("UPDATE jobs SET preference_rank=?, updated_at=? WHERE id=?", (update.preference_rank, now, job_id))
 
         detail_fields = {
             "title": update.title,

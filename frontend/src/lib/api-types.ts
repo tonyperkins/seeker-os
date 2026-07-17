@@ -53,6 +53,7 @@ export interface JobSummary {
   source_id: string;
   discovered_query: string;
   run_id: string | null;
+  preference_rank: number | null;
   is_stale: boolean;
   days_since_last_activity: number | null;
   has_analysis: boolean;
@@ -66,7 +67,7 @@ export interface JobSummary {
   recruiter_source: string | null;
 }
 
-export type JobSortKey = "score" | "net_score" | "status" | "run_id" | "title" | "company" | "comp" | "location" | "ats";
+export type JobSortKey = "score" | "net_score" | "status" | "run_id" | "title" | "company" | "comp" | "location" | "ats" | "preference";
 export type SortOrder = "asc" | "desc";
 
 export type PaginatedJobsResponse = Omit<ApiComponents["schemas"]["PaginatedJobsResponse"], "jobs"> & {

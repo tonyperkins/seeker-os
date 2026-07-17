@@ -11,7 +11,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { CollapsibleCard } from "@/components/collapsible-card";
 import type { JobSummary } from "@/lib/api";
 
-const STATUS_LABELS: Record<string, string> = {
+export const STATUS_LABELS: Record<string, string> = {
   reviewing: "Reviewing",
   interested: "Interested",
   applied: "Applied",
@@ -22,7 +22,7 @@ const STATUS_LABELS: Record<string, string> = {
   offer_declined: "Offer Declined",
 };
 
-function StaleBadge({ days, threshold = 14 }: { days: number; threshold?: number }) {
+export function StaleBadge({ days, threshold = 14 }: { days: number; threshold?: number }) {
   if (days < threshold) return null;
   const isCritical = days >= threshold * 2;
   return (
