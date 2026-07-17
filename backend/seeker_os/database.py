@@ -178,11 +178,18 @@ def _migrate_flat_recruiter_columns(conn):
 # Schema migrations
 # ---------------------------------------------------------------------------
 
+# The squash migration at index 0 consolidates the original 31 individual
+# migrations.  DBs that ran those old migrations have user_version up to 31,
+# which exceeds len(MIGRATIONS) after the squash and causes range() to skip
+# all new migrations.  run_migrations() uses this constant to detect and
+# remap those DBs to the post-squash baseline (user_version = 1).
+_PRE_SQUASH_HIGH_WATER_MARK = 31
+
 MIGRATIONS: list[str | callable] = [
     # Squashed v1-v31: all tables in their final form.
-    # This single migration replaces migrations 1-31 for fresh DBs.
-    # Existing prod DBs at user_version >= 31 skip this entirely
-    # (range(31, 1) is empty — run_migrations loop does nothing).
+    # This single migration replaces migrations 1-30 for fresh DBs.
+    # Existing prod DBs at user_version >= 30 are remapped to user_version = 1
+    # by run_migrations() so subsequent migrations run normally.
     """
     -- jobs (final form: all ALTER TABLE columns merged in, no recruiter_* columns)
     CREATE TABLE IF NOT EXISTS jobs (
@@ -545,6 +552,22 @@ def run_migrations(db_path: Path | str | None = None) -> None:
     conn.isolation_level = None  # manual BEGIN/COMMIT/ROLLBACK control
     try:
         current_version = conn.execute("PRAGMA user_version").fetchone()[0]
+
+        # If user_version exceeds len(MIGRATIONS), the DB predates the squash
+        # and already has the schema from migration index 0.  Remap to 1
+        # (squash applied) so pending migrations run normally.
+        if current_version > len(MIGRATIONS):
+            if current_version > _PRE_SQUASH_HIGH_WATER_MARK:
+                raise RuntimeError(
+                    f"Database user_version {current_version} is higher than "
+                    f"the pre-squash high-water mark ({_PRE_SQUASH_HIGH_WATER_MARK}) "
+                    f"and current schema version ({len(MIGRATIONS)}). "
+                    f"This DB may be from a newer version of Seeker OS."
+                )
+            print(f"  Remapping pre-squash user_version {current_version} -> 1")
+            conn.execute("PRAGMA user_version = 1")
+            current_version = 1
+
         for i in range(current_version, len(MIGRATIONS)):
             migration = MIGRATIONS[i]
             conn.execute("BEGIN")
@@ -584,7 +607,7 @@ def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
         conn = sqlite3.connect(str(db_path))
         current = conn.execute("PRAGMA user_version").fetchone()[0]
         conn.close()
-        if current < len(MIGRATIONS):
+        if current != len(MIGRATIONS):
             run_migrations(db_path)
 
     conn = sqlite3.connect(str(db_path))

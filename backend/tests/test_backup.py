@@ -109,12 +109,13 @@ class TestDbRestoreVersionCheck:
         assert "restored" in r.json().get("message", "").lower() or r.json().get("ok") is True
 
     def test_future_version_db_rejected(self, client, tmp_path):
-        """A DB with user_version > len(MIGRATIONS) should be rejected."""
+        """A DB with user_version beyond the pre-squash range should be rejected."""
         import sqlite3
+        from seeker_os.database import _PRE_SQUASH_HIGH_WATER_MARK
 
         db_path = tmp_path / "test_future.db"
         conn = sqlite3.connect(str(db_path))
-        conn.execute("PRAGMA user_version = %d" % (len(MIGRATIONS) + 1))
+        conn.execute("PRAGMA user_version = %d" % (_PRE_SQUASH_HIGH_WATER_MARK + 1))
         conn.execute("CREATE TABLE test (id INTEGER)")
         conn.commit()
         conn.close()
