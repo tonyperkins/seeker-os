@@ -40,6 +40,9 @@ class JobSummary(BaseModel):
     discovered_query: str = ""
     run_id: str | None = None
 
+    # Candidate-controlled preference ranking (NULL = unranked; lower = more preferred)
+    preference_rank: int | None = None
+
     # Derived recruiter indicator (computed from recruiter_contacts table)
     has_recruiter: bool = False
     recruiter_source: str | None = None
@@ -134,6 +137,7 @@ class JobDetail(BaseModel):
 
     is_pinned: bool = False
     ai_policy: str | None = None
+    preference_rank: int | None = None
 
     # Research-adjusted scoring (Phase 3.2)
     research_adjusted_score: float | None = None
@@ -242,6 +246,7 @@ class JobUpdate(BaseModel):
     notes: str | None = None
     is_pinned: bool | None = None
     ai_policy: str | None = None
+    preference_rank: int | None = None
     # Editable job details
     title: str | None = None
     company: str | None = None
@@ -262,6 +267,11 @@ class JobUpdate(BaseModel):
         if v is None:
             return None
         return int(round(float(v)))
+
+
+class JobReorderRequest(BaseModel):
+    """POST /api/jobs/reorder — job_ids in desired preference order (most preferred first)."""
+    job_ids: list[int]
 
 
 class RecruiterContact(BaseModel):

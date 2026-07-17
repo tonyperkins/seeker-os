@@ -156,6 +156,7 @@ def row_to_summary(
         source_id=row["source_id"] or "",
         discovered_query=row["discovered_query"] or "",
         run_id=row["run_id"] if "run_id" in row.keys() else None,
+        preference_rank=row["preference_rank"] if "preference_rank" in row.keys() else None,
         is_stale=is_stale,
         days_since_last_activity=days_since,
         has_analysis=has_analysis,
@@ -250,6 +251,7 @@ def row_to_detail(row, db=None) -> JobDetail:
         cross_ref_score=row["cross_ref_score"],
         is_pinned=bool(row["is_pinned"]),
         ai_policy=row["ai_policy"] if "ai_policy" in row.keys() else None,
+        preference_rank=row["preference_rank"] if "preference_rank" in row.keys() else None,
         research_adjusted_score=row["research_adjusted_score"] if "research_adjusted_score" in row.keys() else None,
         research_delta=row["research_delta"] if "research_delta" in row.keys() else 0.0,
         analysis_verdict=row["analysis_verdict"] if "analysis_verdict" in row.keys() else None,
@@ -280,6 +282,7 @@ JOB_SORT_EXPRESSIONS: dict[str, str] = {
     "comp": "COALESCE(comp_min, comp_max)",
     "location": "LOWER(COALESCE(location, ''))",
     "ats": "LOWER(COALESCE(ats_source, ''))",
+    "preference": "COALESCE(preference_rank, 999999)",
 }
 
 

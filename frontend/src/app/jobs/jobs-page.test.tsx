@@ -39,7 +39,7 @@ function job(id: number, title: string): JobSummary {
     seniority_level: null, date_posted: "", discovered_at: "", apply_url: "",
     ats_source: null, cross_ref_status: null, is_pinned: false, reject_reason: null,
     reject_details: null, ai_policy: null, source_id: "manual", discovered_query: "",
-    run_id: null, is_stale: false, days_since_last_activity: null, has_analysis: false,
+    run_id: null, preference_rank: null, is_stale: false, days_since_last_activity: null, has_analysis: false,
     has_research: false, has_resume: false, analysis_verdict: null, net_score: 7,
     score_modifiers: {}, score_reasons: [], has_recruiter: false, recruiter_source: null,
   };

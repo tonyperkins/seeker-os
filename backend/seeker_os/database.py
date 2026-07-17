@@ -506,6 +506,11 @@ MIGRATIONS: list[str | callable] = [
     CREATE INDEX IF NOT EXISTS idx_retrieval_calls_adapter_date
         ON retrieval_calls(adapter_type, called_at);
     """,
+    # v33: candidate-controlled preference ranking, independent of system score.
+    # NULL = unranked; lower value = more preferred (1 = top choice).
+    """
+    ALTER TABLE jobs ADD COLUMN preference_rank INTEGER;
+    """,
 ]
 
 
