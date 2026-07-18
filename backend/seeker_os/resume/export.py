@@ -151,32 +151,16 @@ def _add_runs_to_paragraph(paragraph, text: str, font_name: str = "Arial",
                            font_size: int = 10, color: str = "222222",
                            bold: bool = False, italic: bool = False):
     """Add inline-formatted runs to a paragraph from markdown text."""
-    from docx.oxml.ns import qn
     from docx.shared import Pt, RGBColor
 
     tokens = _parse_inline_markdown(text)
     for token_text, token_bold, token_italic, url in tokens:
-        # Split token on URL separators to apply noWrap per-URL, not per-line
-        url_pattern = re.compile(r'(https?://\S+)')
-        parts = url_pattern.split(token_text)
-
-        for part in parts:
-            if not part:
-                continue
-            run = paragraph.add_run(part)
-            run.font.name = font_name
-            run.font.size = Pt(font_size)
-            run.font.color.rgb = RGBColor.from_string(color)
-            run.bold = bold or token_bold
-            run.italic = italic or token_italic
-
-            # Apply noWrap to individual URLs so they never split mid-URL
-            if part.startswith('https://') or part.startswith('http://'):
-                rPr = run._element.get_or_add_rPr()
-                no_wrap = rPr.find(qn('w:noWrap'))
-                if no_wrap is None:
-                    no_wrap = rPr.makeelement(qn('w:noWrap'), {})
-                    rPr.append(no_wrap)
+        run = paragraph.add_run(token_text)
+        run.font.name = font_name
+        run.font.size = Pt(font_size)
+        run.font.color.rgb = RGBColor.from_string(color)
+        run.bold = bold or token_bold
+        run.italic = italic or token_italic
 
 
 def _add_section_rule(paragraph, color: str = "2E5A8C", size: str = "6"):
