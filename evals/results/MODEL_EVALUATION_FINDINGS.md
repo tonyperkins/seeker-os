@@ -14,7 +14,7 @@
 | Task | Recommended Model | Provider | Accuracy | Cost/Run | Notes |
 |------|-------------------|----------|----------|----------|-------|
 | **JD Analysis (best)** | `gpt-5.6-terra` | OpenAI | 82.4% | ~$3.02 | Best JD accuracy; safe failure mode (SKIP→CONDITIONAL) |
-| **JD Analysis (budget)** | `mistralai/mistral-large-2512` | Kilo | 76.5% | ~$0.29 | 2nd best JD score overall; only 1 false positive; zero parse errors |
+| **JD Analysis (budget)** | `>` | Kilo | 76.5% | ~$0.29 | 2nd best JD score overall; only 1 false positive; zero parse errors |
 | **JD Analysis (budget alt)** | `moonshotai/kimi-k2` | Kilo | 73.5% | ~$0.41 | Safest budget failure pattern; only 1 false positive |
 | **Resume Generation (best)** | `gpt-5.6-terra`, `gpt-5.6-luna`, or `claude-sonnet-5` | OpenAI/Anthropic | **100%** | $0.82-1.44 | Three-way tie at perfect score |
 | **Resume Generation (value)** | `claude-haiku-4-5` | Anthropic | 92.9% | ~$0.26 | Near-perfect at lowest frontier cost |

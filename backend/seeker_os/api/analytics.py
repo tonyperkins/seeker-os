@@ -1173,18 +1173,19 @@ def get_spend():
                     auto_priced.add(key)
             pricing[key] = (in_price, out_price)
 
-    def _estimate_cost(provider: str, model: str, in_tok: int, out_tok: int) -> float:
-        key = (provider, model)
-        in_price, out_price = pricing.get(key, (None, None))
-        # Fuzzy match: handle version-pinned IDs like 'qwen/qwen3.7-max-20260520'
-        # where the cache has the base ID 'qwen/qwen3.7-max'
+    def _fuzzy_pricing(provider: str, model: str) -> tuple[float | None, float | None]:
+        """Look up pricing with fuzzy suffix matching for version-pinned IDs."""
+        in_price, out_price = pricing.get((provider, model), (None, None))
         if in_price is None and out_price is None:
             for (p, m), (pin, pout) in pricing.items():
                 if p != provider:
                     continue
                 if model.startswith(m + "-") or m.startswith(model + "-"):
-                    in_price, out_price = pin, pout
-                    break
+                    return pin, pout
+        return in_price, out_price
+
+    def _estimate_cost(provider: str, model: str, in_tok: int, out_tok: int) -> float:
+        in_price, out_price = _fuzzy_pricing(provider, model)
         cost = 0.0
         if in_price is not None:
             cost += in_tok / 1_000_000 * in_price
@@ -1223,7 +1224,7 @@ def get_spend():
             calls = r["calls"] or 0
             in_tok = r["in_tok"] or 0
             out_tok = r["out_tok"] or 0
-            cost = r["ledger_cost"] or 0.0
+            cost = _estimate_cost(provider_id, model_id, in_tok, out_tok)
 
             total_calls += calls
             total_in += in_tok
@@ -1353,8 +1354,8 @@ def get_spend():
                     input_tokens=d["in"],
                     output_tokens=d["out"],
                     estimated_cost=round(d["cost"], 4),
-                    input_price_per_mtok=pricing.get((d["provider"], d["model"]), (None, None))[0],
-                    output_price_per_mtok=pricing.get((d["provider"], d["model"]), (None, None))[1],
+                    input_price_per_mtok=_fuzzy_pricing(d["provider"], d["model"])[0],
+                    output_price_per_mtok=_fuzzy_pricing(d["provider"], d["model"])[1],
                     pricing_source=(
                         "yaml+auto" if (d["provider"], d["model"]) in yaml_priced and (d["provider"], d["model"]) in auto_priced
                         else "yaml" if (d["provider"], d["model"]) in yaml_priced
@@ -1374,5 +1375,60 @@ def get_spend():
             partial=True,
             warnings=["Usage before the LLM ledger activation is not included."],
         )
+    finally:
+        db.close()
+
+
+@router.post("/spend/backfill-costs")
+def backfill_ledger_costs():
+    """Recompute estimated_cost for existing ledger rows using current pricing data.
+
+    Fixes rows that were recorded with estimated_cost = 0 because the model cache
+    was empty at call time. Uses the same _pricing() logic as finish_call(),
+    including fuzzy suffix matching for version-pinned model IDs.
+    """
+    from seeker_os.observability.llm_ledger import _pricing
+
+    settings = get_settings()
+    db = get_connection()
+    try:
+        rows = db.execute(
+            """SELECT call_id, COALESCE(actual_provider, requested_provider) AS provider,
+                      COALESCE(actual_model, requested_model) AS model,
+                      input_tokens, output_tokens
+               FROM llm_calls"""
+        ).fetchall()
+
+        updated = 0
+        unchanged = 0
+        still_unpriced = 0
+        for r in rows:
+            price_in, price_out = _pricing(settings, r["provider"], r["model"])
+            in_tok = r["input_tokens"] or 0
+            out_tok = r["output_tokens"] or 0
+            cost = (in_tok * (price_in or 0) + out_tok * (price_out or 0)) / 1_000_000
+            if price_in is None and price_out is None:
+                still_unpriced += 1
+            db.execute(
+                """UPDATE llm_calls SET
+                    input_price_per_mtok = ?, output_price_per_mtok = ?, estimated_cost = ?
+                   WHERE call_id = ?""",
+                (price_in, price_out, cost, r["call_id"]),
+            )
+            if cost > 0:
+                updated += 1
+            else:
+                unchanged += 1
+        db.commit()
+        logger.info(
+            "ledger cost backfill: %d updated, %d unchanged, %d still unpriced (total %d)",
+            updated, unchanged, still_unpriced, len(rows),
+        )
+        return {
+            "total_rows": len(rows),
+            "rows_with_cost": updated,
+            "rows_zero_cost": unchanged,
+            "rows_still_unpriced": still_unpriced,
+        }
     finally:
         db.close()
