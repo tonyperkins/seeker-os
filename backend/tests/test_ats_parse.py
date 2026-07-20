@@ -61,17 +61,32 @@ def resume_66_data():
             elif e["metric_name"] == "competency_selection" and "selected_labels" in d:
                 category_labels = d["selected_labels"]
 
-        # Get pinned bullet texts from master
+        # Reconstruct pinned bullet texts from audit records — the same
+        # approach used by revalidate_all.  Only bullets that were
+        # selected with reason=pinned in the generation's own audit
+        # records are included, cross-referenced against the master to
+        # get the text.  This avoids stale test data when new pins are
+        # added to the master after the resume was generated.
         parsed = parse_master_resume(master_resume)
         pinned: list[str] = []
-        for role in parsed.roles:
-            for b in role.bullets:
-                if b.pinned:
-                    pinned.append(b.text)
-        for proj in parsed.projects:
-            for b in proj.bullets:
-                if b.pinned:
-                    pinned.append(b.text)
+        for e in evals:
+            if e["metric_name"] != "bullet_selection":
+                continue
+            d = json.loads(e["details_json"]) if e["details_json"] else {}
+            selected = d.get("selected", [])
+            pinned_indices = [s["index"] for s in selected if s.get("reason") == "pinned"]
+            if not pinned_indices:
+                continue
+            for role in parsed.roles:
+                if role.role_id == e["label"]:
+                    for idx in pinned_indices:
+                        if idx < len(role.bullets) and role.bullets[idx].pinned:
+                            pinned.append(role.bullets[idx].text)
+            for proj in parsed.projects:
+                if proj.project_id == e["label"]:
+                    for idx in pinned_indices:
+                        if idx < len(proj.bullets) and proj.bullets[idx].pinned:
+                            pinned.append(proj.bullets[idx].text)
 
         return {
             "settings": settings,

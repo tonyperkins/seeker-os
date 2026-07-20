@@ -20,7 +20,7 @@ from seeker_os.database import get_connection, json_decode
 from seeker_os.events import Actor, EventType, JobStatus, record_event, transition_status
 from seeker_os.llm.router import ModelRouter
 from seeker_os.observability.llm_ledger import attach_artifact, digest, fingerprint, record_evaluation
-from seeker_os.resume.bullet_ranker import CompetencySelectionResult, select_bullets_for_role, select_competencies, select_projects
+from seeker_os.resume.bullet_ranker import CompetencySelectionResult, select_bullets_for_role, select_competencies, select_projects, strip_html_to_text, tokenize
 from seeker_os.resume.master_parser import parse_master_resume, render_filtered_master
 from seeker_os.resume.role_recency import years_since_end
 from seeker_os.validation import AccuracyValidator, Violation
@@ -316,6 +316,46 @@ def _run_deterministic_bullet_selection(
         parsed = parse_master_resume(master_resume)
         title_stopwords = frozenset(tiering.title_stopwords)
         business_stopwords = frozenset(tiering.business_stopwords)
+
+        # --- HTML preprocessing: strip tags/entities before scoring ---
+        # The JD may be stored as raw HTML (e.g. from ATS board fetches).
+        # The deterministic scorer needs plain text; the LLM prompt gets the
+        # raw jd_text separately.
+        scoring_jd = strip_html_to_text(jd_text)
+
+        # --- Blind-selection guard ---
+        # If the JD term map is empty after stripping + scoping, selection
+        # runs blind (master-order fallback).  Record a loud audit warning
+        # so this is visible, not silent.
+        from seeker_os.resume.bullet_ranker import scope_jd_text as _scope
+        scoped_jd, jd_scope_mode = _scope(scoring_jd)
+        jd_terms_check = tokenize(scoped_jd, business_stopwords=business_stopwords)
+        selection_ran_blind = len(jd_terms_check) == 0
+
+        if jd_scope_mode == "scope_collapsed" or selection_ran_blind:
+            try:
+                record_evaluation(
+                    operation_id=operation_id,
+                    evaluator_name="bullet_selection",
+                    evaluator_type="deterministic",
+                    metric_name="jd_scope_warning",
+                    passed=True,
+                    label="jd_scope_collapsed" if jd_scope_mode == "scope_collapsed" else "selection_ran_blind",
+                    details={
+                        "jd_scope_mode": jd_scope_mode,
+                        "scoring_jd_chars": len(scoring_jd),
+                        "scoped_jd_chars": len(scoped_jd),
+                        "jd_term_count": len(jd_terms_check),
+                        "raw_jd_chars": len(jd_text),
+                        "had_html": "<" in jd_text,
+                        "warning": "jd_scope_collapsed" if jd_scope_mode == "scope_collapsed" else "selection_ran_blind",
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "jd_scope_warning_write_failed",
+                    extra={"operation_id": operation_id, "mode": jd_scope_mode},
+                )
         selections: dict[str, list[int]] = {}
         role_titles: dict[str, str] = {}
         mid_old_active = False
@@ -343,7 +383,7 @@ def _run_deterministic_bullet_selection(
 
             result = select_bullets_for_role(
                 bullets=role.bullets,
-                jd_text=jd_text,
+                jd_text=scoring_jd,
                 job_title=job_title,
                 cap=cap,
                 near_duplicate_threshold=tiering.near_duplicate_similarity_threshold,
@@ -398,7 +438,7 @@ def _run_deterministic_bullet_selection(
 
             result = select_bullets_for_role(
                 bullets=role.bullets,
-                jd_text=jd_text,
+                jd_text=scoring_jd,
                 job_title=job_title,
                 cap=cap,
                 near_duplicate_threshold=tiering.near_duplicate_similarity_threshold,
@@ -444,7 +484,7 @@ def _run_deterministic_bullet_selection(
 
             result = select_bullets_for_role(
                 bullets=role.bullets,
-                jd_text=jd_text,
+                jd_text=scoring_jd,
                 job_title=job_title,
                 cap=cap,
                 near_duplicate_threshold=tiering.near_duplicate_similarity_threshold,
@@ -489,7 +529,7 @@ def _run_deterministic_bullet_selection(
         if parsed.projects:
             proj_result = select_projects(
                 projects=parsed.projects,
-                jd_text=jd_text,
+                jd_text=scoring_jd,
                 job_title=job_title,
                 max_projects=tiering.max_projects,
                 max_bullets_per_project=tiering.max_bullets_per_project,
@@ -588,7 +628,7 @@ def _run_deterministic_bullet_selection(
         if parsed.categories:
             cat_result = select_competencies(
                 categories=parsed.categories,
-                jd_text=jd_text,
+                jd_text=scoring_jd,
                 job_title=job_title,
                 max_categories=tiering.max_competency_categories,
                 always_include=tiering.always_include_competency_categories,
