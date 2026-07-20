@@ -287,3 +287,109 @@ original validation to still be valid.
 
 Trust nothing, verify everything, and when the verification is wrong
 (because it will be), verify the verification.
+
+---
+
+## 7. Silent Degradation: The Three Instances
+
+The deterministic selection pipeline had three independent silent-degradation
+modes, each with the same structure: a plausible code path that produces
+correct-looking output while quietly discarding all signal.
+
+### Instance 1: HTML JD → scope_jd_text collapses to empty
+
+**Trigger**: Job 1727 (Trojan Trading) stored its JD as raw HTML on a single
+10,630-char line. The boilerplate regex matched `pto` inside `crypto` (no word
+boundaries), and since the entire JD was one line, the filter stripped
+everything. `scope_jd_text` returned `("", "full_text_filtered")` — zero
+characters.
+
+**Effect**: Every bullet and competency category scored 0.0. Selection ran in
+master order only — the JD's actual terms (Kubernetes, Terraform, Prometheus,
+Grafana, observability) never reached the scorer. The output looked correct
+(resume had bullets, categories, pinned content) but was completely untailored.
+
+**Fix**: Three-layer defense — (1) `strip_html_to_text()` before scoring, (2)
+word-bound all boilerplate regex patterns, (3) `scope_collapsed` fallback: if
+filtering produces < 100 chars, return raw text and record an audit warning.
+
+**Discovery**: Production audit of resume 66. Every bullet_selection audit
+record showed `score=0.0, matched_terms=[]`. The JD had the right terms — they
+just never reached the scorer.
+
+### Instance 2: Config fields absent → silent no-op
+
+**Trigger**: The Phase 1-3 deterministic selection code was merged to prod
+(PR #145), but the config that activates it was not. Prod `channel_rules.yml`
+had only the original 5 fields (`target_pages`, `recent_years`, `mid_years`,
+`mid_max_bullets`, `old_max_bullets`). All 20+ new fields
+(`always_include_competency_categories`, `max_competency_categories`,
+`title_boost`, `business_stopwords`, etc.) were absent.
+
+**Effect**: The code gracefully no-ops when fields are absent — `if not
+tiering: return master_resume, {}, {}, False, False, False, [], []`. Every
+prod generation since the merge ran with defaults, not the tuned config. The
+deterministic selection pipeline was deployed but never activated in
+production. SRE Practice was in the dev config's `always_include` list but
+absent from prod — it was never even considered for inclusion.
+
+**Fix**: Config sync via backup-restore endpoint. Verified by regenerating
+resume 67: SRE Practice fired as always-include, real matched terms in all
+audit records, `jd_scope_mode=section_headers` (not `full_text_filtered`).
+
+**Discovery**: Production audit of resume 66. The competency_selection audit
+showed `always_include: []` — the list was empty at generation time, despite
+the dev config having three entries.
+
+### Instance 3: Stale test data → false failures
+
+**Trigger**: The ATS parse test fixture read all pinned bullets from the
+current master resume (6 pins after the early-career pin addition) and
+asserted them against resume 66's stored render (generated with 4 pins).
+
+**Effect**: `pin_content_4` and `pin_content_5` failed — the 2 new pins
+weren't in the stored resume. The test reported "ATS parse gate failed" for a
+resume that actually passed at generation time. This broke the baseline (4
+failures instead of 1 known-red).
+
+**Fix**: Source expected pins from the generation's own audit records
+(`bullet_selection` evals with `reason=pinned`), cross-referenced against the
+master for text — mirroring how `revalidate_all` already works.
+
+**Discovery**: Baseline check after the HTML fix. "4 pre-existing failures"
+contradicted the accepted baseline of 984/1-known-red/0-others.
+
+### The Pattern
+
+All three instances share the same structure: a system that produces
+correct-looking output while silently discarding signal. The HTML fix
+addresses the trigger. The config sync addresses the activation. The test fix
+addresses the verification. But the pattern itself — "plausible code path that
+quietly does nothing" — is the disease. The proposed startup warning for
+missing `content_tiering` fields (see below) is the prophylactic.
+
+### Proposed: Startup Warning for Missing content_tiering Fields
+
+**Proposal only — no implementation yet.**
+
+When `content_tiering` is present but key fields are absent
+(`always_include_competency_categories`, `max_competency_categories`,
+`title_boost`, `business_stopwords`, etc.), emit a startup warning:
+
+```
+WARNING: channel_rules.yml content_tiering is missing N fields
+  (always_include_competency_categories, max_competency_categories, ...).
+  Deterministic selection will run with defaults, not tuned config.
+  Sync from the approved dev config to activate Phase 1-3 features.
+```
+
+This would have caught Instance 2 at the first prod generation after the
+PR #145 merge, instead of requiring a production audit to discover.
+
+**Considerations**:
+- Warning level (not error) — the code legitimately no-ops when fields are
+  absent, and that's the correct fallback behavior.
+- One-time at startup, not per-request — the settings cache means it fires
+  once per process lifetime.
+- Field list should be maintained alongside the `ContentTieringConfig` model
+  to avoid drift.
