@@ -65,16 +65,21 @@ _JD_SECTION_HEADERS = re.compile(
 )
 
 # Boilerplate patterns — lines to exclude when no section headers are found.
+# All patterns are word-bounded to prevent substring hazards (e.g. "pto"
+# matching inside "crypto", "eeo" inside "theoretical", "remote" inside
+# "remotely-sensed"). Multi-word phrases use \b at both ends; single tokens
+# use \b at both ends. Hyphenated patterns like "on-site" use \b and the
+# optional hyphen.
 _BOILERPLATE_RE = re.compile(
     r"(?:"
-    r"equal opportunity|eeo|diversity|inclusion|"
-    r"benefits|health insurance|401k|pto|paid time off|"
-    r"compensation|salary range|pay range|base salary|"
-    r"we offer|our benefits|"
-    r"reasonable accommodation|disability|"
-    r"background check|drug screen|"
-    r"visa sponsorship|sponsorship|"
-    r"remote|hybrid|on.site|work from home"
+    r"\bequal opportunity\b|\beeo\b|\bdiversity\b|\binclusion\b|"
+    r"\bbenefits\b|\bhealth insurance\b|\b401k\b|\bpto\b|\bpaid time off\b|"
+    r"\bcompensation\b|\bsalary range\b|\bpay range\b|\bbase salary\b|"
+    r"\bwe offer\b|\bour benefits\b|"
+    r"\breasonable accommodation\b|\bdisability\b|"
+    r"\bbackground check\b|\bdrug screen\b|"
+    r"\bvisa sponsorship\b|\bsponsorship\b|"
+    r"\bremote\b|\bhybrid\b|\bon[.-]site\b|\bwork from home\b"
     r")",
     re.IGNORECASE,
 )
@@ -85,6 +90,38 @@ def tokenize(text: str, business_stopwords: frozenset[str] | None = None) -> lis
     raw = _TOKEN_RE.findall(text.lower())
     stops = _STOPWORDS | (business_stopwords or _DEFAULT_BUSINESS_STOPWORDS)
     return [t for t in raw if t not in stops and len(t) > 1]
+
+
+def strip_html_to_text(html: str) -> str:
+    """Strip HTML tags/entities to plain text, preserving block structure.
+
+    Converts block-element boundaries (<br>, </p>, </div>, headings, list
+    items, table rows) to newlines so the JD's structure survives for
+    line-by-line scope_jd_text processing.  Whitespace is normalized per
+    line; blank lines are dropped.
+    """
+    import html as html_mod
+    if not html:
+        return ""
+    if "<" not in html:
+        return html_mod.unescape(html)  # plain text, but still decode entities
+    # Remove script and style blocks entirely
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    # <br> and block-closing tags become line breaks
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"</(p|div|h[1-6]|tr|ul|ol|section|article|header|footer|blockquote|pre|dd|dt)\s*>",
+        "\n", text, flags=re.IGNORECASE,
+    )
+    # List items start on a new line with a bullet
+    text = re.sub(r"<li[^>]*>", "\n- ", text, flags=re.IGNORECASE)
+    # Remove all remaining tags
+    text = re.sub(r"<[^>]+>", " ", text)
+    # Decode HTML entities
+    text = html_mod.unescape(text)
+    # Normalize spaces/tabs within each line, drop blank lines
+    lines = [re.sub(r"[ \t\r\f\v]+", " ", ln).strip() for ln in text.splitlines()]
+    return "\n".join(ln for ln in lines if ln)
 
 
 def scope_jd_text(jd_text: str) -> tuple[str, str]:
@@ -154,7 +191,14 @@ def scope_jd_text(jd_text: str) -> tuple[str, str]:
         if not _BOILERPLATE_RE.search(line)
     ]
     if len(filtered) < len(lines):
-        return "\n".join(filtered), "full_text_filtered"
+        result = "\n".join(filtered)
+        # Blind-selection guard: if filtering collapsed the JD to near-empty,
+        # fall back to the raw text.  The boilerplate filter is a nicety, not
+        # a correctness gate — an over-aggressive regex must never starve the
+        # scorer of all JD terms.
+        if len(result.strip()) < 100:
+            return jd_text, "scope_collapsed"
+        return result, "full_text_filtered"
     return jd_text, "full_text"
 
 

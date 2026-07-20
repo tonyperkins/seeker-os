@@ -314,6 +314,8 @@ Benefits:
 
     def test_no_headers_falls_back_to_boilerplate_filter(self):
         jd = """We need a DevOps engineer with Terraform and AWS skills.
+You will build CI/CD pipelines using GitHub Actions and manage Kubernetes clusters.
+Experience with Prometheus, Grafana, and Datadog for observability is required.
 Equal opportunity employer. Benefits include 401k and health insurance.
 Remote work available. Compensation range: $150k-$200k.
 """
