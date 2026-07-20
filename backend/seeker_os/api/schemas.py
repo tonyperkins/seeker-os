@@ -8,6 +8,8 @@ These are separate from the internal models in models.py because:
 
 from __future__ import annotations
 
+import json
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
@@ -1277,6 +1279,19 @@ class CompAssessmentSchema(BaseModel):
     posted: str | float | None = None
     meets_floor: bool | None = None
     note: str = ""
+
+    @field_validator("posted", mode="before")
+    @classmethod
+    def _coerce_posted(cls, v):
+        if v is None or isinstance(v, (str, int, float)):
+            return v
+        if isinstance(v, dict):
+            parts = []
+            for key in ("min", "max", "value", "amount", "text", "note"):
+                if key in v and v[key] is not None:
+                    parts.append(f"{key}: {v[key]}")
+            return "; ".join(parts) if parts else json.dumps(v)
+        return str(v)
 
     @field_validator("meets_floor", mode="before")
     @classmethod
