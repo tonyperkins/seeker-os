@@ -28,7 +28,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from seeker_os.config import CONFIG_DIR, DATA_DIR, PROJECT_ROOT
-from seeker_os.database import MIGRATIONS, _db_path, run_migrations
+from seeker_os.database import (
+    MIGRATIONS,
+    _PRE_SQUASH_HIGH_WATER_MARK,
+    _db_path,
+    run_migrations,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backup", tags=["backup"])
@@ -337,7 +342,7 @@ async def restore_db_backup(file: UploadFile = File(...)):
             ver_conn.close()
         except sqlite3.DatabaseError:
             raise HTTPException(status_code=400, detail="Could not read database version")
-        if db_version > len(MIGRATIONS):
+        if db_version > len(MIGRATIONS) and db_version > _PRE_SQUASH_HIGH_WATER_MARK:
             raise HTTPException(
                 status_code=400,
                 detail=f"Database version {db_version} is newer than this app supports (max {len(MIGRATIONS)}). Update Seeker OS before restoring.",
@@ -363,7 +368,7 @@ async def restore_db_backup(file: UploadFile = File(...)):
 
         # Bring an older restored DB up to the current schema immediately, rather
         # than relying on the next get_connection() to lazily migrate it.
-        if db_version < len(MIGRATIONS):
+        if db_version != len(MIGRATIONS):
             run_migrations(_db_path())
             logger.info(
                 "Restored DB migrated from version %d to %d", db_version, len(MIGRATIONS)
