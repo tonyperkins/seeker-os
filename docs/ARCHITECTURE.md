@@ -111,8 +111,9 @@ backend/seeker_os/
 │       └── tavily.py       Tavily retrieval adapter
 ├── resume/
 │   ├── generator.py        Resume generation (LLM + identity rules + channel rules)
-│   ├── export.py           Export to PDF, DOCX, Markdown
-│   ├── extract.py          Extract text from uploaded resume file
+│   ├── export.py           Export to PDF, DOCX, Markdown (PDF: non-breaking hyphen substitution, list-style-position: inside)
+│   ├── extract.py          Extract text from uploaded resume file (pymupdf → pypdf fallback)
+│   ├── master_parser.py    Parse master resume into addressable role/project/bullet units + non-bullet content lines
 │   ├── validator.py        Backward-compat shim → seeker_os/validation/
 │   └── prompts/            Resume generation system + user prompt templates
 ├── scoring/
@@ -120,7 +121,8 @@ backend/seeker_os/
 │   ├── net_score.py        Net score composite (base + research + verdict cap)
 │   └── research_adjustment.py  Research-adjusted score (deterministic modifiers)
 └── validation/
-    ├── __init__.py         Artifact-agnostic validator (deny-list, required phrases, etc.)
+    ├── __init__.py         Artifact-agnostic validator (deny-list, required phrases, etc.) + page gate + revalidation orchestrator
+    ├── ats_parse.py        ATS parse-survival gate: contact, URLs, roles, sections, competencies, pins, artifacts, key-term token survival, hyphen-merge diagnostic, non-bullet role content preservation
     ├── traceability.py     LLM-judged claim traceability against master resume
     └── prompts/            Traceability judgment prompt
 ```

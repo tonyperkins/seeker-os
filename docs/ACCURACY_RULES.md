@@ -241,3 +241,62 @@ generation paths:
 
 Resume generation does not currently check `ai_policy` (resumes are always
 user-reviewed); this may be added in a future phase.
+
+## ATS Parse-Survival Gate
+
+The ATS parse-survival gate (`validation/ats_parse.py`) verifies that
+critical content from the generated resume survives text extraction —
+simulating what an ATS (Applicant Tracking System) does when it parses
+a submitted resume. The gate extracts text from three formats (HTML,
+DOCX, PDF) and runs assertions against each.
+
+### Assertions (HTML layer)
+
+| # | Assertion | What it checks |
+|---|---|---|
+| 1 | Contact block | Name, email, location, citizenship line present and intact |
+| 2 | URLs | Every URL from the master survives as an exact full-string match |
+| 3 | Role titles | Every selected role title extracts as a word-boundary token |
+| 4 | Project titles | Every selected portfolio project title extracts |
+| 5 | Competency lines | Every selected category label extracts with skills |
+| 6 | Pin content | Every pinned bullet's text survives extraction |
+| 7 | No artifacts | No HTML fragments, pin markers, placeholders, or table syntax |
+| 8 | Role content preservation | Non-bullet role content (intro paragraphs, trailing notes) from the master survives verbatim |
+| 9 | Key-term survival (PDF-only) | Critical JD terms survive PDF extraction as word-boundary tokens |
+
+### PDF-Specific Diagnostics
+
+The PDF layer runs a subset of assertions (contact, URLs, artifacts, key-term
+survival) plus two diagnostics:
+
+- **Hyphen-merge diagnostic**: Reports compound terms from the resume that
+  appear merged (e.g., "Terraformbased") or split across line wraps
+  (e.g., "Terraform-\nbased") in the extracted PDF text. Not an assertion —
+  surfaces the issue without failing the gate.
+
+- **Non-breaking hyphen substitution**: Curated compound terms in
+  `channel_rules.yml` → `content_tiering.non_breaking_hyphen_terms` have
+  their ASCII hyphens replaced with U+2011 (non-breaking hyphen) in the PDF
+  render path ONLY. This prevents line-wrap splits at hyphens. The
+  substitution happens in HTML body text only — never in markdown source,
+  DOCX export, tag attributes, or URLs. The key-term survival assertion
+  runs against the post-substitution PDF to verify U+2011 compounds still
+  yield their key component tokens.
+
+### CSS PDF Optimizations
+
+- **`list-style-position: inside`**: Places the bullet marker inside the
+  content flow of the `<li>` element, preventing PDF extractors from
+  placing the marker on a separate line (detached bullet markers).
+
+### Source of Expected Values
+
+Expected values are sourced from the generation's own audit records — no
+hardcoded duplicates. The validator receives:
+- `selected_role_titles` / `selected_project_titles` from the bullet
+  selection audit
+- `selected_category_labels` from the competency selection audit
+- `pinned_bullet_texts` from the bullet selection audit (`reason=pinned`)
+- `key_terms` from the competency selection audit (kept skill items +
+  category labels)
+- `master_resume` for role content preservation (parsed in-situ)

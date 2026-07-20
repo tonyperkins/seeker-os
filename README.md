@@ -32,7 +32,7 @@ A structured, dashboard-driven job search pipeline.
 2. **Filters** aggressively using structured fields before fetching full JDs
 3. **Scores** survivors against a user-configured rubric
 4. **Analyzes** job fit with an AI agent that evaluates JD vs. profile, producing a verdict (APPLY/CONDITIONAL/MONITOR/SKIP) with named gaps, rubric breakdown, and tailoring guidance
-5. **Generates** tailored resumes with strict no-embellish accuracy enforcement (deterministic deny-list checks + LLM-judged claim traceability against the master resume)
+5. **Generates** tailored resumes with strict no-embellish accuracy enforcement (deterministic deny-list checks + LLM-judged claim traceability against the master resume) and an ATS parse-survival gate that verifies critical content survives text extraction from HTML, DOCX, and PDF formats
 6. **Researches** companies with a pluggable retrieval adapter (Tavily as one adapter) — live web search for funding signals and employee sentiment, config-driven thresholds (confidence floor, staleness, source trust ordering), and graceful degradation when no retrieval provider is configured
 7. **Tracks** the full application lifecycle through a web dashboard
 
@@ -50,7 +50,7 @@ queryable interface, no analytics, and no resume automation.
 - [Application Lifecycle](docs/APPLICATION_LIFECYCLE.md) — Job statuses, events, Kanban, stale tracking
 - [LLM Routing](docs/LLM_ROUTING.md) — Multi-provider model routing, OAuth, task tiers
 - [Scoring Rubric](docs/SCORING_RUBRIC.md) — Base score, research-adjusted score, net score
-- [Resume Accuracy Rules](docs/ACCURACY_RULES.md) — Validation, identity rules, channel rules, AI policy
+- [Resume Accuracy Rules](docs/ACCURACY_RULES.md) — Validation, identity rules, channel rules, AI policy, ATS parse-survival gate
 - [Source Adapters](docs/SOURCE_ADAPTERS.md) — Pluggable source adapter design
 - [hiring.cafe Field Reference](docs/HIRINGCAFE_FIELDS.md)
 - [Dedup Design](docs/DEDUP_DESIGN.md)

@@ -226,6 +226,51 @@ Each of these is one sentence in a commit message and a full anecdote here.
     Screen is now pinned and takes its slot with `reason=pinned`,
     regardless of score.
 
+- **Silent verbatim-content loss: Early Career non-bullet paragraphs**:
+  The deterministic pipeline correctly preserved intro paragraphs
+  (Aeritas, Sabre) in the filtered master sent to the LLM. The LLM
+  omitted them anyway — it interpreted "de-emphasize irrelevant parts"
+  as license to drop non-bullet role content entirely. Three paragraphs
+  vanished with no signal: no error, no warning, no violation. The fix
+  was two-layered: (1) prompt rule 14 explicitly requiring verbatim
+  preservation of non-bullet role content, and (2) assertion 9 in the
+  ATS parse gate that parses the master resume, extracts non-bullet
+  content lines from role blocks, and asserts each survives in the
+  generated output. The assertion caught all 3 missing paragraphs on
+  resume 67 and 1 on resume 66 (the Aeritas trailing note). The root
+  cause was LLM omission, not a code regression — `render_filtered_master`
+  was doing its job correctly.
+
+- **Detached bullet markers in PDF extraction**:
+  PDF text extractors (pymupdf, pypdf) sometimes place the bullet
+  marker (•) on a separate line from the bullet text, producing
+  detached markers that an ATS would parse as orphaned punctuation
+  rather than list items. The fix was a single CSS property:
+  `list-style-position: inside` in `_PDF_STYLE`. This places the
+  marker inside the content flow of the `<li>` element, so the
+  extractor sees them as contiguous. Zero height delta on the test
+  resume (2468→2468 pt, 4 pages). 0 detached markers (was 3+).
+
+- **Line-wrap splits at hyphens destroying ATS token survival**:
+  Compound technical terms like "Terraform-based" and "outcome-based"
+  were splitting across PDF line wraps ("Terraform-\nbased"), causing
+  ATS keyword matchers to miss them. Investigation showed CSS
+  `hyphens: none`, `word-break: keep-all`, and `overflow-wrap:
+  break-word` did NOT prevent the splits — the line break happens at
+  the ASCII hyphen character regardless. The fix: replace ASCII hyphens
+  with U+2011 (non-breaking hyphen) in curated compound terms, but
+  ONLY in the PDF render path (never in markdown source, DOCX export,
+  or tag attributes/URLs). The substitution function splits HTML into
+  text segments and tag segments, replacing only in text. A 25-term
+  curated list (terms containing key skill tokens) is configured in
+  `channel_rules.yml` under `content_tiering.non_breaking_hyphen_terms`.
+  Line-wrap splits on the test resume dropped from 3 to 1 (only
+  "per-airline" remains, not in the curated list). The key-term
+  survival assertion runs against the post-substitution PDF, and a
+  test verifies U+2011 compounds still yield their key component token
+  ("terraform" from "Terraform‑based") — if U+2011 breaks tokenization
+  in our own extractors, the gate catches it.
+
 ---
 
 ## 6. Numbers That Won't Survive Memory
@@ -248,11 +293,12 @@ Each of these is one sentence in a commit message and a full anecdote here.
   tolerance — the height-based gate correctly passes it. The old integer
   gate saw "4 pages" and failed it.
 
-- **696 → 984 tests**: The test suite grew from 696 to 984 tests over the
-  course of this work. The 288 new tests cover master parsing, bullet
+- **696 → 1026 tests**: The test suite grew from 696 to 1026 tests over the
+  course of this work. The 330 new tests cover master parsing, bullet
   ranking, competency selection, portfolio selection, role recency, ATS
-  parse survival (HTML/DOCX/PDF), page count validation, and the
-  revalidation orchestrator.
+  parse survival (HTML/DOCX/PDF), key-term token survival, hyphen-merge
+  diagnostics, non-breaking hyphen token survival, non-bullet role content
+  preservation, page count validation, and the revalidation orchestrator.
 
 - **~250-word Ladders email → this**: The origin story. A ~250-word spam
   email from Ladders ("Principal Platform Engineer, DevOps/Developer
