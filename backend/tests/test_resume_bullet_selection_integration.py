@@ -76,7 +76,7 @@ def master_text() -> str:
 class TestRunDeterministicBulletSelection:
     def test_current_role_is_filtered_to_cap(self, master_text):
         settings = _make_settings()
-        filtered_text, role_titles, project_titles, mid_old_active, portfolio_active, competency_active, selected_cat_labels, _pinned = _run_deterministic_bullet_selection(
+        filtered_text, role_titles, project_titles, mid_old_active, portfolio_active, competency_active, selected_cat_labels, _pinned, _key_terms = _run_deterministic_bullet_selection(
             settings=settings, master_resume=master_text, jd_text=JD_TEXT,
             job_title=JOB_TITLE, operation_id="test-op-1",
         )
@@ -96,7 +96,7 @@ class TestRunDeterministicBulletSelection:
 
     def test_untouched_roles_survive_verbatim(self, master_text):
         settings = _make_settings()
-        filtered_text, _, _, _, _, _, _, _ = _run_deterministic_bullet_selection(
+        filtered_text, _, _, _, _, _, _, _, _ = _run_deterministic_bullet_selection(
             settings=settings, master_resume=master_text, jd_text=JD_TEXT,
             job_title=JOB_TITLE, operation_id="test-op-2",
         )
@@ -118,7 +118,7 @@ class TestRunDeterministicBulletSelection:
             channel_rules: _NoTieringChannelRules
 
         settings = _NoTieringSettings(channel_rules=_NoTieringChannelRules(resume=_NoTieringChannelConfig()))
-        filtered_text, role_titles, _, _, _, _, _, _ = _run_deterministic_bullet_selection(
+        filtered_text, role_titles, _, _, _, _, _, _, _ = _run_deterministic_bullet_selection(
             settings=settings, master_resume=master_text, jd_text=JD_TEXT,
             job_title=JOB_TITLE, operation_id="test-op-3",
         )
@@ -128,7 +128,7 @@ class TestRunDeterministicBulletSelection:
     def test_malformed_master_resume_falls_back_gracefully(self):
         settings = _make_settings()
         garbage_text = "not a resume at all, just plain text with no headings"
-        filtered_text, role_titles, _, _, _, _, _, _ = _run_deterministic_bullet_selection(
+        filtered_text, role_titles, _, _, _, _, _, _, _ = _run_deterministic_bullet_selection(
             settings=settings, master_resume=garbage_text, jd_text=JD_TEXT,
             job_title=JOB_TITLE, operation_id="test-op-4",
         )
@@ -148,7 +148,7 @@ class TestRunDeterministicBulletSelection:
 
         settings = _make_settings()
         original = "## Professional Experience\n### Role\n**Co** · loc · *2020–2022*\n- Did stuff"
-        filtered_text, role_titles, _, _, _, _, _, _ = _run_deterministic_bullet_selection(
+        filtered_text, role_titles, _, _, _, _, _, _, _ = _run_deterministic_bullet_selection(
             settings=settings, master_resume=original, jd_text=JD_TEXT,
             job_title=JOB_TITLE, operation_id="test-op-parse-err",
         )

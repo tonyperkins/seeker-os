@@ -196,6 +196,7 @@ class ATSParseValidator:
         selected_project_titles: dict[str, str] | None = None,
         selected_category_labels: list[str] | None = None,
         pinned_bullet_texts: list[str] | None = None,
+        key_terms: list[str] | None = None,
     ) -> ATSParseResult:
         """Run ATS parse-survival assertions on the rendered resume.
 
@@ -216,6 +217,7 @@ class ATSParseValidator:
         selected_project_titles = selected_project_titles or {}
         selected_category_labels = selected_category_labels or []
         pinned_bullet_texts = pinned_bullet_texts or []
+        key_terms = key_terms or []
 
         # Extract expected values from the master resume
         expected = self._extract_expected_values(master_resume)
@@ -257,13 +259,18 @@ class ATSParseValidator:
             docx_assertions.extend(self._check_urls(docx_text, expected, source="docx"))
             docx_assertions.extend(self._check_no_artifacts(docx_text, resume_text, source="docx"))
 
-        # Run PDF assertions if available (layout-sensitive subset: 1, 2, 7)
+        # Run PDF assertions if available (layout-sensitive subset: 1, 2, 7, + key-term survival)
         pdf_text = _extract_pdf_text_from_markdown(resume_text)
         pdf_assertions: list[ATSParseAssertionResult] = []
+        pdf_diagnostics: dict = {}
         if pdf_text is not None:
             pdf_assertions.extend(self._check_contact_block(pdf_text, expected, source="pdf"))
             pdf_assertions.extend(self._check_urls(pdf_text, expected, source="pdf"))
             pdf_assertions.extend(self._check_no_artifacts(pdf_text, resume_text, source="pdf"))
+            # Key-term token survival (PDF-only — the layer where hyphen-wrap splits occur)
+            pdf_assertions.extend(self._check_key_term_survival(pdf_text, key_terms, source="pdf"))
+            # Hyphen-merge diagnostic (not an assertion — surfaces the issue without failing)
+            pdf_diagnostics = self._diagnose_hyphen_merges(pdf_text, resume_text)
 
         all_passed = all(a.passed for a in assertions)
         docx_passed = all(a.passed for a in docx_assertions) if docx_assertions else True
@@ -281,6 +288,10 @@ class ATSParseValidator:
             "ats_parse_pdf_passed": pdf_passed if pdf_text is not None else None,
             "ats_parse_pdf_assertions": len(pdf_assertions),
             "ats_parse_pdf_failures": sum(1 for a in pdf_assertions if not a.passed),
+            "ats_parse_pdf_hyphen_merges": pdf_diagnostics.get("hyphen_merge_count", 0),
+            "ats_parse_pdf_hyphen_merge_instances": pdf_diagnostics.get("hyphen_merges", []),
+            "ats_parse_pdf_line_wrap_splits": pdf_diagnostics.get("line_wrap_split_count", 0),
+            "ats_parse_pdf_line_wrap_instances": pdf_diagnostics.get("line_wrap_splits", []),
             "ats_parse_failed_assertions": [
                 {
                     "assertion_id": a.assertion_id,
@@ -610,3 +621,123 @@ class ATSParseValidator:
         ))
 
         return results
+
+    def _check_key_term_survival(
+        self,
+        text: str,
+        key_terms: list[str],
+        source: str = "pdf",
+    ) -> list[ATSParseAssertionResult]:
+        """Assertion 8 (PDF-only): critical JD terms survive extraction as
+        standalone, word-boundary-matchable tokens.
+
+        Each term is checked with a word-boundary regex. A term that appears
+        intact in at least one location passes — a term destroyed everywhere
+        (e.g. hyphen-merged into a single token at every occurrence) fails.
+
+        This catches the class of bug where a PDF renderer breaks at a hyphen
+        in a compound technical term (e.g. "Terraform-based" → "Terraform-
+        based" split across lines, or "Terraformbased" merged by a naive
+        extractor), causing a tokenizer to miss a named hard requirement.
+        """
+        results: list[ATSParseAssertionResult] = []
+        suffix = f" ({source})" if source != "html" else ""
+
+        for term in key_terms:
+            term_lower = term.lower()
+            # Word-boundary match: the term must appear as a standalone token,
+            # not as a substring of a larger word.
+            pattern = re.compile(r'\b' + re.escape(term_lower) + r'\b', re.IGNORECASE)
+            found = bool(pattern.search(text))
+            results.append(ATSParseAssertionResult(
+                assertion_id=f"key_term_{re.sub(r'[^a-zA-Z0-9]', '_', term).lower()}{suffix}",
+                description=f"Key term '{term}' survives PDF extraction as a word-boundary token",
+                passed=found,
+                found=term if found else "(not found as standalone token)",
+                expected=term,
+            ))
+
+        return results
+
+    def _diagnose_hyphen_merges(self, pdf_text: str, resume_text: str) -> dict:
+        """Diagnostic (not assertion): detect and report hyphen-merge and
+        line-wrap-split candidates in the PDF extraction.
+
+        Hyphen-merge: a compound term like "Terraform-based" appears in the
+        PDF as "Terraformbased" (hyphen removed, words joined). This is
+        caused by some PDF extractors stripping hyphens at line-wrap points.
+
+        Line-wrap split: a compound term like "Outcome-based" appears in the
+        PDF as "Outcome-\\nbased" (split across a line break). A tokenizer
+        that doesn't join hyphenated line breaks will miss the term.
+
+        Both are reported as diagnostics — they don't fail the gate — so a
+        critical instance is visible without failing on harmless ones.
+        """
+        # Collect all hyphenated compound terms from the resume markdown
+        hyphen_terms = set(re.findall(
+            r'\b([a-z]+-[a-z]+(?:-[a-z]+)*)\b',
+            resume_text.lower(),
+        ))
+
+        merges: list[dict] = []
+        splits: list[dict] = []
+
+        for term in sorted(hyphen_terms):
+            term_lower = term.lower()
+            # Check if the intact form survives
+            intact = term_lower in pdf_text.lower()
+
+            if intact:
+                continue  # Term survives — no issue
+
+            # Check for hyphen-merge (no hyphen, words joined)
+            merged = term_lower.replace('-', '')
+            if merged in pdf_text.lower():
+                idx = pdf_text.lower().find(merged)
+                ctx_start = max(0, idx - 20)
+                ctx_end = min(len(pdf_text), idx + len(merged) + 20)
+                context = pdf_text[ctx_start:ctx_end].replace('\n', '\\n')
+                merges.append({
+                    "term": term,
+                    "merged_as": merged,
+                    "context": context,
+                })
+                continue
+
+            # Check for line-wrap split (hyphen + newline)
+            parts = term_lower.split('-')
+            if len(parts) == 2:
+                split_pattern = parts[0] + r'[-\u00ad]?\s*\n\s*' + parts[1]
+                m = re.search(split_pattern, pdf_text, re.IGNORECASE)
+                if m:
+                    ctx_start = max(0, m.start() - 10)
+                    ctx_end = min(len(pdf_text), m.end() + 10)
+                    context = pdf_text[ctx_start:ctx_end].replace('\n', '\\n')
+                    splits.append({
+                        "term": term,
+                        "split_as": pdf_text[m.start():m.end()].replace('\n', '\\n'),
+                        "context": context,
+                    })
+            elif len(parts) > 2:
+                # Multi-part: check if any adjacent pair is split
+                for i in range(len(parts) - 1):
+                    split_pattern = parts[i] + r'[-\u00ad]?\s*\n\s*' + parts[i + 1]
+                    m = re.search(split_pattern, pdf_text, re.IGNORECASE)
+                    if m:
+                        ctx_start = max(0, m.start() - 10)
+                        ctx_end = min(len(pdf_text), m.end() + 10)
+                        context = pdf_text[ctx_start:ctx_end].replace('\n', '\\n')
+                        splits.append({
+                            "term": term,
+                            "split_as": pdf_text[m.start():m.end()].replace('\n', '\\n'),
+                            "context": context,
+                        })
+                        break
+
+        return {
+            "hyphen_merge_count": len(merges),
+            "hyphen_merges": merges,
+            "line_wrap_split_count": len(splits),
+            "line_wrap_splits": splits,
+        }

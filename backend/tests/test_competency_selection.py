@@ -426,7 +426,7 @@ class TestCompetencyIntegration:
     def test_competency_active_in_deterministic_selection(self, master_text):
         from seeker_os.resume.generator import _run_deterministic_bullet_selection
         settings = _make_settings()
-        _, _, _, _, _, competency_active, selected_labels, _pinned = _run_deterministic_bullet_selection(
+        _, _, _, _, _, competency_active, selected_labels, _pinned, _key_terms = _run_deterministic_bullet_selection(
             settings=settings,
             master_resume=master_text,
             jd_text=NON_AI_JD,
@@ -446,7 +446,7 @@ class TestCompetencyIntegration:
             always_include_competency_categories=[],
         )
         settings = _make_settings(tiering=tiering)
-        _, _, _, _, _, competency_active, selected_labels, _pinned = _run_deterministic_bullet_selection(
+        _, _, _, _, _, competency_active, selected_labels, _pinned, _key_terms = _run_deterministic_bullet_selection(
             settings=settings,
             master_resume=master_text,
             jd_text=NON_AI_JD,
@@ -461,7 +461,7 @@ class TestCompetencyIntegration:
     def test_dropped_categories_not_in_filtered_master(self, master_text):
         from seeker_os.resume.generator import _run_deterministic_bullet_selection
         settings = _make_settings()
-        filtered, _, _, _, _, _, selected_labels, _pinned = _run_deterministic_bullet_selection(
+        filtered, _, _, _, _, _, selected_labels, _pinned, _key_terms = _run_deterministic_bullet_selection(
             settings=settings,
             master_resume=master_text,
             jd_text=NON_AI_JD,

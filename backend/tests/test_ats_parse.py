@@ -88,6 +88,21 @@ def resume_66_data():
                         if idx < len(proj.bullets) and proj.bullets[idx].pinned:
                             pinned.append(proj.bullets[idx].text)
 
+        # Reconstruct key_terms from competency_selection audit kept_items
+        key_terms: list[str] = []
+        for e in evals:
+            if e["metric_name"] == "competency_selection" and "selected_labels" in (
+                json.loads(e["details_json"]) if e["details_json"] else {}
+            ):
+                d = json.loads(e["details_json"]) if e["details_json"] else {}
+                kept_items = d.get("kept_items", {})
+                for items in kept_items.values():
+                    for item in items:
+                        first_word = item.strip().split()[0] if item.strip() else ""
+                        if first_word and len(first_word) > 2:
+                            key_terms.append(first_word)
+                key_terms.extend(d.get("selected_labels", []))
+
         return {
             "settings": settings,
             "resume_text": resume_text,
@@ -96,6 +111,7 @@ def resume_66_data():
             "project_titles": project_titles,
             "category_labels": category_labels,
             "pinned": pinned,
+            "key_terms": key_terms,
         }
     finally:
         db.close()
@@ -114,6 +130,7 @@ class TestATSParseHappyPath:
             selected_project_titles=resume_66_data["project_titles"],
             selected_category_labels=resume_66_data["category_labels"],
             pinned_bullet_texts=resume_66_data["pinned"],
+            key_terms=resume_66_data["key_terms"],
         )
         assert result.passed, (
             f"ATS parse gate failed with {len([a for a in result.assertions if not a.passed])} failures: "
@@ -263,6 +280,7 @@ class TestATSParseHappyPath:
             resume_text=resume_66_data["resume_text"],
             master_resume=resume_66_data["master_resume"],
             pinned_bullet_texts=resume_66_data["pinned"],
+            key_terms=resume_66_data["key_terms"],
         )
         pin_assertions = [a for a in result.assertions if a.assertion_id.startswith("pin_content_")]
         assert len(pin_assertions) == len(resume_66_data["pinned"])
@@ -323,6 +341,7 @@ class TestATSParseHappyPath:
             selected_project_titles=resume_66_data["project_titles"],
             selected_category_labels=resume_66_data["category_labels"],
             pinned_bullet_texts=resume_66_data["pinned"],
+            key_terms=resume_66_data["key_terms"],
         )
         d = result.diagnostics
         assert "ats_parse_passed" in d
@@ -537,6 +556,7 @@ class TestATSParsePDFLayer:
             selected_project_titles=resume_66_data["project_titles"],
             selected_category_labels=resume_66_data["category_labels"],
             pinned_bullet_texts=resume_66_data["pinned"],
+            key_terms=resume_66_data["key_terms"],
         )
         if not result.diagnostics.get("ats_parse_pdf_available"):
             pytest.skip("PDF extraction layer not available")
@@ -571,3 +591,137 @@ class TestATSParsePDFLayer:
         ]
         assert len(pdf_linkedin_failures) >= 1, "Expected PDF LinkedIn URL assertion to fail"
         assert "www.linkedin.com" in pdf_linkedin_failures[0].expected
+
+
+class TestKeyTermSurvival:
+    """Assertion 8 (PDF-only): key-term token survival.
+
+    Critical JD-relevant terms (sourced from the competency selection
+    audit's kept_items and category labels) must survive PDF extraction
+    as standalone, word-boundary-matchable tokens.
+    """
+
+    def test_key_terms_pass_on_normal_pdf(self, resume_66_data):
+        """Key terms from resume 66's competency selection should survive
+        PDF extraction as word-boundary tokens."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        result = validator.validate(
+            resume_text=resume_66_data["resume_text"],
+            master_resume=resume_66_data["master_resume"],
+            key_terms=resume_66_data["key_terms"],
+        )
+        if not result.diagnostics.get("ats_parse_pdf_available"):
+            pytest.skip("PDF extraction layer not available")
+        key_term_assertions = [
+            a for a in result.assertions
+            if a.assertion_id.startswith("key_term_") and "(pdf)" in a.assertion_id
+        ]
+        assert len(key_term_assertions) > 0, "Expected key-term assertions to be generated"
+        for a in key_term_assertions:
+            assert a.passed, f"Key term assertion failed: {a.assertion_id} — expected '{a.expected}', found '{a.found}'"
+
+    def test_hyphen_merged_term_fails(self, resume_66_data):
+        """A deliberately hyphen-merged critical term in the PDF text
+        should fail the key-term survival assertion.
+
+        We simulate this by creating a minimal resume where a key term
+        (e.g. 'Terraform') appears only as part of a hyphen-merged
+        compound ('Terraformbased') in the rendered output. We test
+        the assertion logic directly rather than through full PDF
+        rendering, since the merge behavior is extractor-dependent.
+        """
+        validator = ATSParseValidator(resume_66_data["settings"])
+        # Test the assertion directly with simulated extracted text
+        # where 'terraform' only appears as 'terraformbased' (merged)
+        fake_pdf_text = "Senior Platform Engineer\nTerraformbased infrastructure automation\n"
+        assertions = validator._check_key_term_survival(fake_pdf_text, ["terraform"], source="pdf")
+        assert len(assertions) == 1
+        assert not assertions[0].passed, "Hyphen-merged 'Terraformbased' should not match 'terraform' as a word-boundary token"
+        assert "not found as standalone token" in assertions[0].found
+
+    def test_intact_term_passes(self, resume_66_data):
+        """An intact key term should pass the word-boundary assertion."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        fake_pdf_text = "Terraform-based infrastructure automation and Terraform modules\n"
+        assertions = validator._check_key_term_survival(fake_pdf_text, ["terraform"], source="pdf")
+        assert len(assertions) == 1
+        assert assertions[0].passed, "'Terraform' as a standalone word should pass"
+
+    def test_substring_does_not_match(self, resume_66_data):
+        """A term that only appears as a substring of a larger word
+        should NOT pass the word-boundary assertion."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        fake_pdf_text = "Extensive experience with Terraformification of cloud resources\n"
+        assertions = validator._check_key_term_survival(fake_pdf_text, ["terraform"], source="pdf")
+        assert len(assertions) == 1
+        assert not assertions[0].passed, "'Terraform' inside 'Terraformification' should not match as a word-boundary token"
+
+
+class TestHyphenMergeDiagnostic:
+    """Diagnostic (not assertion): detect and report hyphen-merge and
+    line-wrap-split candidates in PDF extraction.
+
+    These are reported as diagnostics — they don't fail the gate — so
+    a critical instance is visible without failing on harmless ones.
+    """
+
+    def test_diagnostic_reports_line_wrap_splits(self, resume_66_data):
+        """The Trojan resume's PDF extraction should report line-wrap
+        splits (e.g. 'Outcome-\\nbased') as diagnostics, not failures."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        result = validator.validate(
+            resume_text=resume_66_data["resume_text"],
+            master_resume=resume_66_data["master_resume"],
+            key_terms=resume_66_data["key_terms"],
+        )
+        if not result.diagnostics.get("ats_parse_pdf_available"):
+            pytest.skip("PDF extraction layer not available")
+        d = result.diagnostics
+        # The diagnostic keys should be present
+        assert "ats_parse_pdf_hyphen_merges" in d
+        assert "ats_parse_pdf_line_wrap_splits" in d
+        # Line-wrap splits should be non-negative
+        assert d["ats_parse_pdf_line_wrap_splits"] >= 0
+        # The diagnostic should NOT cause the gate to fail
+        # (diagnostics are informational, not assertions)
+        key_term_failures = [
+            a for a in result.assertions
+            if a.assertion_id.startswith("key_term_") and "(pdf)" in a.assertion_id and not a.passed
+        ]
+        # Key terms should pass (the split terms still appear intact elsewhere)
+        # or if they fail, the diagnostic should have surfaced the issue
+        if key_term_failures:
+            assert d["ats_parse_pdf_line_wrap_splits"] > 0 or d["ats_parse_pdf_hyphen_merges"] > 0, \
+                "Key term failures should be explained by hyphen-merge or line-wrap diagnostics"
+
+    def test_diagnostic_detects_simulated_merge(self, resume_66_data):
+        """The diagnostic should detect a simulated hyphen-merge:
+        markdown has 'cloud-based' but PDF text has 'cloudbased'."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        fake_pdf_text = "Cloudbased infrastructure with real-world experience\n"
+        fake_resume_text = "Cloud-based infrastructure with real-world experience\n"
+        diag = validator._diagnose_hyphen_merges(fake_pdf_text, fake_resume_text)
+        assert diag["hyphen_merge_count"] >= 1
+        merge_terms = [m["term"] for m in diag["hyphen_merges"]]
+        assert "cloud-based" in merge_terms
+
+    def test_diagnostic_detects_simulated_split(self, resume_66_data):
+        """The diagnostic should detect a simulated line-wrap split:
+        markdown has 'production-grade' but PDF text has 'production-\\ngrade'."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        fake_pdf_text = "Built production-\ngrade CI/CD pipelines\n"
+        fake_resume_text = "Built production-grade CI/CD pipelines\n"
+        diag = validator._diagnose_hyphen_merges(fake_pdf_text, fake_resume_text)
+        assert diag["line_wrap_split_count"] >= 1
+        split_terms = [s["term"] for s in diag["line_wrap_splits"]]
+        assert "production-grade" in split_terms
+
+    def test_diagnostic_no_issues_when_intact(self, resume_66_data):
+        """The diagnostic should report zero issues when all hyphenated
+        terms survive intact in the PDF text."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        fake_pdf_text = "Cloud-based infrastructure with production-grade CI/CD\n"
+        fake_resume_text = "Cloud-based infrastructure with production-grade CI/CD\n"
+        diag = validator._diagnose_hyphen_merges(fake_pdf_text, fake_resume_text)
+        assert diag["hyphen_merge_count"] == 0
+        assert diag["line_wrap_split_count"] == 0

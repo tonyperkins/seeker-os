@@ -317,6 +317,7 @@ def revalidate_all(resume_id: int, settings: Settings | None = None) -> Validati
         project_titles: dict[str, str] = {}
         category_labels: list[str] = []
         pinned_bullet_texts: list[str] = []
+        key_terms: list[str] = []
 
         # Find the operation_id from existing audit records
         op_row = db.execute(
@@ -369,6 +370,16 @@ def revalidate_all(resume_id: int, settings: Settings | None = None) -> Validati
             except Exception:
                 logger.exception("revalidate_all: failed to reconstruct pinned bullets")
 
+            # Reconstruct key_terms from competency_selection audit kept_items
+            if comp_row:
+                kept_items = cd.get("kept_items", {})
+                for items in kept_items.values():
+                    for item in items:
+                        first_word = item.strip().split()[0] if item.strip() else ""
+                        if first_word and len(first_word) > 2:
+                            key_terms.append(first_word)
+                key_terms.extend(category_labels)
+
         ats_validator = ATSParseValidator(settings)
         ats_result = ats_validator.validate(
             resume_text=text,
@@ -377,6 +388,7 @@ def revalidate_all(resume_id: int, settings: Settings | None = None) -> Validati
             selected_project_titles=project_titles,
             selected_category_labels=category_labels,
             pinned_bullet_texts=pinned_bullet_texts,
+            key_terms=key_terms,
         )
         if ats_result.violations:
             validation.violations.extend(

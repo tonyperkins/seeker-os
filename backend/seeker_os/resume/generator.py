@@ -300,6 +300,8 @@ def _run_deterministic_bullet_selection(
     - selected_category_labels: list of selected category labels (empty if none).
     - pinned_bullet_texts: list of pinned bullet text strings that were
       selected (for ATS parse-survival verification).
+    - key_terms: list of critical JD-relevant terms (from competency
+      kept_items and category labels) for PDF key-term survival checks.
 
     Falls back to the original master_resume text (selection inactive) on
     any parsing error — resume generation must never break because the
@@ -307,10 +309,10 @@ def _run_deterministic_bullet_selection(
     """
     logger = logging.getLogger(__name__)
     if not settings.channel_rules or not settings.channel_rules.resume:
-        return master_resume, {}, {}, False, False, False, [], []
+        return master_resume, {}, {}, False, False, False, [], [], []
     tiering = settings.channel_rules.resume.content_tiering
     if not tiering:
-        return master_resume, {}, {}, False, False, False, [], []
+        return master_resume, {}, {}, False, False, False, [], [], []
 
     try:
         parsed = parse_master_resume(master_resume)
@@ -687,7 +689,7 @@ def _run_deterministic_bullet_selection(
                     )
 
         if not selections and not dropped_project_ids and not dropped_category_line_nos and not cat_result.kept_items:
-            return master_resume, {}, {}, False, False, False, [], []
+            return master_resume, {}, {}, False, False, False, [], [], []
 
         # Collect pinned bullet texts that were selected — the ATS gate
         # verifies these survived rendering.
@@ -704,7 +706,24 @@ def _run_deterministic_bullet_selection(
             parsed, selections, dropped_project_ids, dropped_category_line_nos,
             kept_items=cat_result.kept_items if cat_result.kept_items else None,
         )
-        return master_resume_for_prompt, role_titles, project_titles, mid_old_active, portfolio_active, competency_active, selected_category_labels, pinned_bullet_texts
+
+        # Extract key terms for PDF key-term survival assertion:
+        # the skill items from kept_items (the terms the deterministic
+        # pipeline determined were JD-relevant and rendered) plus the
+        # category labels themselves.  These are the terms an ATS must
+        # be able to extract from the PDF.
+        key_terms: list[str] = []
+        for items in cat_result.kept_items.values():
+            for item in items:
+                # Skill items are "·"-separated; take the first word of each
+                # as the key term (e.g. "VPC design" → "VPC")
+                first_word = item.strip().split()[0] if item.strip() else ""
+                if first_word and len(first_word) > 2:
+                    key_terms.append(first_word)
+        # Also add the category labels as key terms
+        key_terms.extend(selected_category_labels)
+
+        return master_resume_for_prompt, role_titles, project_titles, mid_old_active, portfolio_active, competency_active, selected_category_labels, pinned_bullet_texts, key_terms
     except Exception as exc:
         logger.exception(
             "bullet_selection_failed_falling_back", extra={"operation_id": operation_id}
@@ -728,7 +747,7 @@ def _run_deterministic_bullet_selection(
                 "bullet_selection_parse_error_eval_write_failed",
                 extra={"operation_id": operation_id},
             )
-        return master_resume, {}, {}, False, False, False, [], []
+        return master_resume, {}, {}, False, False, False, [], [], []
 
 
 def generate_resume(
@@ -791,7 +810,7 @@ def generate_resume(
     # master resume on any parsing issue. Validation later still uses the
     # ORIGINAL unfiltered master_resume as ground truth — selection only
     # narrows what's offered to the LLM, it never changes what's true.
-    master_resume_for_prompt, selected_role_titles, selected_project_titles, mid_old_active, portfolio_active, competency_active, selected_category_labels, pinned_bullet_texts = _run_deterministic_bullet_selection(
+    master_resume_for_prompt, selected_role_titles, selected_project_titles, mid_old_active, portfolio_active, competency_active, selected_category_labels, pinned_bullet_texts, key_terms = _run_deterministic_bullet_selection(
         settings=settings,
         master_resume=master_resume,
         jd_text=jd_text,
@@ -927,6 +946,7 @@ def generate_resume(
         selected_project_titles=selected_project_titles,
         selected_category_labels=selected_category_labels,
         pinned_bullet_texts=pinned_bullet_texts,
+        key_terms=key_terms,
     )
     if ats_result.violations:
         validation.violations.extend(
