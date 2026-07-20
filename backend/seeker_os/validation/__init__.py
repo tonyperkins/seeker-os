@@ -484,7 +484,16 @@ class PageCountValidator:
 
         violations: list[Violation] = []
         diagnostics = self._generate_diagnostics(resume_text)
-        measurement = measure_pdf_pages(resume_text)
+
+        # Pass non_breaking_hyphen_terms so page measurement matches actual PDF export
+        nbh_terms: list[str] = []
+        try:
+            cr = self.settings.channel_rules
+            if cr and cr.resume and cr.resume.content_tiering:
+                nbh_terms = cr.resume.content_tiering.non_breaking_hyphen_terms
+        except Exception:
+            pass
+        measurement = measure_pdf_pages(resume_text, non_breaking_hyphen_terms=nbh_terms)
 
         if measurement is None:
             # weasyprint not installed — can't check, return pass with no violations

@@ -69,6 +69,8 @@ class RoleBlock:
     is_current: bool = False
     bullets: list[BulletUnit] = field(default_factory=list)
     heading_line: int = -1
+    content_lines: list[str] = field(default_factory=list)
+    content_line_nos: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -227,6 +229,13 @@ def parse_master_resume(text: str) -> ParsedMaster:
             bullet = _parse_bullet(line, i, current_role.role_id, len(current_role.bullets))
             if bullet:
                 current_role.bullets.append(bullet)
+            elif line and not line.startswith("---"):
+                # Non-bullet, non-blank, non-separator line within a role
+                # block — intro paragraphs, trailing notes, etc. Preserved
+                # verbatim by render_filtered_master; tracked here so the
+                # ATS gate can assert their survival in the LLM output.
+                current_role.content_lines.append(raw_line)
+                current_role.content_line_nos.append(i)
             continue
 
         # Parse Portfolio Projects section

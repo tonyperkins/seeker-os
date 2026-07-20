@@ -137,7 +137,7 @@ def _extract_docx_text_from_markdown(markdown_text: str) -> str | None:
             docx_path.unlink(missing_ok=True)
 
 
-def _extract_pdf_text_from_markdown(markdown_text: str) -> str | None:
+def _extract_pdf_text_from_markdown(markdown_text: str, non_breaking_hyphen_terms: list[str] | None = None) -> str | None:
     """Generate a real PDF from markdown text and extract text from it.
 
     This validates the actual PDF export path — the format employers most
@@ -161,7 +161,7 @@ def _extract_pdf_text_from_markdown(markdown_text: str) -> str | None:
 
     try:
         pdf_path = md_path.with_suffix(".pdf")
-        result = export_pdf(md_path, pdf_path)
+        result = export_pdf(md_path, pdf_path, non_breaking_hyphen_terms=non_breaking_hyphen_terms)
         if result is None:
             return None
         return extract_pdf_text(result)
@@ -187,6 +187,16 @@ class ATSParseValidator:
 
     def __init__(self, settings: Settings):
         self.settings = settings
+
+    def _get_non_breaking_hyphen_terms(self) -> list[str]:
+        """Extract non_breaking_hyphen_terms from channel rules config."""
+        try:
+            cr = self.settings.channel_rules
+            if cr and cr.resume and cr.resume.content_tiering:
+                return cr.resume.content_tiering.non_breaking_hyphen_terms
+        except Exception:
+            pass
+        return []
 
     def validate(
         self,
@@ -252,6 +262,9 @@ class ATSParseValidator:
         # 7. No artifacts
         assertions.extend(self._check_no_artifacts(extracted, resume_text))
 
+        # 8. Non-bullet role content preservation (HTML layer)
+        assertions.extend(self._check_role_content_preservation(extracted, master_resume))
+
         # Run DOCX assertions if available
         docx_assertions: list[ATSParseAssertionResult] = []
         if docx_text is not None:
@@ -260,7 +273,8 @@ class ATSParseValidator:
             docx_assertions.extend(self._check_no_artifacts(docx_text, resume_text, source="docx"))
 
         # Run PDF assertions if available (layout-sensitive subset: 1, 2, 7, + key-term survival)
-        pdf_text = _extract_pdf_text_from_markdown(resume_text)
+        nbh_terms = self._get_non_breaking_hyphen_terms()
+        pdf_text = _extract_pdf_text_from_markdown(resume_text, non_breaking_hyphen_terms=nbh_terms)
         pdf_assertions: list[ATSParseAssertionResult] = []
         pdf_diagnostics: dict = {}
         if pdf_text is not None:
@@ -619,6 +633,48 @@ class ATSParseValidator:
             found=f"{len(table_syntax)} found" if table_syntax else "(clean)",
             expected="0 table separator patterns",
         ))
+
+        return results
+
+    def _check_role_content_preservation(
+        self,
+        text: str,
+        master_resume: str,
+    ) -> list[ATSParseAssertionResult]:
+        """Assertion 9: non-bullet role content (intro paragraphs, trailing
+        notes) from the master resume survives in the generated output.
+
+        The deterministic pipeline preserves these lines verbatim in the
+        filtered master sent to the LLM. If the LLM omits them, this
+        assertion catches the silent verbatim-content loss.
+        """
+        results: list[ATSParseAssertionResult] = []
+
+        try:
+            from seeker_os.resume.master_parser import parse_master_resume
+            parsed = parse_master_resume(master_resume)
+        except Exception:
+            return results
+
+        for role in parsed.roles:
+            for content_line in role.content_lines:
+                stripped = content_line.strip()
+                if not stripped or stripped.startswith("---"):
+                    continue
+                # Strip markdown formatting for search
+                clean = re.sub(r'[*`]', '', stripped).strip()
+                if len(clean) < 20:
+                    continue
+                # Use first 40 chars as search key — enough to be unique
+                search_key = clean[:40].strip()
+                found = search_key in text
+                results.append(ATSParseAssertionResult(
+                    assertion_id=f"role_content_{role.role_id}_{hash(search_key) % 10000}",
+                    description=f"Non-bullet role content for '{role.title}' survives: '{search_key[:30]}...'",
+                    passed=found,
+                    found=search_key[:40] if found else "(not found)",
+                    expected=search_key[:40],
+                ))
 
         return results
 

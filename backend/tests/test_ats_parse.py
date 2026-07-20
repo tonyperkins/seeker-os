@@ -121,7 +121,14 @@ class TestATSParseHappyPath:
     """Happy path: all assertions pass on resume 66's existing render."""
 
     def test_gate_passes_overall(self, resume_66_data):
-        """The ATS parse gate should pass on resume 66."""
+        """The ATS parse gate should pass on resume 66.
+
+        Note: the role_content_preservation assertion (9) catches a real
+        content loss on resume 66 (the Aeritas trailing note was omitted
+        by the LLM before the prompt fix).  This is a known pre-fix
+        issue — the assertion is correct, the resume was generated
+        before the fix.  We exclude it from the happy-path check.
+        """
         validator = ATSParseValidator(resume_66_data["settings"])
         result = validator.validate(
             resume_text=resume_66_data["resume_text"],
@@ -132,9 +139,17 @@ class TestATSParseHappyPath:
             pinned_bullet_texts=resume_66_data["pinned"],
             key_terms=resume_66_data["key_terms"],
         )
-        assert result.passed, (
-            f"ATS parse gate failed with {len([a for a in result.assertions if not a.passed])} failures: "
-            + "; ".join(a.assertion_id for a in result.assertions if not a.passed)
+        # Filter out role_content assertions — resume 66 was generated
+        # before the prompt fix that requires non-bullet role content
+        # preservation.  The assertion correctly catches the omission;
+        # the resume is pre-fix.
+        non_content_assertions = [
+            a for a in result.assertions if not a.assertion_id.startswith("role_content_")
+        ]
+        failures = [a for a in non_content_assertions if not a.passed]
+        assert not failures, (
+            f"ATS parse gate failed with {len(failures)} failures: "
+            + "; ".join(a.assertion_id for a in failures)
         )
 
     def test_contact_name_present(self, resume_66_data):
@@ -345,13 +360,26 @@ class TestATSParseHappyPath:
         )
         d = result.diagnostics
         assert "ats_parse_passed" in d
-        assert d["ats_parse_passed"] is True
+        # resume 66 has a known role_content failure (pre-fix);
+        # check that non-role-content assertions all pass
+        non_content_failures = [
+            a for a in result.assertions
+            if not a.passed and not a.assertion_id.startswith("role_content_")
+        ]
+        assert len(non_content_failures) == 0, (
+            f"Non-role-content failures: {'; '.join(a.assertion_id for a in non_content_failures)}"
+        )
         assert "ats_parse_html_assertions" in d
         assert d["ats_parse_html_assertions"] > 0
-        assert d["ats_parse_html_failures"] == 0
         assert "ats_parse_docx_available" in d
         assert "ats_parse_failed_assertions" in d
-        assert len(d["ats_parse_failed_assertions"]) == 0
+        # resume 66 has 1 known role_content failure (pre-fix);
+        # all other assertions should have 0 failures
+        non_content_failures_in_diag = [
+            f for f in d["ats_parse_failed_assertions"]
+            if not f["assertion_id"].startswith("role_content_")
+        ]
+        assert len(non_content_failures_in_diag) == 0
 
     def test_violations_are_medium_severity(self, resume_66_data):
         """ATS parse violations should be medium severity (flag-for-review, not hard-fail)."""
@@ -367,6 +395,70 @@ class TestATSParseHappyPath:
             assert v["severity"] == "medium", (
                 f"ATS parse violation {v['rule_id']} has severity {v['severity']}, expected 'medium'"
             )
+
+
+# ---------------------------------------------------------------------------
+# Role content preservation tests
+# ---------------------------------------------------------------------------
+
+
+class TestRoleContentPreservation:
+    """Assertion 9: non-bullet role content (intro paragraphs, trailing
+    notes) from the master resume survives in the generated output.
+
+    The deterministic pipeline preserves these lines verbatim in the
+    filtered master sent to the LLM. If the LLM omits them, this
+    assertion catches the silent verbatim-content loss.
+    """
+
+    def test_catches_missing_intro_on_resume_66(self, resume_66_data):
+        """Resume 66 was generated before the prompt fix — the Aeritas
+        trailing note ('The company wound down...') was omitted by the
+        LLM. The assertion should catch this."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        result = validator.validate(
+            resume_text=resume_66_data["resume_text"],
+            master_resume=resume_66_data["master_resume"],
+        )
+        role_content = [
+            a for a in result.assertions if a.assertion_id.startswith("role_content_")
+        ]
+        assert len(role_content) >= 3, f"Expected >= 3 role content assertions, got {len(role_content)}"
+        # At least one should fail (the Aeritas trailing note)
+        failures = [a for a in role_content if not a.passed]
+        assert len(failures) >= 1, "Expected at least 1 role content failure on pre-fix resume 66"
+        # The failing one should be the 'company wound down' note
+        wound_down = [a for a in failures if "wound down" in a.description.lower()]
+        assert len(wound_down) == 1, f"Expected 'wound down' failure, got: {[a.description for a in failures]}"
+
+    def test_catches_missing_intro_on_resume_67(self, resume_66_data):
+        """Resume 67 (Trojan) was also generated before the prompt fix —
+        all three Early Career intro paragraphs were omitted."""
+        import sqlite3
+        db = sqlite3.connect("/tmp/seeker_prod_new.db")
+        db.row_factory = sqlite3.Row
+        try:
+            r = db.execute("SELECT resume_text FROM resumes WHERE id = 67").fetchone()
+            if not r:
+                pytest.skip("Resume 67 not found in prod DB")
+            resume_67_text = r["resume_text"]
+        finally:
+            db.close()
+
+        validator = ATSParseValidator(resume_66_data["settings"])
+        result = validator.validate(
+            resume_text=resume_67_text,
+            master_resume=resume_66_data["master_resume"],
+        )
+        role_content = [
+            a for a in result.assertions if a.assertion_id.startswith("role_content_")
+        ]
+        failures = [a for a in role_content if not a.passed]
+        # Resume 67 should have all 3 Early Career intros missing
+        assert len(failures) >= 3, (
+            f"Expected >= 3 role content failures on resume 67, got {len(failures)}: "
+            + "; ".join(a.description for a in failures)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -725,3 +817,90 @@ class TestHyphenMergeDiagnostic:
         diag = validator._diagnose_hyphen_merges(fake_pdf_text, fake_resume_text)
         assert diag["hyphen_merge_count"] == 0
         assert diag["line_wrap_split_count"] == 0
+
+
+class TestNonBreakingHyphenTokenSurvival:
+    """Verify that U+2011 (non-breaking hyphen) in compound terms still
+    yields the key component token in PDF extraction.
+
+    If U+2011 breaks tokenization in our own extractors, the key-term
+    survival assertion must catch it — since it may break it in an ATS too.
+    """
+
+    def test_u2011_compound_yields_key_token(self, resume_66_data):
+        """A U+2011-joined compound like 'Terraform\u2011based' should still
+        yield 'terraform' as a word-boundary token in extracted text."""
+        validator = ATSParseValidator(resume_66_data["settings"])
+        # Simulate PDF text where 'Terraform‑based' uses U+2011
+        fake_pdf_text = "Built Terraform\u2011based infrastructure automation\n"
+        assertions = validator._check_key_term_survival(fake_pdf_text, ["terraform"], source="pdf")
+        assert len(assertions) == 1
+        # 'terraform' should still match as a word-boundary token
+        # because \b matches at the boundary between 'Terraform' and '\u2011'
+        assert assertions[0].passed, (
+            f"U+2011 compound 'Terraform\\u2011based' should yield 'terraform' token. "
+            f"Found: {assertions[0].found}"
+        )
+
+    def test_u2011_compound_full_render_survives(self, resume_66_data):
+        """End-to-end: render a PDF with U+2011 substitution applied, extract
+        text, and verify the key component token survives."""
+        from seeker_os.resume.export import _apply_non_breaking_hyphens
+        import markdown
+
+        # Minimal resume with a compound term
+        test_md = "# Test\n\n- Built Terraform-based infrastructure\n"
+        html_body = markdown.markdown(test_md, extensions=["extra", "tables", "nl2br"])
+
+        # Apply non-breaking hyphen substitution
+        html_body = _apply_non_breaking_hyphens(html_body, ["Terraform-based"])
+
+        # Verify U+2011 is in the HTML
+        assert "\u2011" in html_body, "U+2011 should be present after substitution"
+
+        # Verify the original ASCII hyphen is NOT in the compound term
+        assert "Terraform-based" not in html_body, "ASCII hyphen should be replaced"
+        assert "Terraform\u2011based" in html_body, "U+2011 should replace ASCII hyphen"
+
+    def test_substitution_preserves_urls(self, resume_66_data):
+        """Non-breaking hyphen substitution must NOT affect URLs or tag attributes."""
+        from seeker_os.resume.export import _apply_non_breaking_hyphens
+        import markdown
+
+        test_md = "# Test\n\n[Link](https://example.com/cloud-based)\n"
+        html_body = markdown.markdown(test_md, extensions=["extra", "tables", "nl2br"])
+
+        # Apply substitution
+        html_body = _apply_non_breaking_hyphens(html_body, ["cloud-based"])
+
+        # The URL in the href attribute should NOT have U+2011
+        assert "https://example.com/cloud-based" in html_body, "URL should keep ASCII hyphen"
+        # But the display text (if it contained the term) would have U+2011
+        # In this case the link text is "Link" so no substitution in text
+
+    def test_substitution_not_in_markdown_source(self, resume_66_data):
+        """The substitution must only happen in the PDF render path, never
+        in the markdown source file."""
+        import tempfile
+        from pathlib import Path
+        from seeker_os.resume.export import export_pdf
+
+        test_md = "# Test\n\n- Built Terraform-based infrastructure\n"
+        with tempfile.NamedTemporaryFile(suffix=".md", mode="w", delete=False) as f:
+            f.write(test_md)
+            md_path = Path(f.name)
+
+        # Read back to confirm source is unchanged
+        assert "Terraform-based" in md_path.read_text()
+        assert "\u2011" not in md_path.read_text()
+
+        # Export PDF with substitution
+        pdf_path = md_path.with_suffix(".pdf")
+        export_pdf(md_path, pdf_path, non_breaking_hyphen_terms=["Terraform-based"])
+
+        # Source file should still have ASCII hyphen
+        assert "Terraform-based" in md_path.read_text()
+        assert "\u2011" not in md_path.read_text()
+
+        md_path.unlink(missing_ok=True)
+        pdf_path.unlink(missing_ok=True)

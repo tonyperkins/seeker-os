@@ -16,13 +16,51 @@ _PDF_STYLE = """  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-
   h3 { font-size: 11pt; margin-top: 4pt; margin-bottom: 2pt; }
   a { color: #222; text-decoration: none; }
   .url { white-space: nowrap; }
-  ul { margin-top: 2pt; margin-bottom: 2pt; }
+  ul { margin-top: 2pt; margin-bottom: 2pt; list-style-position: inside; }
   li { margin-bottom: 1pt; }
   p { margin-top: 3pt; margin-bottom: 3pt; }
   @page { size: Letter; margin: 0.5in; }"""
 
 
 _BR_RE = re.compile(r"\s*$", re.MULTILINE)
+
+# U+2011 (non-breaking hyphen) — prevents PDF line-wrap splits at the hyphen
+_NB_HYPHEN = "\u2011"
+
+
+def _apply_non_breaking_hyphens(html_body: str, terms: list[str]) -> str:
+    """Replace ASCII hyphens with U+2011 in curated compound terms within
+    the HTML body, but ONLY in text content — not inside tag attributes,
+    URLs, or class names.
+
+    This is a PDF-render-path-only transformation. The markdown source
+    and DOCX export are never affected.
+    """
+    if not terms:
+        return html_body
+
+    # Build a case-insensitive regex matching each term as a whole word.
+    # Escape regex special chars in terms (none expected, but safe).
+    escaped = [re.escape(t) for t in terms]
+    pattern = re.compile(
+        r"(?<![\w/])(" + "|".join(escaped) + r")(?![\w/])",
+        re.IGNORECASE,
+    )
+
+    def _replace_in_text(m: re.Match) -> str:
+        return m.group(0).replace("-", _NB_HYPHEN)
+
+    # Split HTML into text segments and tag segments, replace only in text
+    # Simple approach: split on <...> tags and replace in non-tag parts
+    parts = re.split(r"(<[^>]+>)", html_body)
+    result = []
+    for part in parts:
+        if part.startswith("<") and part.endswith(">"):
+            # This is a tag — don't modify
+            result.append(part)
+        else:
+            result.append(pattern.sub(_replace_in_text, part))
+    return "".join(result)
 
 
 def _collapse_inline_breaks(md_text: str) -> str:
@@ -149,10 +187,18 @@ def _convert_competencies_table(md_text: str) -> str:
     return '\n'.join(result)
 
 
-def export_pdf(markdown_path: Path, output_path: Path | None = None) -> Path | None:
+def export_pdf(
+    markdown_path: Path,
+    output_path: Path | None = None,
+    non_breaking_hyphen_terms: list[str] | None = None,
+) -> Path | None:
     """Export a markdown resume to PDF.
 
     Returns the path to the PDF, or None if export failed (missing deps).
+
+    If non_breaking_hyphen_terms is provided, ASCII hyphens in those
+    compound terms are replaced with U+2011 (non-breaking hyphen) in
+    the PDF render path ONLY. The markdown source file is never modified.
     """
     try:
         import markdown
@@ -181,6 +227,10 @@ def export_pdf(markdown_path: Path, output_path: Path | None = None) -> Path | N
         r'<span class="url">\1</span>',
         html_body,
     )
+
+    # Apply non-breaking hyphens to curated compound terms (PDF render path only)
+    if non_breaking_hyphen_terms:
+        html_body = _apply_non_breaking_hyphens(html_body, non_breaking_hyphen_terms)
 
     # Wrap in a simple HTML document with print-friendly styling
     html = f"""<!DOCTYPE html>
@@ -216,7 +266,7 @@ def count_pdf_pages(markdown_text: str) -> int | None:
     return result["page_count"]
 
 
-def measure_pdf_pages(markdown_text: str) -> dict | None:
+def measure_pdf_pages(markdown_text: str, non_breaking_hyphen_terms: list[str] | None = None) -> dict | None:
     """Measure PDF page count and per-page content heights.
 
     Uses weasyprint's render() to determine the true page layout without
@@ -244,6 +294,10 @@ def measure_pdf_pages(markdown_text: str) -> dict | None:
         r'<span class="url">\1</span>',
         html_body,
     )
+
+    # Apply non-breaking hyphens to curated compound terms (PDF render path only)
+    if non_breaking_hyphen_terms:
+        html_body = _apply_non_breaking_hyphens(html_body, non_breaking_hyphen_terms)
 
     html = f"""<!DOCTYPE html>
 <html>

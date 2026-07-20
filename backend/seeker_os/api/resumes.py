@@ -757,9 +757,18 @@ def download_pdf(resume_id: int):
 
     # Try to generate PDF on the fly
     from seeker_os.resume.export import export_pdf
+    from seeker_os.config import get_settings
+    settings = get_settings()
+    nbh_terms = []
+    try:
+        cr = settings.channel_rules
+        if cr and cr.resume and cr.resume.content_tiering:
+            nbh_terms = cr.resume.content_tiering.non_breaking_hyphen_terms
+    except Exception:
+        pass
     md_path = Path(row["markdown_path"]) if row["markdown_path"] else None
     if md_path and md_path.exists():
-        output = export_pdf(md_path)
+        output = export_pdf(md_path, non_breaking_hyphen_terms=nbh_terms)
         if output:
             # Save path to DB
             db = get_connection()

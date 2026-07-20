@@ -652,6 +652,13 @@ class ContentTieringConfig(BaseModel):
         "benefits", "working", "work", "ability", "looking", "join",
         "help", "helping", "driving", "drive",
     ]
+    # Non-breaking hyphen terms: compound technical terms where the hyphen
+    # is replaced with U+2011 (non-breaking hyphen) in the PDF render path
+    # ONLY (never in markdown/docx/source). Prevents PDF extractors from
+    # splitting the term across line wraps, which destroys token survival
+    # for ATS keyword matching. Restricted to terms containing key skill
+    # tokens — not every hyphenated compound in the resume.
+    non_breaking_hyphen_terms: list[str] = []
 
 
 class ChannelConfig(BaseModel):
