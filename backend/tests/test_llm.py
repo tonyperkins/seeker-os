@@ -127,12 +127,13 @@ class TestRouterResolution:
                 ProviderConfig(id="p1", type="anthropic", api_key="x", enabled=True),
             ],
             tiers={
-                "heavy": TierMapping(provider="p1", model="big-model"),
+                "heavy": TierMapping(provider="p1", model="test-premium-model"),
                 "light": TierMapping(provider="p1", model="small-model"),
             },
             tasks={
                 "resume_generation": TaskOverride(tier="heavy"),
             },
+            approved_models=["test-premium-model", "small-model"],
         )
 
         router = ModelRouter(settings)
@@ -143,13 +144,13 @@ class TestRouterResolution:
         # Test task resolution
         provider, model = router.resolve("resume_generation")
         assert provider.id == "p1"
-        assert model == "big-model"
+        assert model == "test-premium-model"
 
         # Test generate
         response = router.generate("resume_generation", "sys", "usr")
         assert response.text == "mock"
         assert response.provider == "p1"
-        assert response.model == "big-model"
+        assert response.model == "test-premium-model"
 
     def test_router_no_providers(self):
         from seeker_os.config import Settings
@@ -184,13 +185,14 @@ class TestRouterResolution:
                 ProviderConfig(id="p1", type="anthropic", api_key="x", enabled=True),
             ],
             tiers={
-                "heavy": TierMapping(provider="p1", model="big-model"),
+                "heavy": TierMapping(provider="p1", model="test-premium-model"),
                 "moderate": TierMapping(provider="p1", model="mid-model"),
                 "light": TierMapping(provider="p1", model="small-model"),
             },
             tasks={
                 "application_answer_critique": TaskOverride(tier="moderate"),
             },
+            approved_models=["test-premium-model", "mid-model", "small-model"],
         )
 
         router = ModelRouter(settings)
@@ -228,6 +230,7 @@ class TestRouterResolution:
                 "moderate": TierMapping(provider="p1", model="mid-model"),
             },
             tasks={},
+            approved_models=["mid-model"],
         )
 
         router = ModelRouter(settings)
@@ -384,14 +387,15 @@ class TestMaxOutputCeiling:
             def list_models(self): return []
             def test_connection(self): return ProviderHealth(provider_id=self._id, healthy=True)
 
-        model = ProviderModel(id="big-model", label="Big", max_output=max_output, tags=["heavy"])
+        model = ProviderModel(id="test-premium-model", label="Big", max_output=max_output, tags=["heavy"])
         settings = Settings.__new__(Settings)
         settings.providers = ProvidersConfig(
             providers=[
                 ProviderConfig(id="p1", type="anthropic", api_key="x", enabled=True, models=[model]),
             ],
-            tiers={"heavy": TierMapping(provider="p1", model="big-model")},
+            tiers={"heavy": TierMapping(provider="p1", model="test-premium-model")},
             tasks={"resume_generation_standard": TaskOverride(tier="heavy")},
+            approved_models=["test-premium-model"],
         )
 
         router = ModelRouter(settings)

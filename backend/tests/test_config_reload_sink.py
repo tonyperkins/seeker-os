@@ -15,7 +15,7 @@ from seeker_os.api.app import app
 from seeker_os.database import get_connection, run_migrations
 from seeker_os.observability import langfuse_sink as sink_mod
 
-pytest.importorskip("langfuse")
+import langfuse  # noqa: F401 — declared dependency, not optional
 
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter,

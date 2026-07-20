@@ -484,6 +484,77 @@ class ProvidersConfig(BaseModel):
     # pricing data is older than this, pricing_stale=True in the spend report.
     pricing_stale_after_days: int = 30
 
+    # Allowlist of approved production model strings. Every tier mapping and
+    # task override must reference a model on this list — no exceptions.
+    # Add new models here first, then reference them in tiers/tasks.
+    approved_models: list[str] = []
+
+    # Denylist patterns (second layer): known auto-routing aliases and
+    # free-tier model patterns that must never appear in production config.
+    _FREE_TIER_PATTERNS: list[str] = [
+        "kilo-auto",
+        ":free",
+        "/free",
+        "auto/free",
+        "auto/efficient",
+        "big-model",
+    ]
+
+    @model_validator(mode="after")
+    def _validate_production_models(self) -> ProvidersConfig:
+        """Fail loudly at startup if any tier or task references a model not
+        on the approved_models allowlist, or matches a known free-tier /
+        auto-routing denylist pattern.
+
+        Layer 1 (allowlist): every tier and task model must be on
+        approved_models. This catches unlisted-but-innocuous-looking models
+        — a typo or a new model that hasn't been approved yet.
+
+        Layer 2 (denylist): even if a model somehow passes the allowlist
+        check (e.g. approved_models is empty/misconfigured), known
+        auto-routing and free-tier patterns are always rejected.
+        """
+        offenders: list[str] = []
+        approved = set(self.approved_models)
+
+        def _check_model(scope: str, name: str, model: str) -> None:
+            # Layer 1: allowlist
+            if approved and model not in approved:
+                offenders.append(
+                    f"{scope} '{name}' model '{model}' is not in "
+                    f"approved_models {sorted(approved)}"
+                )
+            # Layer 2: denylist patterns
+            model_lower = model.lower()
+            for pattern in self._FREE_TIER_PATTERNS:
+                if pattern in model_lower:
+                    offenders.append(
+                        f"{scope} '{name}' model '{model}' "
+                        f"matches free-tier pattern '{pattern}'"
+                    )
+                    break
+
+        for tier_name, tier in self.tiers.items():
+            _check_model("tier", tier_name, tier.model)
+
+        for task_name, task in self.tasks.items():
+            if task.model:
+                _check_model("task", task_name, task.model)
+
+        if offenders:
+            raise ValueError(
+                "Production config validation failed — model policy "
+                "violation in providers.yml:\n  - "
+                + "\n  - ".join(offenders)
+                + "\n\nEvery production tier and task must be pinned to an "
+                "explicit model on the approved_models list. Remove "
+                "kilo-auto/*, *:free, and big-model aliases. If you need "
+                "an experimental tier, create a dedicated 'experimental' "
+                "tier separate from heavy/moderate/light."
+            )
+
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Identity rules models
@@ -518,6 +589,69 @@ class ContentTieringConfig(BaseModel):
     mid_years: int = 20
     mid_max_bullets: int = 3
     old_max_bullets: int = 1
+    # Phase 1: deterministic recent-tier bullet selection (pre-filter, not
+    # post-hoc trimming — see resume/bullet_ranker.py). Caps apply only to
+    # roles within recent_years; current role gets a higher cap than other
+    # recent roles.
+    recent_current_role_max_bullets: int = 6
+    recent_other_max_bullets: int = 4
+    # Phase 1d: deterministic portfolio project selection.
+    # max_projects caps the number of projects rendered (always-include
+    # projects consume slots first). max_bullets_per_project caps bullets
+    # per project. always_include_projects entries are matched case-
+    # insensitively against the project heading text after "### " up to
+    # the first "—" (or full heading if no dash).
+    max_projects: int = 3
+    max_bullets_per_project: int = 2
+    always_include_projects: list[str] = []
+    # Phase 3: deterministic competency category pruning.
+    # max_competency_categories caps rendered categories (always-include
+    # consume slots first). always_include_competency_categories entries
+    # are matched case-insensitively against the category label (bold
+    # text in the Area column of the competencies table).
+    max_competency_categories: int = 8
+    always_include_competency_categories: list[str] = []
+    # Competency scoring: label tokens earn a boost multiplier (shares
+    # title_stopwords). Qualifier phrases are stripped before tokenizing —
+    # only known phrases are stripped, everything else in parentheticals
+    # scores. Qualifiers still render verbatim.
+    competency_label_boost: float = 1.5
+    competency_qualifier_stopwords: list[str] = []
+    # Competency item capping: within each selected category, individual
+    # skill items (·-separated) are ranked by JD relevance and the top N
+    # render. Items are dropped WHOLE, never truncated or reworded.
+    # Honesty qualifiers travel verbatim with any surviving item that
+    # carries one. Categories with <= N items render unchanged.
+    max_items_per_category: int = 6
+    # Page overflow tolerance: the page gate checks rendered content height
+    # against the page budget (target_pages × printable page height). A
+    # resume within this fraction of the budget passes — e.g. 0.10 means
+    # a 3-page resume can spill up to 10% of one page's height and still
+    # pass. Set to 0 for strict integer-page-count behavior.
+    page_overflow_tolerance: float = 0.10
+    # 3-gram Jaccard threshold for collapsing near-duplicate bullets within
+    # a role's candidate pool before the cap is applied.
+    near_duplicate_similarity_threshold: float = 0.6
+    # Multiplier applied to JD-term weight when the matched term also
+    # appears in the job title (and isn't a title_stopword).
+    title_boost: float = 1.5
+    # Title words that never earn the JD-relevance title-match boost because
+    # they're seniority/generic terms, not discriminating skill signal.
+    title_stopwords: list[str] = [
+        "principal", "senior", "staff", "lead", "engineer", "engineering",
+        "architect", "director", "manager", "specialist", "associate",
+        "junior", "chief", "head",
+    ]
+    # Generic-business-vocabulary stopwords — non-discriminating terms that
+    # appear in almost every JD and resume but carry no technical signal.
+    # Excluded from both the JD term map and bullet token matching.
+    business_stopwords: list[str] = [
+        "client", "team", "years", "measurable", "location", "building",
+        "through", "ensure", "across", "support", "strong", "proven",
+        "opportunity", "experience", "role", "position", "candidates",
+        "benefits", "working", "work", "ability", "looking", "join",
+        "help", "helping", "driving", "drive",
+    ]
 
 
 class ChannelConfig(BaseModel):

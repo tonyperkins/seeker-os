@@ -688,14 +688,17 @@ def generate_resume_stream(body: ResumeGenerateRequest):
 
 @router.post("/{resume_id}/validate", response_model=dict)
 def revalidate_resume(resume_id: int):
-    """Re-run accuracy validation on a stored resume."""
+    """Re-run all validation gates on a stored resume.
+
+    Runs accuracy, page-count, and ATS parse-survival gates against the
+    stored resume text. Previous verdict is preserved in llm_evaluations.
+    """
     from seeker_os.config import get_settings
-    from seeker_os.validation import AccuracyValidator
+    from seeker_os.validation import revalidate_all
 
     settings = get_settings()
-    validator = AccuracyValidator(settings)
     try:
-        result = validator.revalidate(resume_id)
+        result = revalidate_all(resume_id, settings)
         return result.to_dict()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

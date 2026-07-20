@@ -21,6 +21,11 @@
 #                           compression rules. See ContentTieringConfig in
 #                           config.py. When present, the generator instructs
 #                           the LLM to tier experience bullets by role age.
+#                           For recent-tier roles, bullet selection is done
+#                           DETERMINISTICALLY (resume/bullet_ranker.py) —
+#                           the LLM only renders the pre-selected set, it
+#                           never chooses what to drop. Mid/old tiers still
+#                           use prompt-based compression instructions.
 
 channels:
   resume:
@@ -29,10 +34,68 @@ channels:
     ai_generation_default: allowed
     content_tiering:
       target_pages: 2
+      # Page overflow tolerance: the gate checks rendered content height
+      # against the page budget (target_pages × printable page height).
+      # A resume within this fraction of the budget passes. 0.15 sits
+      # outside observed run-to-run LLM generation noise (~3-4%) while
+      # still failing a genuine extra page (~1.33 ratio). Set to 0 for
+      # strict integer-page-count behavior.
+      page_overflow_tolerance: 0.15
       recent_years: 10
       mid_years: 20
       mid_max_bullets: 3
       old_max_bullets: 1
+      # Deterministic recent-tier bullet selection (Phase 1)
+      recent_current_role_max_bullets: 6
+      recent_other_max_bullets: 4
+      near_duplicate_similarity_threshold: 0.6
+      title_boost: 1.5
+      title_stopwords:
+        - principal
+        - senior
+        - staff
+        - lead
+        - engineer
+        - engineering
+        - architect
+        - director
+        - manager
+        - specialist
+        - associate
+        - junior
+        - chief
+        - head
+      # Generic-business-vocabulary stopwords — non-discriminating terms
+      # that appear in almost every JD and resume but carry no technical
+      # signal. Excluded from JD term map and bullet token matching.
+      business_stopwords:
+        - client
+        - team
+        - years
+        - measurable
+        - location
+        - building
+        - through
+        - ensure
+        - across
+        - support
+        - strong
+        - proven
+        - opportunity
+        - experience
+        - role
+        - position
+        - candidates
+        - benefits
+        - working
+        - work
+        - ability
+        - looking
+        - join
+        - help
+        - helping
+        - driving
+        - drive
 
   cover_letter:
     require_visible_urls: false

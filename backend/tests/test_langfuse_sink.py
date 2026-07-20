@@ -21,7 +21,7 @@ from seeker_os.observability.langfuse_sink import (
     init_sink,
 )
 
-pytest.importorskip("langfuse")
+import langfuse  # noqa: F401 — declared dependency, not optional
 
 _FAILURE_MARKERS = (
     "langfuse_start_failed",
@@ -547,7 +547,13 @@ class TestSinkBehavior:
         s.shutdown()
 
     def test_missing_keys_warning_no_raise(self, caplog):
-        """Missing keys with enabled=True → warning logged, sink disabled, no raise."""
+        """Missing keys with enabled=True → warning logged, sink disabled, no raise.
+
+        TODO(langfuse): pre-existing failure as of 2026-07-19, unrelated to
+        the Phase 1 resume bullet-selection work — tracked separately, must
+        be green before the Langfuse blog post publishes. Not touched here
+        per explicit scope exclusion.
+        """
         caplog.set_level(logging.WARNING, logger=sink_mod.__name__)
         settings = types.SimpleNamespace(
             observability=types.SimpleNamespace(

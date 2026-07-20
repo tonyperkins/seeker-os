@@ -10,6 +10,101 @@ import re
 from pathlib import Path
 
 
+_PDF_STYLE = """  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; line-height: 1.35; color: #222; margin: 0; padding: 0; }
+  h1 { font-size: 18pt; margin-bottom: 2pt; }
+  h2 { font-size: 13pt; margin-top: 8pt; border-bottom: 1px solid #ccc; padding-bottom: 1pt; }
+  h3 { font-size: 11pt; margin-top: 4pt; margin-bottom: 2pt; }
+  a { color: #222; text-decoration: none; }
+  .url { white-space: nowrap; }
+  ul { margin-top: 2pt; margin-bottom: 2pt; }
+  li { margin-bottom: 1pt; }
+  p { margin-top: 3pt; margin-bottom: 3pt; }
+  @page { size: Letter; margin: 0.5in; }"""
+
+
+_BR_RE = re.compile(r"\s*$", re.MULTILINE)
+
+
+def _collapse_inline_breaks(md_text: str) -> str:
+    """Convert newlines to inline ' · ' separators for company/location/date
+    lines and competency bold-label lines, preserving contact block line breaks.
+
+    The contact block (first paragraph after h1, containing email/phone/URLs)
+    keeps its line breaks. Everything else that uses single-newline breaks
+    within a paragraph gets collapsed to inline separators, saving ~20px per
+    eliminated <br> tag.
+    """
+    lines = md_text.split("\n")
+    result: list[str] = []
+    in_contact = False
+    contact_done = False
+    in_competencies = False
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+
+        # Track section headers
+        if line.startswith("## "):
+            in_competencies = "competenc" in line.lower() or "skill" in line.lower()
+            in_contact = False
+            contact_done = True
+            result.append(line)
+            i += 1
+            continue
+
+        # Detect contact block: first non-empty content after h1
+        if line.startswith("# ") and not contact_done:
+            in_contact = False  # h1 itself
+            result.append(line)
+            i += 1
+            # Next non-empty lines until a --- or ## are contact block
+            while i < len(lines):
+                cl = lines[i]
+                if cl.strip() == "---" or cl.startswith("## ") or cl.startswith("# "):
+                    break
+                if cl.strip():
+                    in_contact = True
+                result.append(cl)
+                i += 1
+            contact_done = True
+            in_contact = False
+            continue
+
+        # Competency bold-label lines: **Label:** skills\n**Label:** skills
+        # Collapse continuation lines (multi-line competency entries) into one line
+        if in_competencies and line.strip().startswith("**") and ":**" in line:
+            # Check if next line is also a competency entry or blank/section
+            # This line is a complete competency entry — keep as-is
+            result.append(line)
+            i += 1
+            continue
+
+        # Company/location/date lines under h3 (Professional Experience roles):
+        # Pattern: **Company** · Location · *Date*
+        # These often span 2 lines with a newline between company and location
+        # Only collapse if the current line starts with ** and next line
+        # continues with location/date info (no markdown header, no bullet)
+        if (
+            line.strip().startswith("**")
+            and i + 1 < len(lines)
+            and lines[i + 1].strip()
+            and not lines[i + 1].strip().startswith(("-", "**", "##", "###", "#", "|"))
+            and not lines[i + 1].strip() == "---"
+            and "·" in (line + " " + lines[i + 1])
+        ):
+            # Merge with inline separator
+            merged = line.rstrip() + " · " + lines[i + 1].strip()
+            result.append(merged)
+            i += 2
+            continue
+
+        result.append(line)
+        i += 1
+
+    return "\n".join(result)
+
+
 def _convert_competencies_table(md_text: str) -> str:
     """Convert markdown tables in competencies/skills sections to labeled plain-text lines.
 
@@ -75,6 +170,7 @@ def export_pdf(markdown_path: Path, output_path: Path | None = None) -> Path | N
     # section to labeled plain-text lines before HTML conversion, so ATS parsers
     # never see a <table> for competencies even if the model emitted pipe syntax.
     md_text = _convert_competencies_table(md_text)
+    md_text = _collapse_inline_breaks(md_text)
 
     # Convert markdown to HTML
     html_body = markdown.markdown(md_text, extensions=["extra", "tables", "nl2br"])
@@ -92,15 +188,7 @@ def export_pdf(markdown_path: Path, output_path: Path | None = None) -> Path | N
 <head>
 <meta charset="utf-8">
 <style>
-  body {{ font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; line-height: 1.4; color: #222; max-width: 800px; margin: 0 auto; padding: 20px; }}
-  h1 {{ font-size: 18pt; margin-bottom: 4pt; }}
-  h2 {{ font-size: 13pt; margin-top: 14pt; border-bottom: 1px solid #ccc; padding-bottom: 2pt; }}
-  h3 {{ font-size: 11pt; margin-top: 10pt; }}
-  a {{ color: #222; text-decoration: none; }}
-  .url {{ white-space: nowrap; }}
-  ul {{ margin-top: 4pt; }}
-  li {{ margin-bottom: 2pt; }}
-  @page {{ margin: 0.5in; }}
+{_PDF_STYLE}
 </style>
 </head>
 <body>
@@ -110,6 +198,97 @@ def export_pdf(markdown_path: Path, output_path: Path | None = None) -> Path | N
 
     weasyprint.HTML(string=html).write_pdf(str(output_path))
     return output_path
+
+
+def count_pdf_pages(markdown_text: str) -> int | None:
+    """Count the number of PDF pages a markdown resume would produce.
+
+    Uses weasyprint's render() to determine page count without writing a
+    file. Returns None if weasyprint or markdown is not installed.
+
+    Applies the same HTML conversion pipeline as export_pdf (competencies
+    table conversion, URL wrapping, print-friendly styling) so the page
+    count matches what export_pdf would actually produce.
+    """
+    result = measure_pdf_pages(markdown_text)
+    if result is None:
+        return None
+    return result["page_count"]
+
+
+def measure_pdf_pages(markdown_text: str) -> dict | None:
+    """Measure PDF page count and per-page content heights.
+
+    Uses weasyprint's render() to determine the true page layout without
+    writing a file. Returns None if weasyprint or markdown is not installed.
+
+    Returns a dict with:
+        - page_count: int — number of pages
+        - page_heights: list[float] — content height in CSS px per page
+        - total_content_height: float — sum of all page content heights
+        - printable_page_height: float — printable height of one page in CSS px
+
+    Applies the same HTML conversion pipeline as export_pdf.
+    """
+    try:
+        import markdown
+        import weasyprint
+    except ImportError:
+        return None
+
+    md_text = _convert_competencies_table(markdown_text)
+    md_text = _collapse_inline_breaks(md_text)
+    html_body = markdown.markdown(md_text, extensions=["extra", "tables", "nl2br"])
+    html_body = re.sub(
+        r'(?<!["\'>])(https?://[^\s<]+)',
+        r'<span class="url">\1</span>',
+        html_body,
+    )
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+{_PDF_STYLE}
+</style>
+</head>
+<body>
+{html_body}
+</body>
+</html>"""
+
+    doc = weasyprint.HTML(string=html).render()
+    page_count = len(doc.pages)
+    page_heights: list[float] = []
+    for i, page in enumerate(doc.pages):
+        page_box = page._page_box
+        if i == page_count - 1:
+            # Last page: measure actual content height, not full page box.
+            # The body element's height reflects how much content is on
+            # this page (may be much less than the full printable area).
+            body_height = 0.0
+            for child in page_box.children:
+                if hasattr(child, "children"):
+                    for gc in child.children:
+                        if hasattr(gc, "height") and gc.height > body_height:
+                            body_height = float(gc.height)
+            # If body_height is 0 (couldn't find body), fall back to page_box height
+            page_heights.append(body_height if body_height > 0 else float(page_box.height))
+        else:
+            # Non-final pages: content fills the entire printable area
+            page_heights.append(float(page_box.height))
+
+    # Printable page height = the page box height (printable area after margins)
+    printable_page_height = float(doc.pages[0]._page_box.height) if doc.pages else 0.0
+    total_content_height = sum(page_heights)
+
+    return {
+        "page_count": page_count,
+        "page_heights": page_heights,
+        "total_content_height": total_content_height,
+        "printable_page_height": printable_page_height,
+    }
 
 
 def _parse_inline_markdown(text: str):
