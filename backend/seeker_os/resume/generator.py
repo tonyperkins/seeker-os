@@ -20,7 +20,11 @@ from seeker_os.database import get_connection, json_decode
 from seeker_os.events import Actor, EventType, JobStatus, record_event, transition_status
 from seeker_os.llm.router import ModelRouter
 from seeker_os.observability.llm_ledger import attach_artifact, digest, fingerprint, record_evaluation
-from seeker_os.validation import AccuracyValidator
+from seeker_os.resume.bullet_ranker import CompetencySelectionResult, select_bullets_for_role, select_competencies, select_projects
+from seeker_os.resume.master_parser import parse_master_resume, render_filtered_master
+from seeker_os.resume.role_recency import years_since_end
+from seeker_os.validation import AccuracyValidator, Violation
+from seeker_os.validation.ats_parse import ATSParseValidator
 from seeker_os.validation.traceability import TraceabilityChecker
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -141,11 +145,29 @@ def _load_work_eligibility_text(settings: Settings) -> str:
     )
 
 
-def _build_tiering_instructions(settings: Settings) -> str:
+def _build_tiering_instructions(
+    settings: Settings,
+    selections_active: bool = False,
+    mid_old_active: bool = False,
+    portfolio_active: bool = False,
+    competency_active: bool = False,
+) -> str:
     """Build recency/relevance tiering instructions from channel_rules config.
 
     Returns empty string if no content_tiering is configured — the prompt
     says nothing about tiering in that case. No hardcoded values.
+
+    `selections_active` indicates whether deterministic Phase 1 bullet
+    selection actually ran for recent-tier roles. When True, the recent-roles
+    line is rewritten to avoid contradicting the DETERMINISTIC BULLET SELECTION
+    block.
+
+    `mid_old_active` indicates mid/old tier deterministic selection also ran.
+    When True, the mid/old lines are rewritten similarly.
+
+    `portfolio_active` indicates portfolio project selection ran.
+
+    `competency_active` indicates competency category selection ran.
     """
     if not settings.channel_rules or not settings.channel_rules.resume:
         return ""
@@ -153,16 +175,520 @@ def _build_tiering_instructions(settings: Settings) -> str:
     if not tiering:
         return ""
 
+    if selections_active:
+        recent_line = (
+            f"- Recent roles (within the last {tiering.recent_years} years): bullets have "
+            f"already been deterministically pre-selected by relevance to this JD (see the "
+            f"DETERMINISTIC BULLET SELECTION section below) — render exactly the bullets "
+            f"provided for those roles; do not add or invent additional ones."
+        )
+    else:
+        recent_line = (
+            f"- Recent roles (within the last {tiering.recent_years} years): keep ALL strong "
+            f"bullets — full detail."
+        )
+
+    if mid_old_active:
+        mid_line = (
+            f"- Mid-age roles ({tiering.recent_years}-{tiering.mid_years} years old): bullets have "
+            f"already been deterministically pre-selected and capped at {tiering.mid_max_bullets} — "
+            f"render exactly the bullets provided; do not add or invent additional ones."
+        )
+        old_line = (
+            f"- Old roles ({tiering.mid_years}+ years old): bullets have already been "
+            f"deterministically pre-selected and capped at {tiering.old_max_bullets} — "
+            f"render exactly the bullets provided; do not add or invent additional ones."
+        )
+    else:
+        mid_line = (
+            f"- Mid-age roles ({tiering.recent_years}-{tiering.mid_years} years old): compress to at most {tiering.mid_max_bullets} highest-impact bullets. Prefer bullets with quantified outcomes or keywords matching the target JD; drop generic ones."
+        )
+        old_line = (
+            f"- Old roles ({tiering.mid_years}+ years old): compress to at most {tiering.old_max_bullets} bullet or a single summary line."
+        )
+
     lines = [
         f"Target length: {tiering.target_pages} pages. Apply recency-based bullet tiering to every role:",
-        f"- Recent roles (within the last {tiering.recent_years} years): keep ALL strong bullets — full detail.",
-        f"- Mid-age roles ({tiering.recent_years}-{tiering.mid_years} years old): compress to at most {tiering.mid_max_bullets} highest-impact bullets. Prefer bullets with quantified outcomes or keywords matching the target JD; drop generic ones.",
-        f"- Old roles ({tiering.mid_years}+ years old): compress to at most {tiering.old_max_bullets} bullet or a single summary line.",
+        recent_line,
+        mid_line,
+        old_line,
         "- NEVER drop a role entirely or alter dates/titles. This is about bullet COUNT per role, not removing history.",
         "- JD-relevance can PROMOTE an older role's bullet: if a bullet from an older role directly matches the target JD's stack or requirements, keep it even when compressing. Recency is the default axis; JD-relevance can override downward compression.",
         "- All honesty/traceability rules still apply. Compressing means SELECTING which true bullets to show — never invent or merge into new claims.",
     ]
+
+    if portfolio_active:
+        lines.append(
+            f"- Portfolio Projects: projects and their bullets have already been deterministically "
+            f"selected by relevance to this JD (see the DETERMINISTIC BULLET SELECTION section below) — "
+            f"render exactly the projects and bullets provided; do not add or invent additional ones."
+        )
+
+    if competency_active:
+        comp_line = (
+            f"- Core Competencies: categories have already been deterministically selected by relevance "
+            f"to this JD — render exactly the competency categories provided in the master resume text; "
+            f"do not add categories that aren't shown, and do not alter category labels or qualifier text."
+        )
+        if tiering.max_items_per_category > 0:
+            comp_line += (
+                f" Individual skill items within each category have also been pre-selected — "
+                f"render exactly the items provided; do not add or reword items."
+            )
+        lines.append(comp_line)
+
     return "\n".join(lines)
+
+
+def _build_selection_instructions(
+    role_titles: dict[str, str],
+    project_titles: dict[str, str] | None = None,
+) -> str:
+    """Build the render-only instruction for roles/projects with pre-selected bullets.
+
+    Returns empty string if no roles or projects had deterministic selection applied.
+    """
+    project_titles = project_titles or {}
+    if not role_titles and not project_titles:
+        return ""
+
+    parts: list[str] = []
+    if role_titles:
+        titles = ", ".join(sorted(role_titles.values()))
+        parts.append(
+            f"Roles with pre-selected bullets: {titles}"
+        )
+    if project_titles:
+        p_titles = ", ".join(sorted(project_titles.values()))
+        parts.append(
+            f"Portfolio projects with pre-selected bullets: {p_titles}"
+        )
+
+    return (
+        "For the following items, bullets have already been selected deterministically "
+        "based on relevance to this JD — the master resume text you were given for these "
+        "items contains ONLY the pre-selected bullets, in their original order.\n"
+        "Render exactly those bullets (you may still reorder/reframe wording per the usual "
+        "tailoring rules) — do NOT add a bullet for these items that isn't shown, and do NOT "
+        "omit a bullet that IS shown. Selection is already done; your job here is rendering, "
+        "not re-selecting.\n"
+        + "\n".join(parts)
+    )
+
+
+def _run_deterministic_bullet_selection(
+    settings: Settings,
+    master_resume: str,
+    jd_text: str,
+    job_title: str,
+    operation_id: str,
+) -> tuple[str, dict[str, str], dict[str, str], bool, bool, bool, list[str], list[str]]:
+    """Phase 1 + 1d + 3: deterministically select bullets and competency
+    categories by JD relevance.
+
+    Returns (master_resume_for_prompt, role_titles, project_titles,
+    mid_old_active, portfolio_active, competency_active,
+    selected_category_labels, pinned_bullet_texts).
+
+    - role_titles maps role_id -> title for every role that had selection
+      applied (empty dict if none).
+    - project_titles maps project_id -> title for every portfolio project
+      that had bullet selection applied (empty dict if none).
+    - mid_old_active: True if mid/old tier deterministic selection ran.
+    - portfolio_active: True if portfolio project selection ran.
+    - competency_active: True if competency category selection ran.
+    - selected_category_labels: list of selected category labels (empty if none).
+    - pinned_bullet_texts: list of pinned bullet text strings that were
+      selected (for ATS parse-survival verification).
+
+    Falls back to the original master_resume text (selection inactive) on
+    any parsing error — resume generation must never break because the
+    master resume's formatting doesn't match the parser's expectations.
+    """
+    logger = logging.getLogger(__name__)
+    if not settings.channel_rules or not settings.channel_rules.resume:
+        return master_resume, {}, {}, False, False, False, [], []
+    tiering = settings.channel_rules.resume.content_tiering
+    if not tiering:
+        return master_resume, {}, {}, False, False, False, [], []
+
+    try:
+        parsed = parse_master_resume(master_resume)
+        title_stopwords = frozenset(tiering.title_stopwords)
+        business_stopwords = frozenset(tiering.business_stopwords)
+        selections: dict[str, list[int]] = {}
+        role_titles: dict[str, str] = {}
+        mid_old_active = False
+        pinned_bullet_texts: list[str] = []
+
+        # --- Recent tier (Phase 1) ---
+        recent_roles = [
+            role
+            for role in parsed.roles_in_section("Professional Experience")
+            if role.bullets
+            and (
+                (years := years_since_end(role.dates_raw)) is None
+                or years <= tiering.recent_years
+            )
+        ]
+
+        for role in recent_roles:
+            cap = (
+                tiering.recent_current_role_max_bullets
+                if role.is_current
+                else tiering.recent_other_max_bullets
+            )
+            if len(role.bullets) <= cap:
+                continue
+
+            result = select_bullets_for_role(
+                bullets=role.bullets,
+                jd_text=jd_text,
+                job_title=job_title,
+                cap=cap,
+                near_duplicate_threshold=tiering.near_duplicate_similarity_threshold,
+                title_stopwords=title_stopwords,
+                business_stopwords=business_stopwords,
+            )
+            selections[role.role_id] = [item["index"] for item in result.selected]
+            role_titles[role.role_id] = role.title
+
+            try:
+                record_evaluation(
+                    operation_id=operation_id,
+                    evaluator_name="bullet_selection",
+                    evaluator_type="deterministic",
+                    metric_name="bullet_selection",
+                    passed=True,
+                    label=role.role_id,
+                    details={
+                        "role_title": role.title,
+                        "tier": "recent",
+                        "candidate_count": result.candidate_count,
+                        "post_dedupe_count": result.post_dedupe_count,
+                        "cap": cap,
+                        "selected": result.selected,
+                        "dropped": result.dropped,
+                        "warnings": result.warnings,
+                        "jd_scope_mode": result.jd_scope_mode,
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "bullet_selection_evaluation_write_failed",
+                    extra={"operation_id": operation_id, "role_id": role.role_id},
+                )
+
+        # --- Mid/old tier deterministic enforcement (Phase 1d) ---
+        all_exp_roles = parsed.roles_in_section("Professional Experience")
+        for role in all_exp_roles:
+            years = years_since_end(role.dates_raw)
+            if years is None or years <= tiering.recent_years:
+                continue  # already handled as recent
+
+            if years <= tiering.mid_years:
+                cap = tiering.mid_max_bullets
+                tier_label = "mid"
+            else:
+                cap = tiering.old_max_bullets
+                tier_label = "old"
+
+            if not role.bullets or len(role.bullets) <= cap:
+                continue
+
+            result = select_bullets_for_role(
+                bullets=role.bullets,
+                jd_text=jd_text,
+                job_title=job_title,
+                cap=cap,
+                near_duplicate_threshold=tiering.near_duplicate_similarity_threshold,
+                title_stopwords=title_stopwords,
+                business_stopwords=business_stopwords,
+            )
+            selections[role.role_id] = [item["index"] for item in result.selected]
+            role_titles[role.role_id] = role.title
+            mid_old_active = True
+
+            try:
+                record_evaluation(
+                    operation_id=operation_id,
+                    evaluator_name="bullet_selection",
+                    evaluator_type="deterministic",
+                    metric_name="bullet_selection",
+                    passed=True,
+                    label=role.role_id,
+                    details={
+                        "role_title": role.title,
+                        "tier": tier_label,
+                        "candidate_count": result.candidate_count,
+                        "post_dedupe_count": result.post_dedupe_count,
+                        "cap": cap,
+                        "selected": result.selected,
+                        "dropped": result.dropped,
+                        "warnings": result.warnings,
+                        "jd_scope_mode": result.jd_scope_mode,
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "bullet_selection_evaluation_write_failed",
+                    extra={"operation_id": operation_id, "role_id": role.role_id},
+                )
+
+        # --- Early Career roles: enforce old_max_bullets deterministically ---
+        early_career_roles = parsed.roles_in_section("Early Career")
+        for role in early_career_roles:
+            cap = tiering.old_max_bullets
+            if not role.bullets or len(role.bullets) <= cap:
+                continue
+
+            result = select_bullets_for_role(
+                bullets=role.bullets,
+                jd_text=jd_text,
+                job_title=job_title,
+                cap=cap,
+                near_duplicate_threshold=tiering.near_duplicate_similarity_threshold,
+                title_stopwords=title_stopwords,
+                business_stopwords=business_stopwords,
+            )
+            selections[role.role_id] = [item["index"] for item in result.selected]
+            role_titles[role.role_id] = role.title
+            mid_old_active = True
+
+            try:
+                record_evaluation(
+                    operation_id=operation_id,
+                    evaluator_name="bullet_selection",
+                    evaluator_type="deterministic",
+                    metric_name="bullet_selection",
+                    passed=True,
+                    label=role.role_id,
+                    details={
+                        "role_title": role.title,
+                        "tier": "early_career",
+                        "candidate_count": result.candidate_count,
+                        "post_dedupe_count": result.post_dedupe_count,
+                        "cap": cap,
+                        "selected": result.selected,
+                        "dropped": result.dropped,
+                        "warnings": result.warnings,
+                        "jd_scope_mode": result.jd_scope_mode,
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "bullet_selection_evaluation_write_failed",
+                    extra={"operation_id": operation_id, "role_id": role.role_id},
+                )
+
+        # --- Portfolio project selection (Phase 1d) ---
+        project_titles: dict[str, str] = {}
+        dropped_project_ids: set[str] = set()
+        portfolio_active = False
+
+        if parsed.projects:
+            proj_result = select_projects(
+                projects=parsed.projects,
+                jd_text=jd_text,
+                job_title=job_title,
+                max_projects=tiering.max_projects,
+                max_bullets_per_project=tiering.max_bullets_per_project,
+                always_include=tiering.always_include_projects,
+                near_duplicate_threshold=tiering.near_duplicate_similarity_threshold,
+                title_boost=tiering.title_boost,
+                title_stopwords=title_stopwords,
+                business_stopwords=business_stopwords,
+            )
+            portfolio_active = bool(proj_result.selected_project_ids or proj_result.dropped_project_ids)
+
+            # Merge project bullet selections into the shared selections dict
+            for pid, bullet_result in proj_result.per_project.items():
+                selections[pid] = [item["index"] for item in bullet_result.selected]
+                project = parsed.project_by_id(pid)
+                if project:
+                    project_titles[pid] = project.title
+
+                try:
+                    record_evaluation(
+                        operation_id=operation_id,
+                        evaluator_name="bullet_selection",
+                        evaluator_type="deterministic",
+                        metric_name="bullet_selection",
+                        passed=True,
+                        label=pid,
+                        details={
+                            "project_title": project.title if project else pid,
+                            "tier": "portfolio",
+                            "candidate_count": bullet_result.candidate_count,
+                            "post_dedupe_count": bullet_result.post_dedupe_count,
+                            "cap": tiering.max_bullets_per_project,
+                            "selected": bullet_result.selected,
+                            "dropped": bullet_result.dropped,
+                            "warnings": bullet_result.warnings,
+                            "jd_scope_mode": bullet_result.jd_scope_mode,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "bullet_selection_evaluation_write_failed",
+                        extra={"operation_id": operation_id, "project_id": pid},
+                    )
+
+            # Record dropped projects
+            dropped_project_ids = set(proj_result.dropped_project_ids)
+
+            # Record zero-bullet project blocks suppressed from render output
+            for project in parsed.projects:
+                if not project.has_bullets:
+                    try:
+                        record_evaluation(
+                            operation_id=operation_id,
+                            evaluator_name="bullet_selection",
+                            evaluator_type="deterministic",
+                            metric_name="bullet_selection",
+                            passed=True,
+                            label=project.project_id,
+                            details={
+                                "project_title": project.title,
+                                "tier": "portfolio",
+                                "reason": "zero_bullet_suppressed",
+                                "warning": f"zero_bullet_suppressed:{project.title}",
+                            },
+                        )
+                    except Exception:
+                        logger.exception(
+                            "bullet_selection_evaluation_write_failed",
+                            extra={"operation_id": operation_id, "project_id": project.project_id},
+                        )
+
+            # Record always_include_unmatched warnings
+            for warning in proj_result.warnings:
+                try:
+                    record_evaluation(
+                        operation_id=operation_id,
+                        evaluator_name="bullet_selection",
+                        evaluator_type="deterministic",
+                        metric_name="bullet_selection",
+                        passed=True,
+                        label=warning,
+                        details={"warning": warning},
+                    )
+                except Exception:
+                    logger.exception(
+                        "bullet_selection_evaluation_write_failed",
+                        extra={"operation_id": operation_id, "warning": warning},
+                    )
+
+        # --- Competency category selection (Phase 3) ---
+        dropped_category_line_nos: set[int] = set()
+        competency_active = False
+        selected_category_labels: list[str] = []
+        cat_result = CompetencySelectionResult()
+
+        if parsed.categories:
+            cat_result = select_competencies(
+                categories=parsed.categories,
+                jd_text=jd_text,
+                job_title=job_title,
+                max_categories=tiering.max_competency_categories,
+                always_include=tiering.always_include_competency_categories,
+                title_boost=tiering.title_boost,
+                title_stopwords=title_stopwords,
+                business_stopwords=business_stopwords,
+                label_boost=tiering.competency_label_boost,
+                qualifier_stopwords=frozenset(tiering.competency_qualifier_stopwords),
+                max_items_per_category=tiering.max_items_per_category,
+            )
+            competency_active = bool(cat_result.selected_labels)
+            selected_category_labels = cat_result.selected_labels
+            dropped_category_line_nos = cat_result.dropped_line_nos
+
+            try:
+                record_evaluation(
+                    operation_id=operation_id,
+                    evaluator_name="bullet_selection",
+                    evaluator_type="deterministic",
+                    metric_name="competency_selection",
+                    passed=True,
+                    label="competency_categories",
+                    details={
+                        "selected_labels": cat_result.selected_labels,
+                        "dropped": cat_result.dropped_labels,
+                        "warnings": cat_result.warnings,
+                        "jd_scope_mode": cat_result.jd_scope_mode,
+                        "max_categories": tiering.max_competency_categories,
+                        "always_include": tiering.always_include_competency_categories,
+                        "max_items_per_category": tiering.max_items_per_category,
+                        "kept_items": cat_result.kept_items,
+                        "dropped_items": cat_result.dropped_items,
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "bullet_selection_evaluation_write_failed",
+                    extra={"operation_id": operation_id, "label": "competency_categories"},
+                )
+
+            for warning in cat_result.warnings:
+                try:
+                    record_evaluation(
+                        operation_id=operation_id,
+                        evaluator_name="bullet_selection",
+                        evaluator_type="deterministic",
+                        metric_name="competency_selection",
+                        passed=True,
+                        label=warning,
+                        details={"warning": warning},
+                    )
+                except Exception:
+                    logger.exception(
+                        "bullet_selection_evaluation_write_failed",
+                        extra={"operation_id": operation_id, "warning": warning},
+                    )
+
+        if not selections and not dropped_project_ids and not dropped_category_line_nos and not cat_result.kept_items:
+            return master_resume, {}, {}, False, False, False, [], []
+
+        # Collect pinned bullet texts that were selected — the ATS gate
+        # verifies these survived rendering.
+        for role in parsed.roles:
+            for idx in selections.get(role.role_id, []):
+                if idx < len(role.bullets) and role.bullets[idx].pinned:
+                    pinned_bullet_texts.append(role.bullets[idx].text)
+        for proj in parsed.projects:
+            for idx in selections.get(proj.project_id, []):
+                if idx < len(proj.bullets) and proj.bullets[idx].pinned:
+                    pinned_bullet_texts.append(proj.bullets[idx].text)
+
+        master_resume_for_prompt = render_filtered_master(
+            parsed, selections, dropped_project_ids, dropped_category_line_nos,
+            kept_items=cat_result.kept_items if cat_result.kept_items else None,
+        )
+        return master_resume_for_prompt, role_titles, project_titles, mid_old_active, portfolio_active, competency_active, selected_category_labels, pinned_bullet_texts
+    except Exception as exc:
+        logger.exception(
+            "bullet_selection_failed_falling_back", extra={"operation_id": operation_id}
+        )
+        try:
+            record_evaluation(
+                operation_id=operation_id,
+                evaluator_name="bullet_selection",
+                evaluator_type="deterministic",
+                metric_name="bullet_selection",
+                passed=False,
+                label="parse_error",
+                explanation_redacted=f"{type(exc).__name__}: {exc}"[:500],
+                details={
+                    "fallback": "unfiltered_master_resume",
+                    "error_type": type(exc).__name__,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "bullet_selection_parse_error_eval_write_failed",
+                extra={"operation_id": operation_id},
+            )
+        return master_resume, {}, {}, False, False, False, [], []
 
 
 def generate_resume(
@@ -220,11 +746,24 @@ def generate_resume(
 
     master_resume = master_path.read_text()
 
-    # 3. Build prompts
+    # 3. Phase 1 + 1d + 3: deterministic bullet and competency selection
+    # (pre-filter, not post-hoc trimming). Falls back to the unmodified
+    # master resume on any parsing issue. Validation later still uses the
+    # ORIGINAL unfiltered master_resume as ground truth — selection only
+    # narrows what's offered to the LLM, it never changes what's true.
+    master_resume_for_prompt, selected_role_titles, selected_project_titles, mid_old_active, portfolio_active, competency_active, selected_category_labels, pinned_bullet_texts = _run_deterministic_bullet_selection(
+        settings=settings,
+        master_resume=master_resume,
+        jd_text=jd_text,
+        job_title=job["title"] or "",
+        operation_id=operation_id,
+    )
+
+    # 4. Build prompts
     accuracy_rules_text = _load_accuracy_rules_text(settings)
     anchor_text = _load_identity_anchor_text(settings)
     user_prompt = _build_user_prompt(
-        master_resume=master_resume,
+        master_resume=master_resume_for_prompt,
         job_title=job["title"] or "",
         company=job["company"] or "",
         jd_text=jd_text,
@@ -232,7 +771,7 @@ def generate_resume(
         anchor_text=anchor_text,
     )
 
-    # 4. Call LLM (inject user instructions and channel rules into system prompt)
+    # 5. Call LLM (inject user instructions and channel rules into system prompt)
     system_prompt = SYSTEM_PROMPT
 
     # Inject never-claim list from identity_rules.yml as a hard constraint
@@ -272,9 +811,20 @@ def generate_resume(
             system_prompt += "\n\n--- CHANNEL RULES (resume) ---\n" + "\n".join(channel_lines) + "\n--- END CHANNEL RULES ---\n"
 
     # Inject content tiering instructions from channel_rules config
-    tiering_text = _build_tiering_instructions(settings)
+    tiering_text = _build_tiering_instructions(
+        settings,
+        selections_active=bool(selected_role_titles),
+        mid_old_active=mid_old_active,
+        portfolio_active=portfolio_active,
+        competency_active=competency_active,
+    )
     if tiering_text:
         system_prompt += f"\n\n--- CONTENT TIERING (resume) ---\n{tiering_text}\n--- END CONTENT TIERING ---\n"
+
+    # Inject the render-only rule for roles/projects with deterministically pre-selected bullets
+    selection_text = _build_selection_instructions(selected_role_titles, selected_project_titles)
+    if selection_text:
+        system_prompt += f"\n\n--- DETERMINISTIC BULLET SELECTION ---\n{selection_text}\n--- END DETERMINISTIC BULLET SELECTION ---\n"
     if settings.profile and settings.profile.instructions:
         system_prompt += f"\n\n--- USER INSTRUCTIONS ---\n{settings.profile.instructions}\n--- END USER INSTRUCTIONS ---\n"
     router = ModelRouter(settings)
@@ -292,14 +842,14 @@ def generate_resume(
     )
     _emit("llm_generation", "Generating resume with LLM", "completed", f"{response.output_tokens} tokens in {response.latency_ms}ms")
 
-    # 5. Validate accuracy (deterministic deny-list + LLM-judged traceability)
+    # 6. Validate accuracy (deterministic deny-list + LLM-judged traceability)
     _emit("validation", "Running accuracy validation", "started")
     validator = AccuracyValidator(settings)
     validation = validator.validate(response.text, artifact_type="resume", master_resume=master_resume)
     logger = logging.getLogger(__name__)
     logger.info("resume_gen job_id=%s: accuracy validation done, passed=%s, violations=%d", job_id, validation.passed, len(validation.violations))
 
-    # 5b. Run traceability check (LLM-judged claim verification)
+    # 6b. Run traceability check (LLM-judged claim verification)
     traceability = TraceabilityChecker(settings)
     if traceability.enabled:
         _emit("traceability", "Verifying claim traceability", "started")
@@ -310,6 +860,62 @@ def generate_resume(
         trace_result.merge_into(validation)
         _emit("traceability", "Verifying claim traceability", "completed", f"{len(trace_result.violations)} violations")
         logger.info("resume_gen job_id=%s: traceability done, claims=%d, violations=%d", job_id, len(trace_result.claims), len(trace_result.violations))
+
+    # 6c. Page-count gate (PDF page count via weasyprint render)
+    _emit("page_count", "Checking PDF page count", "started")
+    from seeker_os.validation import PageCountValidator
+    page_validator = PageCountValidator(settings)
+    page_result = page_validator.validate(response.text)
+    if page_result.violations:
+        validation.violations.extend(page_result.violations)
+        validation.passed = not any(v.severity == "high" for v in validation.violations)
+    if page_result.diagnostics:
+        validation.diagnostics = page_result.diagnostics
+    if page_result.page_count is not None:
+        validation.page_count = page_result.page_count
+    page_count_str = f"{page_result.page_count} pages" if page_result.page_count is not None else "unknown"
+    _emit("page_count", "Checking PDF page count", "completed", page_count_str)
+    logger.info("resume_gen job_id=%s: page count check done, pages=%s, violations=%d", job_id, page_count_str, len(page_result.violations))
+
+    # 6d. ATS parse-survival gate (deterministic text extraction checks)
+    _emit("ats_parse", "Checking ATS parse survival", "started")
+    ats_validator = ATSParseValidator(settings)
+    ats_result = ats_validator.validate(
+        resume_text=response.text,
+        master_resume=master_resume,
+        selected_role_titles=selected_role_titles,
+        selected_project_titles=selected_project_titles,
+        selected_category_labels=selected_category_labels,
+        pinned_bullet_texts=pinned_bullet_texts,
+    )
+    if ats_result.violations:
+        validation.violations.extend(
+            Violation(**v) if isinstance(v, dict) else v
+            for v in ats_result.violations
+        )
+    if ats_result.diagnostics:
+        validation.diagnostics.update(ats_result.diagnostics)
+    ats_str = f"{'passed' if ats_result.passed else f'{len(ats_result.violations)} failures'}"
+    _emit("ats_parse", "Checking ATS parse survival", "completed", ats_str)
+    logger.info("resume_gen job_id=%s: ATS parse check done, passed=%s, failures=%d", job_id, ats_result.passed, len(ats_result.violations))
+
+    try:
+        record_evaluation(
+            operation_id=operation_id,
+            call_id=response.call_id or None,
+            evaluator_name="ats_parse_validator",
+            evaluator_type="deterministic",
+            metric_name="ats_parse_survival",
+            passed=ats_result.passed,
+            label="passed" if ats_result.passed else "failed",
+            details=ats_result.diagnostics,
+        )
+    except Exception:
+        logger.exception(
+            "ats_parse_evaluation_write_failed",
+            extra={"operation_id": operation_id},
+        )
+
     _emit("validation", "Running accuracy validation", "completed", f"{'passed' if validation.passed else 'violations found'}")
 
     t0 = time.monotonic()
@@ -352,7 +958,7 @@ def generate_resume(
         )
     logger.info("resume_gen job_id=%s: evaluations recorded in %.1fs", job_id, time.monotonic() - t0)
 
-    # 6. Save to DB
+    # 7. Save to DB
     _emit("saving", "Saving resume", "started")
     t1 = time.monotonic()
     now = datetime.now(UTC).isoformat()
@@ -426,6 +1032,8 @@ def generate_resume(
         "latency_ms": response.latency_ms,
         "validation_passed": validation.passed,
         "validation_violations": validation.violations,
+        "validation_diagnostics": validation.diagnostics,
+        "page_count": validation.page_count,
         "markdown_path": str(md_path),
         "generated_at": now,
         "operation_id": operation_id,

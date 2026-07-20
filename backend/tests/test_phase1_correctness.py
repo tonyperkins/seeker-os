@@ -134,12 +134,13 @@ class TestRouterOverrideFallback:
         settings = Settings.__new__(Settings)
         settings.providers = ProvidersConfig(
             providers=[ProviderConfig(id="p1", type="anthropic", api_key="x", enabled=True)],
-            tiers={"heavy": TierMapping(provider="p1", model="big-model")},
+            tiers={"heavy": TierMapping(provider="p1", model="test-premium-model")},
             # Override names an unavailable provider, but its model DOES exist on
             # the tier provider (p1) — the fallback branch must find it by id.
             tasks={"resume_generation": TaskOverride(
                 tier="heavy", provider="p_missing", model="override-model",
             )},
+            approved_models=["test-premium-model", "override-model"],
         )
         router = ModelRouter(settings)
         router._providers = {"p1": MockProvider("p1")}

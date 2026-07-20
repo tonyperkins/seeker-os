@@ -315,7 +315,9 @@ def cmd_resume(args: argparse.Namespace) -> None:
             console.print(f"  Validation: {'PASSED' if result['validation_passed'] else 'VIOLATIONS FOUND'}")
             if result["validation_violations"]:
                 for v in result["validation_violations"]:
-                    console.print(f"    [{v.get('severity', 'high')}] {v.get('violation', '')}")
+                    severity = getattr(v, "severity", None) or (v.get("severity", "high") if isinstance(v, dict) else "high")
+                    violation = getattr(v, "violation", None) or (v.get("violation", "") if isinstance(v, dict) else str(v))
+                    console.print(f"    [{severity}] {violation}")
             console.print(f"  File: {result['markdown_path']}")
         except Exception as e:
             console.print(f"[red]Failed: {e}[/red]")
@@ -356,13 +358,19 @@ def cmd_resume(args: argparse.Namespace) -> None:
         console.print(resume["resume_text"])
 
     elif args.resume_command == "validate":
-        from seeker_os.validation import AccuracyValidator
-        validator = AccuracyValidator(settings)
+        from seeker_os.validation import revalidate_all
         try:
-            result = validator.revalidate(args.resume_id)
+            result = revalidate_all(args.resume_id, settings)
             console.print(f"Validation: {'PASSED' if result.passed else 'VIOLATIONS FOUND'}")
             for v in result.violations:
                 console.print(f"  [{v.severity}] {v.rule_id}: {v.violation}")
+            if result.diagnostics:
+                ratio = result.diagnostics.get("page_count_height_ratio")
+                if ratio:
+                    console.print(f"  Page gate: ratio={ratio:.4f}")
+                ats = result.diagnostics.get("ats_parse_passed")
+                if ats is not None:
+                    console.print(f"  ATS parse: {'passed' if ats else 'failed'}")
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
 

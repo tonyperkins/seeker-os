@@ -117,3 +117,128 @@ class TestLiteralSecretWarnings:
             _check_literal_secrets(data, "providers.yml")
         assert len(w) == 1
         assert "api_key" in str(w[0].message)
+
+
+class TestProvidersConfigFreeTierGuard:
+    """Tests for the ProvidersConfig model_validator that enforces
+    allowlist-primary model policy with denylist as second layer."""
+
+    _APPROVED = [
+        "openai/gpt-5.6-terra",
+        "openai/gpt-5.6-luna",
+        "anthropic/claude-haiku-4.5",
+    ]
+
+    def _make_config(self, tiers=None, tasks=None, approved_models=None):
+        from seeker_os.config import ProvidersConfig, ProviderConfig
+        return ProvidersConfig(
+            providers=[ProviderConfig(id="kilo", type="openai_compatible")],
+            tiers=tiers or {},
+            tasks=tasks or {},
+            approved_models=approved_models if approved_models is not None else self._APPROVED,
+        )
+
+    def test_rejects_kilo_auto_free_in_tier(self):
+        with pytest.raises(ValueError, match="kilo-auto"):
+            self._make_config(tiers={
+                "heavy": {"provider": "kilo", "model": "kilo-auto/free"}
+            })
+
+    def test_rejects_stepfun_free_in_tier(self):
+        with pytest.raises(ValueError, match=":free"):
+            self._make_config(tiers={
+                "light": {"provider": "kilo", "model": "stepfun/step-3.7-flash:free"}
+            })
+
+    def test_rejects_big_model_in_tier(self):
+        with pytest.raises(ValueError, match="big-model"):
+            self._make_config(tiers={
+                "heavy": {"provider": "p1", "model": "big-model"}
+            })
+
+    def test_rejects_kilo_auto_efficient_in_task(self):
+        with pytest.raises(ValueError, match="auto/efficient"):
+            self._make_config(tasks={
+                "metadata_extraction": {
+                    "tier": "light", "provider": "kilo",
+                    "model": "kilo-auto/efficient"
+                }
+            })
+
+    def test_rejects_free_tier_in_task_override(self):
+        with pytest.raises(ValueError, match=":free"):
+            self._make_config(tasks={
+                "resume_generation_standard": {
+                    "tier": "heavy", "provider": "kilo",
+                    "model": "stepfun/step-3.7-flash:free"
+                }
+            })
+
+    def test_accepts_explicit_premium_models(self):
+        cfg = self._make_config(
+            tiers={
+                "heavy": {"provider": "kilo", "model": "openai/gpt-5.6-terra"},
+                "moderate": {"provider": "kilo", "model": "openai/gpt-5.6-luna"},
+                "light": {"provider": "kilo", "model": "anthropic/claude-haiku-4.5"},
+            },
+            tasks={
+                "resume_generation_standard": {
+                    "tier": "heavy", "provider": "kilo",
+                    "model": "openai/gpt-5.6-luna"
+                },
+                "accuracy_validation": {
+                    "tier": "light", "provider": "kilo",
+                    "model": "anthropic/claude-haiku-4.5"
+                },
+            },
+        )
+        assert cfg.tiers["heavy"].model == "openai/gpt-5.6-terra"
+
+    def test_rejects_unlisted_but_innocuous_looking_model(self):
+        """A model that looks legitimate but isn't on the approved_models
+        list must be rejected — this is the allowlist's primary purpose."""
+        with pytest.raises(ValueError, match="not in approved_models"):
+            self._make_config(tiers={
+                "heavy": {"provider": "kilo", "model": "openai/gpt-5.6-sol"}
+            })
+
+    def test_rejects_unlisted_model_in_task_override(self):
+        with pytest.raises(ValueError, match="not in approved_models"):
+            self._make_config(tasks={
+                "resume_generation_standard": {
+                    "tier": "heavy", "provider": "kilo",
+                    "model": "anthropic/claude-sonnet-4-6"
+                }
+            })
+
+    def test_error_message_lists_all_offenders(self):
+        with pytest.raises(ValueError) as exc_info:
+            self._make_config(
+                tiers={
+                    "heavy": {"provider": "kilo", "model": "kilo-auto/free"}
+                },
+                tasks={
+                    "resume_generation_standard": {
+                        "tier": "heavy", "provider": "kilo",
+                        "model": "stepfun/step-3.7-flash:free"
+                    }
+                },
+            )
+        msg = str(exc_info.value)
+        assert "tier 'heavy'" in msg
+        assert "task 'resume_generation_standard'" in msg
+
+    def test_empty_approved_models_skips_allowlist_but_denylist_still_active(self):
+        """If approved_models is empty, allowlist is skipped but denylist
+        patterns are still enforced — defense in depth."""
+        cfg = self._make_config(
+            tiers={"heavy": {"provider": "kilo", "model": "openai/gpt-5.6-terra"}},
+            approved_models=[],
+        )
+        assert cfg.tiers["heavy"].model == "openai/gpt-5.6-terra"
+
+        with pytest.raises(ValueError, match="kilo-auto"):
+            self._make_config(
+                tiers={"heavy": {"provider": "kilo", "model": "kilo-auto/free"}},
+                approved_models=[],
+            )
