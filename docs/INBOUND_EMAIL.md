@@ -101,6 +101,23 @@ stores that selection in the short-lived OAuth state. Give the production
 service the OAuth client ID and secret through its private environment, and
 set `CORS_ORIGINS=https://seekeros.perkinslab.com`.
 
+When using Dockhand's stack environment-variable editor, the values are
+available for Compose interpolation but are not magically present in every
+container. The backend service must explicitly pass both
+`GMAIL_OAUTH_CLIENT_ID` and `GMAIL_OAUTH_CLIENT_SECRET` in its `environment:`
+section (the supplied `compose.yaml` does this). After deployment, verify
+without exposing values:
+
+```bash
+docker exec seeker-os-backend-1 python -c "import os; print(bool(os.getenv('GMAIL_OAUTH_CLIENT_ID')), bool(os.getenv('GMAIL_OAUTH_CLIENT_SECRET')))"
+```
+
+The result must be `True True`. A Google `invalid_client` error usually means
+these values are missing, stale, or belong to a different OAuth client. The
+callback may reach the backend through the frontend proxy or directly; both
+paths select only a URI from the configured `redirect_uris` allowlist and
+return the browser to Inbound after authorization.
+
 ### Cloudflare fan-out is Worker-based
 
 Create **one Cloudflare Email Worker** for the inbound address. Its email
