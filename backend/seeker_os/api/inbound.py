@@ -110,7 +110,7 @@ def start_oauth(request: Request):
 def oauth_callback(code: str, state: str):
     service = _service()
     try:
-        service.oauth_callback(code, state)
+        result = service.oauth_callback(code, state)
     except Exception as exc:
         _raise_service_error(exc)
     origin = urlsplit(result["redirect_uri"])

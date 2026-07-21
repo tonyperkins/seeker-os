@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import HTTPException
 
+from seeker_os.api import inbound as inbound_api
 from seeker_os.config import EmailConfig
 from seeker_os.database import get_connection, run_migrations
 from seeker_os.inbound.gmail import parse_gmail_message
@@ -149,6 +150,20 @@ def test_cross_process_lease_blocks_second_owner(tmp_path):
         release_lease(second, "account", "owner-2")
         first.close()
         second.close()
+
+
+def test_oauth_callback_redirects_to_the_origin_that_started_authorization(monkeypatch):
+    class Service:
+        def oauth_callback(self, code, state):
+            assert (code, state) == ("code", "state")
+            return {"redirect_uri": "https://seekeros.perkinslab.com/api/inbound/oauth/callback"}
+
+    monkeypatch.setattr(inbound_api, "_service", Service)
+
+    response = inbound_api.oauth_callback("code", "state")
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "https://seekeros.perkinslab.com/inbound?oauth=connected"
 
 
 class _FakeGmail:
