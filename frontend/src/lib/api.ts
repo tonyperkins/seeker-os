@@ -9,6 +9,10 @@ export { MANUAL_EVENT_TYPES } from "@/lib/api-types";
 export type {
   ActivityEvent,
   ApplicationEvent,
+  InboundCandidate,
+  InboundMessage,
+  InboundStatus,
+  InboundPollResponse,
   JobSummary,
   JobSortKey,
   SortOrder,
@@ -255,6 +259,27 @@ export const api = {
       }),
     delete: (id: number) =>
       fetchAPI<{ message: string }>(`/api/events/${id}`, { method: "DELETE" }),
+  },
+
+  // Dedicated Gmail inbox review
+  inbound: {
+    status: () => fetchAPI<T.InboundStatus>("/api/inbound/status"),
+    list: (opts?: { state?: string; job_id?: number }) => {
+      const params = new URLSearchParams();
+      if (opts?.state) params.set("state", opts.state);
+      if (opts?.job_id !== undefined) params.set("job_id", String(opts.job_id));
+      const qs = params.toString();
+      return fetchAPI<T.InboundMessage[]>(`/api/inbound/messages${qs ? `?${qs}` : ""}`);
+    },
+    check: () => fetchAPI<T.InboundPollResponse>("/api/inbound/check", { method: "POST" }),
+    confirm: (id: number, jobId: number) =>
+      fetchAPI<T.InboundMessage>(`/api/inbound/messages/${id}/confirm`, {
+        method: "POST", body: JSON.stringify({ job_id: jobId }),
+      }),
+    dismiss: (id: number) =>
+      fetchAPI<T.InboundMessage>(`/api/inbound/messages/${id}/dismiss`, { method: "POST" }),
+    startOAuth: () =>
+      fetchAPI<{ authorization_url: string }>("/api/inbound/oauth/start", { method: "POST" }),
   },
 
   // Pipeline

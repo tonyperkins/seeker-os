@@ -21,6 +21,7 @@ from seeker_os.api.company_research import router as company_research_router
 from seeker_os.api.company_research_settings import router as company_research_settings_router
 from seeker_os.api.events_routes import router as events_router
 from seeker_os.api.jd_analysis import router as jd_analysis_router
+from seeker_os.api.inbound import router as inbound_router
 from seeker_os.api.jobs import router as jobs_router
 from seeker_os.api.models import router as models_router
 from seeker_os.api.pipeline import router as pipeline_router
@@ -176,6 +177,7 @@ app.include_router(profile_router)
 app.include_router(company_research_router)
 app.include_router(jd_analysis_router)
 app.include_router(backup_router)
+app.include_router(inbound_router)
 
 
 @app.get("/", response_model=RootResponse)

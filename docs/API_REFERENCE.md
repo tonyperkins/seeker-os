@@ -196,6 +196,27 @@ endpoint includes the configured `skip_reasons` array for the frontend.
 
 ---
 
+## Inbound Email (`/api/inbound`)
+
+Seeker OS has no built-in user authentication. Keep this router bound to
+localhost or put it behind an authenticated reverse proxy. It authorizes only
+the configured dedicated Gmail account and requests `gmail.readonly`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/inbound/status` | Connection, cursor, error, and pending-review status |
+| `GET` | `/api/inbound/messages?state=&job_id=` | List inbound review rows; optionally filter by state or related job |
+| `POST` | `/api/inbound/check` | Poll Gmail now; returns `409` when another sync owns the lease |
+| `POST` | `/api/inbound/messages/{id}/confirm` | Confirm against a job — body: `{job_id}`; creates an immutable email event |
+| `POST` | `/api/inbound/messages/{id}/dismiss` | Dismiss an unmatched or matched review row |
+| `POST` | `/api/inbound/oauth/start` | Begin dedicated-Gmail OAuth; returns the Google authorization URL |
+| `GET` | `/api/inbound/oauth/callback` | OAuth redirect callback; not a frontend API call |
+
+Primary-mailbox Gmail links remain unavailable until the manual RFC Message-ID
+equality prerequisite in [Inbound Email](INBOUND_EMAIL.md) is complete.
+
+---
+
 ## Backup & Restore (`/api/backup`)
 
 | Method | Path | Description |
@@ -204,6 +225,9 @@ endpoint includes the configured `skip_reasons` array for the frontend.
 | `POST` | `/api/backup/restore` | Upload a backup zip and restore all config files (creates pre-restore snapshot) |
 | `GET` | `/api/backup/db` | Download a consistent snapshot of the SQLite database |
 | `POST` | `/api/backup/db/restore` | Upload a .db file and restore it into the live database |
+
+OAuth token files are never exported or restored. `include_secrets=true` adds
+`.env`, not OAuth tokens; reauthorize Gmail after every restore.
 
 ---
 

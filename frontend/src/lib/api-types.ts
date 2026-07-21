@@ -11,6 +11,60 @@ export interface ApplicationEvent {
   created_at: string;
   metadata: Record<string, unknown> | null;
   note: string | null;
+  is_mutable: boolean;
+}
+
+export interface InboundCandidate {
+  job_id: number;
+  score: number;
+  features: Array<{ signal: string; weight: number; evidence: unknown }>;
+}
+
+export interface InboundMessage {
+  id: number;
+  account_key: string;
+  gmail_message_id: string;
+  gmail_thread_id: string | null;
+  rfc822_message_id: string | null;
+  sender_address: string;
+  sender_domain: string;
+  subject: string;
+  received_at: string;
+  suggested_job_id: number | null;
+  suggested_job_title: string | null;
+  suggested_job_company: string | null;
+  final_job_id: number | null;
+  match_score: number;
+  match_features: Record<string, unknown>;
+  match_candidates: InboundCandidate[];
+  matcher_version: string;
+  state: "matched" | "unmatched" | "confirmed" | "dismissed";
+  decision: string | null;
+  decided_at: string | null;
+  confirmed_event_id: number | null;
+  primary_gmail_link: string | null;
+}
+
+export interface InboundStatus {
+  enabled: boolean;
+  account_key: string;
+  dedicated_account_address: string;
+  primary_account_address: string;
+  message_id_equality_verified: boolean;
+  oauth: { connected: boolean; account_email: string | null; token_file_mode?: string };
+  history_id: string | null;
+  last_success_at: string | null;
+  last_error: string | null;
+  sync_locked: boolean;
+  pending_count: number;
+}
+
+export interface InboundPollResponse {
+  account_key: string;
+  messages_seen: number;
+  messages_inserted: number;
+  cursor: string;
+  resynced: boolean;
 }
 
 /** Event enriched with job context for the global activity feed. */

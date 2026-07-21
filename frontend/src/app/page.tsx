@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Inbox } from "lucide-react";
 import { RunStrip } from "@/components/run-strip";
 import { ActionQueue } from "@/components/action-queue";
 import { MetricCards } from "@/components/metric-cards";
@@ -10,7 +12,7 @@ import { CollapsibleCard } from "@/components/collapsible-card";
 import { SpendBreakdownCard } from "@/components/spend-breakdown-card";
 import { DismissibleBanner } from "@/components/dismissible-banner";
 import { PageHeader } from "@/components/page-header";
-import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport, type CostPerArtifactResponse } from "@/lib/api";
+import { api, type FunnelStats, type PipelineRunRecord, type JobSummary, type SettingsResponse, type MasterResumeInfo, type ProvidersConfigResponse, type MovementReport, type SignalQualityReport, type SpendReport, type CostPerArtifactResponse, type InboundStatus } from "@/lib/api";
 import { isFreeTierOnly } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +41,7 @@ export default async function DashboardPage() {
   let signalQuality: SignalQualityReport | null = null;
   let spend: SpendReport | null = null;
   let unitEconomics: CostPerArtifactResponse | null = null;
+  let inbound: InboundStatus | null = null;
   const unavailable: string[] = [];
   const [activeResp, consideringResp, allPostReadyResp, actionQueueResp] = await Promise.all([
     settled("Active applications", api.jobs.list({ status: "applied,engaged,offer_accepted,offer_declined,company_rejected,withdrawn", limit: 50 }), unavailable),
@@ -47,7 +50,7 @@ export default async function DashboardPage() {
     settled("Action queue", api.jobs.list({ status: "ready", sort_by: "net_score", limit: 5 }), unavailable),
   ]);
 
-  const [funnelResult, runsResult, settingsResult, resumeResult, providersResult, pendingResult, movementResult, signalResult, spendResult, unitEconResult] = await Promise.all([
+  const [funnelResult, runsResult, settingsResult, resumeResult, providersResult, pendingResult, movementResult, signalResult, spendResult, unitEconResult, inboundResult] = await Promise.all([
     settled("Pipeline metrics", api.analytics.funnel(), unavailable),
     settled("Pipeline runs", api.pipeline.runs(), unavailable),
     settled("Settings", api.settings.get(), unavailable),
@@ -58,6 +61,9 @@ export default async function DashboardPage() {
     settled("Signal quality", api.analytics.signalQuality(), unavailable),
     settled("Spend", api.analytics.spend(), unavailable),
     settled("Unit economics", api.analytics.costPerArtifact(), unavailable),
+    // Inbound is optional until configured; its absence should not make the
+    // dashboard look partially unavailable.
+    api.inbound.status().catch(() => null),
   ]);
 
   funnel = funnelResult;
@@ -71,6 +77,7 @@ export default async function DashboardPage() {
   signalQuality = signalResult;
   spend = spendResult;
   unitEconomics = unitEconResult;
+  inbound = inboundResult;
   actionQueueJobs = actionQueueResp?.jobs ?? [];
   activeJobs = activeResp?.jobs ?? [];
   consideringJobs = consideringResp?.jobs ?? [];
@@ -117,6 +124,16 @@ export default async function DashboardPage() {
           <span className="font-medium">Partial dashboard data.</span>{" "}
           Unavailable: {unavailable.join(", ")}. Refresh to retry.
         </div>
+      )}
+
+      {inbound && inbound.pending_count > 0 && (
+        <Link
+          href="/inbound"
+          className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm hover:bg-primary/10"
+        >
+          <span className="flex items-center gap-2 font-medium"><Inbox className="size-4" /> Inbound review</span>
+          <span>{inbound.pending_count} message{inbound.pending_count === 1 ? "" : "s"} waiting for review</span>
+        </Link>
       )}
 
       {(providers?.partial || signalQuality?.partial || spend?.partial) && (

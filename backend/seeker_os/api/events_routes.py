@@ -31,7 +31,13 @@ from seeker_os.events import (
 router = APIRouter(prefix="/api/events", tags=["events"])
 
 _SELECT_ENRICHED = """
-    SELECT e.*, j.title AS job_title, j.company AS job_company
+    SELECT e.*, j.title AS job_title, j.company AS job_company,
+           CASE
+             WHEN e.event_type IN ('note', 'call', 'email_sent', 'email_received', 'meeting', 'interview')
+              AND NOT EXISTS (
+                  SELECT 1 FROM inbound_messages i WHERE i.confirmed_event_id = e.id
+              ) THEN 1 ELSE 0
+           END AS is_mutable
     FROM application_events e
     LEFT JOIN jobs j ON j.id = e.job_id
 """
@@ -49,6 +55,7 @@ def _row_to_activity(row) -> ActivityEvent:
         note=row["note"],
         job_title=row["job_title"],
         job_company=row["job_company"],
+        is_mutable=bool(row["is_mutable"]),
     )
 
 
@@ -158,6 +165,14 @@ def _get_mutable_event(db, event_id: int):
             detail=f"Event type '{row['event_type']}' is append-only — only "
                    f"manual events ({', '.join(sorted(MANUAL_EVENT_TYPES))}) "
                    f"can be modified.",
+        )
+    inbound = db.execute(
+        "SELECT 1 FROM inbound_messages WHERE confirmed_event_id = ?", (event_id,)
+    ).fetchone()
+    if inbound:
+        raise HTTPException(
+            status_code=403,
+            detail="This event was confirmed from Gmail and is append-only.",
         )
     return row
 

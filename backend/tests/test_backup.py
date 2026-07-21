@@ -13,7 +13,7 @@ os.environ.setdefault("STATIC_OUT_DIR", "/nonexistent")
 import seeker_os.api.backup as backupmod
 import seeker_os.database as dbmod
 from seeker_os.api.app import app
-from seeker_os.database import run_migrations, MIGRATIONS
+from seeker_os.database import MIGRATIONS, run_migrations
 
 
 @pytest.fixture(scope="module")
@@ -82,6 +82,38 @@ class TestBackupExcludeSecrets:
         assert "config/test.yml" in data["restored"]
         # No error about missing .env
 
+    def test_gmail_tokens_are_never_exported_or_restored(self, tmp_path, monkeypatch):
+        """Gmail refresh tokens always require reauthorization after restore."""
+        project = tmp_path / "project"
+        config_dir = project / "config"
+        data_dir = project / "data"
+        config_dir.mkdir(parents=True)
+        data_dir.mkdir()
+        (config_dir / "email.yml").write_text("enabled: true\n")
+        (project / ".env").write_text("GMAIL_OAUTH_CLIENT_SECRET=secret\n")
+        (data_dir / ".gmail_oauth.json").write_text('{"refresh_token":"secret"}')
+        (data_dir / ".gmail_oauth_state.json").write_text('{"state":"secret"}')
+
+        monkeypatch.setattr(backupmod, "PROJECT_ROOT", project)
+        monkeypatch.setattr(backupmod, "CONFIG_DIR", config_dir)
+        monkeypatch.setattr(backupmod, "DATA_DIR", data_dir)
+
+        default_names = {
+            path.relative_to(project).as_posix()
+            for path in backupmod._collect_backup_files()
+        }
+        secret_names = {
+            path.relative_to(project).as_posix()
+            for path in backupmod._collect_backup_files(include_secrets=True)
+        }
+        assert "data/.gmail_oauth.json" not in default_names | secret_names
+        assert "data/.gmail_oauth_state.json" not in default_names | secret_names
+        assert ".env" in secret_names
+
+        # Restore filtering is equally important: an archive cannot smuggle a
+        # previously issued bearer credential into the local installation.
+        assert ".gmail_oauth.json" in backupmod._EXCLUDED_RUNTIME_SECRETS
+
 
 class TestDbRestoreVersionCheck:
     """Step 6: Reject DB restore if user_version > len(MIGRATIONS), allow if equal."""
@@ -93,7 +125,7 @@ class TestDbRestoreVersionCheck:
         # Create a valid SQLite DB at the current schema version
         db_path = tmp_path / "test_current.db"
         conn = sqlite3.connect(str(db_path))
-        conn.execute("PRAGMA user_version = %d" % len(MIGRATIONS))
+        conn.execute(f"PRAGMA user_version = {len(MIGRATIONS)}")
         conn.execute("CREATE TABLE test (id INTEGER)")
         conn.execute("INSERT INTO test VALUES (1)")
         conn.commit()
@@ -114,7 +146,7 @@ class TestDbRestoreVersionCheck:
 
         db_path = tmp_path / "test_future.db"
         conn = sqlite3.connect(str(db_path))
-        conn.execute("PRAGMA user_version = %d" % (len(MIGRATIONS) + 1))
+        conn.execute(f"PRAGMA user_version = {len(MIGRATIONS) + 1}")
         conn.execute("CREATE TABLE test (id INTEGER)")
         conn.commit()
         conn.close()

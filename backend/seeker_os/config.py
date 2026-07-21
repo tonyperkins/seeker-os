@@ -825,6 +825,61 @@ class ObservabilityConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Inbound email config models
+# ---------------------------------------------------------------------------
+
+class EmailOAuthConfig(BaseModel):
+    """Google OAuth settings for the dedicated read-only Gmail account."""
+
+    client_id: str
+    client_secret: str
+    redirect_uris: list[str] = ["http://localhost:3000/api/inbound/oauth/callback"]
+    token_path: str = "data/.gmail_oauth.json"
+    scope: str = "https://www.googleapis.com/auth/gmail.readonly"
+
+    @field_validator("token_path")
+    @classmethod
+    def _expand_token_path(cls, value: str) -> str:
+        return expand_path(value)
+
+
+class EmailMatcherConfig(BaseModel):
+    """Deterministic, user-tunable evidence weights for job matching."""
+
+    domain_weight: float = Field(default=0.65, ge=0.0, le=1.0)
+    ats_company_weight: float = Field(default=0.45, ge=0.0, le=1.0)
+    company_name_weight: float = Field(default=0.30, ge=0.0, le=1.0)
+    title_term_weight: float = Field(default=0.20, ge=0.0, le=1.0)
+    application_context_weight: float = Field(default=0.10, ge=0.0, le=1.0)
+    match_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+    ambiguity_margin: float = Field(default=0.10, ge=0.0, le=1.0)
+    common_company_names: list[str] = []
+    application_context_terms: list[str] = [
+        "application", "candidate", "interview", "recruiting", "position", "role"
+    ]
+    # ATS sender domain -> company names whose jobs may legitimately use it.
+    ats_domain_companies: dict[str, list[str]] = {}
+
+
+class EmailConfig(BaseModel):
+    """MVP Gmail inbound integration settings."""
+
+    enabled: bool = False
+    account_key: str = "dedicated_gmail"
+    dedicated_account_address: str
+    primary_account_address: str
+    # Must stay false until a Worker-delivered test proves both Gmail copies
+    # expose the exact same RFC Message-ID header.
+    message_id_equality_verified: bool = False
+    max_body_bytes: int = Field(default=262_144, ge=1, le=2_000_000)
+    history_resync_lookback_days: int = Field(default=7, ge=1, le=30)
+    initial_backfill_days: int = Field(default=0, ge=0, le=30)
+    request_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    oauth: EmailOAuthConfig
+    matcher: EmailMatcherConfig = EmailMatcherConfig()
+
+
+# ---------------------------------------------------------------------------
 # Settings — top-level config container
 # ---------------------------------------------------------------------------
 
@@ -847,6 +902,7 @@ class Settings:
         self.skip_reasons: SkipReasonsConfig | None = None
         self.lifecycle: LifecycleConfig = LifecycleConfig()
         self.observability: ObservabilityConfig = ObservabilityConfig()
+        self.email: EmailConfig | None = None
 
         self._load_all()
 
@@ -921,6 +977,11 @@ class Settings:
             data = self._load_yaml("observability.yml")
             if data:
                 self.observability = ObservabilityConfig(**data)
+
+        if (self.config_dir / "email.yml").exists():
+            data = self._load_yaml("email.yml")
+            if data:
+                self.email = EmailConfig(**data)
 
     def load_blacklist(self) -> list[str]:
         """Load blacklist.txt (flat list, one company per line)."""

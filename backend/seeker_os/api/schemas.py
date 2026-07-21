@@ -509,6 +509,62 @@ class ApplicationEvent(BaseModel):
     created_at: str
     metadata: dict | None = None
     note: str | None = None
+    is_mutable: bool
+
+
+class InboundMessage(BaseModel):
+    id: int
+    account_key: str
+    gmail_message_id: str
+    gmail_thread_id: str | None = None
+    rfc822_message_id: str | None = None
+    sender_address: str
+    sender_domain: str
+    subject: str
+    received_at: str
+    suggested_job_id: int | None = None
+    suggested_job_title: str | None = None
+    suggested_job_company: str | None = None
+    final_job_id: int | None = None
+    match_score: float
+    match_features: dict
+    match_candidates: list[dict]
+    matcher_version: str
+    state: str
+    decision: str | None = None
+    decided_at: str | None = None
+    confirmed_event_id: int | None = None
+    primary_gmail_link: str | None = None
+
+
+class InboundConfirmRequest(BaseModel):
+    job_id: int
+
+
+class InboundStatus(BaseModel):
+    enabled: bool
+    account_key: str
+    dedicated_account_address: str
+    primary_account_address: str
+    message_id_equality_verified: bool
+    oauth: dict
+    history_id: str | None = None
+    last_success_at: str | None = None
+    last_error: str | None = None
+    sync_locked: bool
+    pending_count: int
+
+
+class InboundPollResponse(BaseModel):
+    account_key: str
+    messages_seen: int
+    messages_inserted: int
+    cursor: str
+    resynced: bool
+
+
+class OAuthStartResponse(BaseModel):
+    authorization_url: str
 
 
 class ApplicationEventCreate(BaseModel):
