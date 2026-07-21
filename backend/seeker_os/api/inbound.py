@@ -94,7 +94,11 @@ def dismiss_inbound(inbound_id: int):
 @router.post("/oauth/start", response_model=OAuthStartResponse)
 def start_oauth(request: Request):
     try:
-        origin = request.headers.get("x-seekeros-origin")
+        # The Next.js proxy supplies its explicit origin header. A production
+        # deployment may instead expose the backend directly; browsers send the
+        # standard Origin header on this POST, which is still checked against
+        # the configured redirect allowlist by OAuthManager.
+        origin = request.headers.get("x-seekeros-origin") or request.headers.get("origin")
         if not origin:
             raise OAuthError("OAuth must be started through the Seeker OS frontend")
         return {"authorization_url": _service().authorization_url(origin)}
