@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { api, type ApplicationEvent } from "@/lib/api";
 import { formatDate } from "@/lib/date";
-import { ACTIVITY_TYPE_META, LogActivityDialog } from "@/components/log-activity-dialog";
+import { LogActivityDialog } from "@/components/log-activity-dialog";
 
 const ACTOR_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   candidate: User,
@@ -83,10 +83,6 @@ const EVENT_LABELS: Record<string, string> = {
   email_received: "Email Received",
   meeting: "Meeting",
 };
-
-// User-recorded activity — editable and deletable. Everything else in the
-// timeline is append-only.
-const MANUAL_TYPE_SET = new Set(ACTIVITY_TYPE_META.map((t) => t.type));
 
 const POST_APPLY_TRANSITIONS: { status: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { status: "engaged", label: "Engaged", icon: Users },
@@ -687,7 +683,9 @@ export function EventTimeline({
             events.map((event) => {
               const ActorIcon = ACTOR_ICONS[event.actor] ?? Cpu;
               const label = EVENT_LABELS[event.event_type] ?? event.event_type;
-              const isManual = MANUAL_TYPE_SET.has(event.event_type);
+              // Mutability is authoritative server state. Inbound-confirmed
+              // email events look manual by type but are relationally immutable.
+              const isManual = event.is_mutable;
               return (
                 <div
                   key={event.id}

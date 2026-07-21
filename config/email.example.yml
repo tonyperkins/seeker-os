@@ -1,0 +1,56 @@
+# Copy to config/email.yml and fill in the two account addresses. The OAuth
+# credentials stay in .env; do not put literal secrets in this file.
+enabled: false
+account_key: dedicated_gmail
+dedicated_account_address: seeker-inbound@example.com
+primary_account_address: you@example.com
+message_id_equality_verified: false
+
+# The first successful connection starts at the current Gmail History cursor.
+# Set this above zero only if an intentional initial backfill is desired.
+initial_backfill_days: 0
+history_resync_lookback_days: 7
+max_body_bytes: 262144
+request_timeout_seconds: 20
+
+oauth:
+  client_id: ${GMAIL_OAUTH_CLIENT_ID}
+  client_secret: ${GMAIL_OAUTH_CLIENT_SECRET}
+  # Keep this same list in local and production configs. Register every value
+  # with the Google OAuth client; Seeker OS selects the browser's matching URI.
+  redirect_uris:
+    - http://localhost:3000/api/inbound/oauth/callback
+    - https://seekeros.perkinslab.com/api/inbound/oauth/callback
+  token_path: data/.gmail_oauth.json
+  scope: https://www.googleapis.com/auth/gmail.readonly
+
+matcher:
+  domain_weight: 0.65
+  ats_company_weight: 0.45
+  company_name_weight: 0.30
+  title_term_weight: 0.20
+  application_context_weight: 0.10
+  match_threshold: 0.55
+  ambiguity_margin: 0.10
+  common_company_names:
+    - apple
+    - target
+    - square
+  application_context_terms:
+    - application
+    - candidate
+    - interview
+    - recruiting
+    - position
+    - role
+  # Optional ATS sender-domain allowlist. This is deliberately explicit: a
+  # shared ATS domain alone is not evidence for every company using that ATS.
+  ats_domain_companies: {}
+
+# Mail delivery setup (manual): use one Cloudflare Email Worker and call
+# message.forward() once for the dedicated address and once for the primary
+# address. Duplicate routing rules do not fan out a message.
+#
+# Before enabling primary-account links, send a test through that Worker and
+# verify that both Gmail copies expose the exact same RFC Message-ID. The link
+# design depends on this equality; do not treat it as an assumption.

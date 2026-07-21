@@ -48,6 +48,28 @@ class TestDossierJsonParse:
 # --------------------------------------------------------------------------
 
 class TestTransactionalMigrations:
+    @staticmethod
+    def _build_historical_db(dbfile, version, dbmod):
+        """Apply the first *version* logical migrations exactly as an old release did."""
+        conn = sqlite3.connect(str(dbfile))
+        conn.isolation_level = None
+        try:
+            for i, migration in enumerate(dbmod.MIGRATIONS[:version]):
+                conn.execute("BEGIN")
+                try:
+                    if callable(migration):
+                        migration(conn)
+                    else:
+                        for stmt in dbmod._split_sql_statements(migration):
+                            conn.execute(stmt)
+                    conn.execute(f"PRAGMA user_version = {i + 1}")
+                    conn.execute("COMMIT")
+                except Exception:
+                    conn.execute("ROLLBACK")
+                    raise
+        finally:
+            conn.close()
+
     def test_failed_migration_rolls_back(self, tmp_path, monkeypatch):
         """A mid-migration failure leaves no partial columns and doesn't bump version."""
         import seeker_os.database as db
@@ -92,7 +114,32 @@ class TestTransactionalMigrations:
             conn.close()
 
         assert ver == len(db.MIGRATIONS)
-        assert {"jobs", "company_research", "pipeline_runs", "resumes"} <= tables
+        assert {
+            "jobs", "company_research", "pipeline_runs", "resumes",
+            "inbound_messages", "inbound_sync_state",
+        } <= tables
+
+    def test_inbound_foreign_keys_have_explicit_delete_rules(self, tmp_path):
+        """Inbound provenance never relies on SQLite's implicit NO ACTION."""
+        import seeker_os.database as db
+
+        dbfile = tmp_path / "inbound-fks.db"
+        db.run_migrations(dbfile)
+
+        conn = sqlite3.connect(str(dbfile))
+        try:
+            foreign_keys = {
+                row[3]: (row[2], row[6])
+                for row in conn.execute("PRAGMA foreign_key_list(inbound_messages)")
+            }
+        finally:
+            conn.close()
+
+        assert foreign_keys == {
+            "suggested_job_id": ("jobs", "SET NULL"),
+            "final_job_id": ("jobs", "SET NULL"),
+            "confirmed_event_id": ("application_events", "RESTRICT"),
+        }
 
     def test_clean_migrations_apply_and_bump_version(self, tmp_path, monkeypatch):
         import seeker_os.database as db
@@ -113,6 +160,67 @@ class TestTransactionalMigrations:
 
         assert ver == 2
         assert {"a", "b"} <= cols
+
+    @pytest.mark.parametrize("historical_version", [1, 15, 24, 31, 32])
+    def test_every_historical_version_upgrades_to_head(
+        self, tmp_path, historical_version
+    ):
+        """Pre-squash databases retain their logical version and reach current head."""
+        import seeker_os.database as db
+
+        dbfile = tmp_path / f"historical-v{historical_version}.db"
+        self._build_historical_db(dbfile, historical_version, db)
+
+        db.run_migrations(dbfile)
+
+        conn = sqlite3.connect(str(dbfile))
+        try:
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            preference = conn.execute(
+                "SELECT 1 FROM pragma_table_info('jobs') WHERE name='preference_rank'"
+            ).fetchone()
+            retrieval = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='retrieval_calls'"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        assert version == len(db.MIGRATIONS)
+        assert preference is not None
+        assert retrieval is not None
+
+    @pytest.mark.parametrize("squashed_version,with_preference", [(1, False), (2, True)])
+    def test_temporarily_squashed_versions_are_normalized(
+        self, tmp_path, squashed_version, with_preference
+    ):
+        """DBs created during the bad squash window normalize without replaying v2+."""
+        import seeker_os.database as db
+
+        dbfile = tmp_path / f"squashed-v{squashed_version}.db"
+        conn = sqlite3.connect(str(dbfile))
+        try:
+            for stmt in db._split_sql_statements(db.FRESH_SCHEMA_SQL):
+                conn.execute(stmt)
+            if with_preference:
+                conn.execute("ALTER TABLE jobs ADD COLUMN preference_rank INTEGER")
+            conn.execute(f"PRAGMA user_version = {squashed_version}")
+            conn.commit()
+        finally:
+            conn.close()
+
+        db.run_migrations(dbfile)
+
+        conn = sqlite3.connect(str(dbfile))
+        try:
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            preference_count = conn.execute(
+                "SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name='preference_rank'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        assert version == len(db.MIGRATIONS)
+        assert preference_count == 1
 
 
 # --------------------------------------------------------------------------

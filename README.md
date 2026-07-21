@@ -55,6 +55,7 @@ queryable interface, no analytics, and no resume automation.
 - [hiring.cafe Field Reference](docs/HIRINGCAFE_FIELDS.md)
 - [Dedup Design](docs/DEDUP_DESIGN.md)
 - [Langfuse LLM Observability](docs/LANGFUSE_INTEGRATION.md) — Optional tracing, cost-per-artifact, budget caps
+- [Inbound Email](docs/INBOUND_EMAIL.md) — Dedicated Gmail setup, Cloudflare Worker fan-out, review workflow, and recovery
 
 ## Status
 
@@ -104,6 +105,9 @@ by design. However, the data at rest is sensitive:
   identity rules. Real configs are gitignored.
 - **`.env`** contains API keys for LLM providers and retrieval services. It is
   gitignored and excluded from default backups.
+- **Gmail OAuth tokens** are stored locally in `data/.gmail_oauth.json` with
+  owner-only permissions. They are never included in backup archives, including
+  `include_secrets=true`; restoring requires a fresh Gmail authorization.
 
 **Backup awareness:** Backup zips downloaded via the API exclude `.env` by default.
 Use `include_secrets=true` only when you need to transfer keys to a new machine,

@@ -53,6 +53,8 @@ data/resumes/
 data/master_resume.*
 !data/master_resume.example.md
 data/.anthropic_oauth.json
+data/.gmail_oauth.json
+data/.gmail_oauth_state.json
 **/data/seeker.db
 **/backend/seeker.db
 **/data/cache/
@@ -72,6 +74,7 @@ config/queries.yml
 config/providers.yml
 config/filters.yml
 config/company_research.yml
+config/email.yml
 config/skip_reasons.yml
 config/blacklist.txt
 

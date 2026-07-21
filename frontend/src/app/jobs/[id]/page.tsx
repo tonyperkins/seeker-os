@@ -45,6 +45,7 @@ import { LogActivityDialog } from "@/components/log-activity-dialog";
 import { CopyAllButton } from "@/components/copy-all-button";
 import { RefilterRescoreButton } from "@/components/refilter-rescore-button";
 import { JobStatusBanner } from "@/components/job-status-banner";
+import { JobInboundSuggestions } from "@/components/job-inbound-suggestions";
 import { api, type JobDetail } from "@/lib/api";
 import { formatDate } from "@/lib/date";
 
@@ -493,6 +494,8 @@ export default async function JobDetailPage(props: PageProps<"/jobs/[id]">) {
           </CollapsibleCard>
 
           {/* Event Timeline */}
+          <JobInboundSuggestions jobId={job.id} />
+
           <EventTimeline
             jobId={job.id}
             initialEvents={job.events}

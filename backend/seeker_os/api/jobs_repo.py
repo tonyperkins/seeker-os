@@ -13,6 +13,7 @@ from seeker_os.api.schemas import (
 )
 from seeker_os.database import json_decode
 from seeker_os.events import (
+    MANUAL_EVENT_TYPES,
     STALE_ACTIVITY_EVENTS,
     Actor,
     EventType,
@@ -182,6 +183,11 @@ def row_to_event(row) -> ApplicationEvent:
         created_at=row["created_at"],
         metadata=json_decode(row["metadata"]) if row["metadata"] else None,
         note=row["note"],
+        is_mutable=(
+            bool(row["is_mutable"])
+            if "is_mutable" in row.keys()
+            else row["event_type"] in MANUAL_EVENT_TYPES
+        ),
     )
 
 
@@ -192,7 +198,18 @@ def row_to_detail(row, db=None) -> JobDetail:
     days_since = None
     if db is not None:
         event_rows = db.execute(
-            "SELECT * FROM application_events WHERE job_id = ? ORDER BY occurred_at ASC, id ASC",
+            """
+            SELECT e.*,
+                   CASE
+                     WHEN e.event_type IN ('note', 'call', 'email_sent', 'email_received', 'meeting', 'interview')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM inbound_messages i WHERE i.confirmed_event_id = e.id
+                      ) THEN 1 ELSE 0
+                   END AS is_mutable
+            FROM application_events e
+            WHERE e.job_id = ?
+            ORDER BY e.occurred_at ASC, e.id ASC
+            """,
             (row["id"],),
         ).fetchall()
         events = [row_to_event(r) for r in event_rows]

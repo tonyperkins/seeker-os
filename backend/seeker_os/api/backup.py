@@ -2,8 +2,12 @@
 
 Config backup produces a zip containing:
   - config/*.yml and config/blacklist.txt (all real config files)
-  - .env (API keys / env vars)
+  - .env only when the caller explicitly requests a secret-bearing backup
   - data/master_resume.* (if present)
+
+OAuth token files are deliberately never exported or restored. A restored
+Seeker OS installation must reauthorize Gmail rather than inheriting a bearer
+credential from an archive.
 
 DB backup uses SQLite's online backup API for a consistent snapshot.
 DB restore uses the same API to safely copy into the live DB.
@@ -40,6 +44,11 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 _BACKUP_CONFIG_GLOBS = ["*.yml", "blacklist.txt"]
 _BACKUP_ENV = ".env"
 _MASTER_RESUME_PREFIX = "master_resume."
+_EXCLUDED_RUNTIME_SECRETS = frozenset({
+    ".gmail_oauth.json",
+    ".gmail_oauth_state.json",
+    ".anthropic_oauth.json",
+})
 
 # Allowed restore paths (relative to PROJECT_ROOT) — anything outside is rejected.
 _ALLOWED_RESTORE_DIRS = {"config", "data"}
@@ -68,8 +77,9 @@ class DatabaseRestoreResponse(BaseModel):
 def _collect_backup_files(include_secrets: bool = False) -> list[Path]:
     """Gather all non-DB config files that should be included in the backup.
 
-    When include_secrets is False (default), .env is excluded to prevent
-    API keys from leaking via the backup artifact.
+    When include_secrets is False (default), .env is excluded to prevent API
+    keys from leaking via the backup artifact. OAuth token files are excluded
+    in every mode; a restored installation must reauthorize.
     """
     files: list[Path] = []
 
@@ -86,7 +96,11 @@ def _collect_backup_files(include_secrets: bool = False) -> list[Path]:
     # Master resume (data/master_resume.*)
     if DATA_DIR.exists():
         for p in sorted(DATA_DIR.iterdir()):
-            if p.is_file() and p.name.startswith(_MASTER_RESUME_PREFIX):
+            if (
+                p.is_file()
+                and p.name.startswith(_MASTER_RESUME_PREFIX)
+                and p.name not in _EXCLUDED_RUNTIME_SECRETS
+            ):
                 files.append(p)
 
     return files
@@ -176,6 +190,9 @@ async def restore_backup(file: UploadFile = File(...)):
         top_dir = rel.parts[0] if rel.parts else ""
         if top_dir not in _ALLOWED_RESTORE_DIRS and name != _BACKUP_ENV:
             skipped.append(f"{name} (rejected: not in allowed directory)")
+            continue
+        if rel.name in _EXCLUDED_RUNTIME_SECRETS:
+            skipped.append(f"{name} (rejected: OAuth tokens are never restored)")
             continue
 
         # .env is allowed at project root
