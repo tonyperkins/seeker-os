@@ -19,6 +19,8 @@ services:
       - LANGFUSE_FLUSH_INTERVAL=${LANGFUSE_FLUSH_INTERVAL:-1.0}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - GMAIL_OAUTH_CLIENT_ID=${GMAIL_OAUTH_CLIENT_ID:-}
+      - GMAIL_OAUTH_CLIENT_SECRET=${GMAIL_OAUTH_CLIENT_SECRET:-}
       # API keys (KILO_API_KEY, ANTHROPIC_DIRECT_API_KEY, etc.) are NOT
       # passed through here — they live in data/.env (mounted volume),
       # loaded by load_dotenv at startup. If you manage all env vars via
