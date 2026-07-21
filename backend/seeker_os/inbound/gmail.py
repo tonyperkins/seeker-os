@@ -147,13 +147,17 @@ class GmailClient:
     def profile(self) -> dict:
         return self._get("/profile")
 
-    def message(self, message_id: str) -> ParsedMessage:
+    def message(self, message_id: str) -> ParsedMessage | None:
         try:
             raw = self._get(f"/messages/{message_id}", {"format": "full"})
         except GmailError as exc:
             if exc.status_code == 404:
                 raise GmailMessageNotFound("Gmail message is no longer available", 404) from exc
             raise
+        # History retains messageAdded records after a user moves a message to
+        # Trash. Do not turn deleted or spam mail into a review item.
+        if {"TRASH", "SPAM"}.intersection(raw.get("labelIds") or []):
+            return None
         return parse_gmail_message(raw, self.config.max_body_bytes)
 
     def list_message_ids(self, query: str) -> list[str]:

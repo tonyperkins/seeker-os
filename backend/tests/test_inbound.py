@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from seeker_os.api import inbound as inbound_api
 from seeker_os.config import EmailConfig
 from seeker_os.database import get_connection, run_migrations
-from seeker_os.inbound.gmail import parse_gmail_message
+from seeker_os.inbound.gmail import GmailClient, parse_gmail_message
 from seeker_os.inbound.matcher import match_message
 from seeker_os.inbound.models import ParsedMessage
 from seeker_os.inbound.repository import acquire_lease, release_lease
@@ -134,6 +134,13 @@ def test_mime_parser_prefers_plain_text_and_never_reads_attachments():
     assert "secret" not in parsed.body_text
     assert parsed.sender_address == "jobs@example.com"
     assert parsed.rfc822_message_id == "<rfc@example.com>"
+
+
+def test_gmail_client_excludes_messages_currently_in_trash(tmp_path, monkeypatch):
+    client = GmailClient(_config(tmp_path))
+    monkeypatch.setattr(client, "_get", lambda *_args, **_kwargs: {"labelIds": ["INBOX", "TRASH"]})
+
+    assert client.message("deleted-message") is None
 
 
 def test_cross_process_lease_blocks_second_owner(tmp_path):

@@ -151,6 +151,9 @@ class InboundService:
                 except GmailMessageNotFound:
                     logger.info("inbound_message_unavailable account=%s", self.config.account_key)
                     continue
+                if message is None:
+                    logger.info("inbound_message_excluded account=%s", self.config.account_key)
+                    continue
                 match = match_message(db, message, self.config.matcher)
                 seen += 1
                 inserted += int(insert_message(db, self.config.account_key, message, match))
