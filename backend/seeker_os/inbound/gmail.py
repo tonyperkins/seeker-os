@@ -28,6 +28,10 @@ class HistoryCursorExpired(GmailError):
     pass
 
 
+class GmailMessageNotFound(GmailError):
+    """A History entry referred to a message that is no longer readable."""
+
+
 class _TextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -132,8 +136,6 @@ class GmailClient:
                 headers={"Authorization": f"Bearer {self.oauth.access_token()}"},
                 timeout=self.config.request_timeout_seconds,
             )
-            if response.status_code == 404:
-                raise HistoryCursorExpired("Gmail History cursor expired", 404)
             response.raise_for_status()
             return response.json()
         except HistoryCursorExpired:
@@ -146,7 +148,12 @@ class GmailClient:
         return self._get("/profile")
 
     def message(self, message_id: str) -> ParsedMessage:
-        raw = self._get(f"/messages/{message_id}", {"format": "full"})
+        try:
+            raw = self._get(f"/messages/{message_id}", {"format": "full"})
+        except GmailError as exc:
+            if exc.status_code == 404:
+                raise GmailMessageNotFound("Gmail message is no longer available", 404) from exc
+            raise
         return parse_gmail_message(raw, self.config.max_body_bytes)
 
     def list_message_ids(self, query: str) -> list[str]:
@@ -174,7 +181,12 @@ class GmailClient:
             }
             if page_token:
                 params["pageToken"] = page_token
-            data = self._get("/history", params)
+            try:
+                data = self._get("/history", params)
+            except GmailError as exc:
+                if exc.status_code == 404:
+                    raise HistoryCursorExpired("Gmail History cursor expired", 404) from exc
+                raise
             newest_history_id = str(data.get("historyId") or newest_history_id)
             for history in data.get("history") or []:
                 for addition in history.get("messagesAdded") or []:

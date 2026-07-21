@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from seeker_os.config import EmailConfig
 from seeker_os.database import get_connection, json_decode
 from seeker_os.events import Actor, EventType, record_event
-from seeker_os.inbound.gmail import GmailClient, HistoryCursorExpired
+from seeker_os.inbound.gmail import GmailClient, GmailMessageNotFound, HistoryCursorExpired
 from seeker_os.inbound.links import gmail_link_inputs, primary_gmail_link
 from seeker_os.inbound.matcher import match_message
 from seeker_os.inbound.models import PollResult
@@ -146,7 +146,11 @@ class InboundService:
                     )
 
             for message_id in dict.fromkeys(message_ids):
-                message = self.gmail.message(message_id)
+                try:
+                    message = self.gmail.message(message_id)
+                except GmailMessageNotFound:
+                    logger.info("inbound_message_unavailable account=%s", self.config.account_key)
+                    continue
                 match = match_message(db, message, self.config.matcher)
                 seen += 1
                 inserted += int(insert_message(db, self.config.account_key, message, match))
