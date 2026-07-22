@@ -44,11 +44,16 @@ def _load_prefs_text(settings: Settings) -> str:
     if not settings.profile:
         return "(no profile configured)"
     p = settings.profile
+    remote_label = str(p.location.remote_only)
+    hybrid_cities: list[str] = []
+    if settings.filters and settings.filters.filters.hybrid_accepted_cities:
+        hybrid_cities = settings.filters.filters.hybrid_accepted_cities
+        remote_label += f" (hybrid accepted in: {', '.join(hybrid_cities)})"
     lines = [
         f"Comp floor: ${p.comp.floor:,}",
         f"Comp target: ${p.comp.target:,}",
         f"Comp stretch: ${p.comp.stretch:,}",
-        f"Remote only: {p.location.remote_only}",
+        f"Remote only: {remote_label}",
         f"Accepted cities: {', '.join(p.location.accepted_cities) or '(none)'}",
         f"Accepted states: {', '.join(p.location.accepted_states) or '(none)'}",
         f"Rejected cities: {', '.join(p.location.rejected_cities) or '(none)'}",

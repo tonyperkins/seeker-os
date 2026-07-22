@@ -10,10 +10,11 @@ nothing else. No prose outside the JSON.
 2. Score each rubric dimension, apply bonuses/penalties/blockers from RUBRIC, and
    compute the weighted total. Show the per-dimension breakdown.
 3. Check HARD BLOCKERS explicitly. Any present => verdict cannot exceed SKIP
-   regardless of score. Blockers include: onsite/hybrid outside commute tolerance,
-   clearance/citizenship requirements that conflict with the candidate's work
-   eligibility (injected in IDENTITY), and any never-claim tech as a PRIMARY stack
-   requirement.
+   regardless of score. Blockers include: onsite/hybrid outside the candidate's
+   accepted cities (listed in PREFS as "hybrid accepted in:" — hybrid/onsite
+   within those cities is NOT a blocker), clearance/citizenship requirements
+   that conflict with the candidate's work eligibility (injected in IDENTITY),
+   and any never-claim tech as a PRIMARY stack requirement.
 4. Check COMP against the floor in PREFS. Unposted comp is a flag, not a blocker.
 5. Check POSITIONING. The candidate's positioning is provided below in the injected
    context. Roles that mismatch the candidate's positioning should be called out,

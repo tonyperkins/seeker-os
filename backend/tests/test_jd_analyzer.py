@@ -254,3 +254,136 @@ class TestIdentityInjection:
         user_prompt = call_args.kwargs["user_prompt"]
         # Should have the placeholder text, not a crash
         assert "no identity rules configured" in user_prompt
+
+
+class TestHybridAcceptedCitiesInjection:
+    """Verify hybrid_accepted_cities from filters.yml is injected into the
+    analysis prompt so the LLM doesn't falsely flag local hybrid jobs as
+    remote_policy_conflict hard blockers."""
+
+    @patch("seeker_os.llm.router.ModelRouter")
+    def test_hybrid_cities_in_prompt(self, mock_router_cls, db_path):
+        from seeker_os.analysis.jd_analyzer import analyze_job
+        from seeker_os.config import (
+            FilterConfig, FiltersConfig, TitleFilters,
+            LocationPrefs, CompPrefs, ExperiencePrefs, EmploymentPrefs,
+            ProfileConfig, UserIdentity, ResumePrefs, CrossReferencePrefs,
+        )
+
+        job_id = _insert_job(db_path)
+
+        mock_router = MagicMock()
+        mock_router.generate.return_value = MagicMock(
+            text=json.dumps({
+                "company": "TestCo", "title": "SRE", "url": "",
+                "verdict": "APPLY", "weighted_score": 7.0,
+                "one_line": "Good.", "named_gaps": [], "hard_blockers": [],
+                "rubric_breakdown": [], "bonuses_applied": [], "penalties_applied": [],
+                "comp": {"posted": None, "meets_floor": None, "note": ""},
+                "positioning": {"aligned": True, "note": ""},
+                "company_fit": {"size_bucket": None, "stage": None, "remote_policy": None, "note": ""},
+                "tailoring": {"lead_with": [], "reframe_summary": "", "do_not_claim": []},
+                "red_flags": [], "confidence": 0.8,
+            }),
+            provider="test", model="test-model",
+            input_tokens=100, output_tokens=200, latency_ms=50,
+        )
+        mock_router_cls.return_value = mock_router
+
+        settings = MagicMock()
+        settings.config_dir = db_path.parent
+        settings.profile = ProfileConfig(
+            user=UserIdentity(name="Test", email="t@t.com", location="Leander, TX"),
+            location=LocationPrefs(
+                remote_only=True,
+                accepted_cities=["austin", "leander"],
+                accepted_states=["tx"],
+            ),
+            comp=CompPrefs(floor=170000, target=200000, stretch=250000),
+            experience=ExperiencePrefs(years=25, anchor_phrase="25+ years"),
+            employment=EmploymentPrefs(commitment="Full Time", role_type="IC"),
+            resume=ResumePrefs(
+                master_path="data/master_resume.md",
+                accuracy_rules_path="config/accuracy_rules.yml",
+                output_dir="data/resumes",
+            ),
+            cross_reference=CrossReferencePrefs(repo_path="~/projects/test"),
+        )
+        settings.scoring = None
+        settings.identity = None
+        settings.filters = FiltersConfig(
+            filters=FilterConfig(
+                remote_only=True,
+                us_only=True,
+                hybrid_accepted_cities=["austin", "leander", "cedar park"],
+            ),
+            title_filters=TitleFilters(),
+        )
+
+        analyze_job(settings, job_id)
+
+        call_args = mock_router.generate.call_args
+        user_prompt = call_args.kwargs["user_prompt"]
+        # The hybrid accepted cities must appear in the prompt
+        assert "hybrid accepted in:" in user_prompt
+        assert "austin" in user_prompt
+        assert "leander" in user_prompt
+        assert "cedar park" in user_prompt
+
+    @patch("seeker_os.llm.router.ModelRouter")
+    def test_no_hybrid_cities_when_empty(self, mock_router_cls, db_path):
+        from seeker_os.analysis.jd_analyzer import analyze_job
+        from seeker_os.config import (
+            FilterConfig, FiltersConfig, TitleFilters,
+            LocationPrefs, CompPrefs, ExperiencePrefs, EmploymentPrefs,
+            ProfileConfig, UserIdentity, ResumePrefs, CrossReferencePrefs,
+        )
+
+        job_id = _insert_job(db_path)
+
+        mock_router = MagicMock()
+        mock_router.generate.return_value = MagicMock(
+            text=json.dumps({
+                "company": "TestCo", "title": "SRE", "url": "",
+                "verdict": "APPLY", "weighted_score": 7.0,
+                "one_line": "Good.", "named_gaps": [], "hard_blockers": [],
+                "rubric_breakdown": [], "bonuses_applied": [], "penalties_applied": [],
+                "comp": {"posted": None, "meets_floor": None, "note": ""},
+                "positioning": {"aligned": True, "note": ""},
+                "company_fit": {"size_bucket": None, "stage": None, "remote_policy": None, "note": ""},
+                "tailoring": {"lead_with": [], "reframe_summary": "", "do_not_claim": []},
+                "red_flags": [], "confidence": 0.8,
+            }),
+            provider="test", model="test-model",
+            input_tokens=100, output_tokens=200, latency_ms=50,
+        )
+        mock_router_cls.return_value = mock_router
+
+        settings = MagicMock()
+        settings.config_dir = db_path.parent
+        settings.profile = ProfileConfig(
+            user=UserIdentity(name="Test", email="t@t.com", location="Leander, TX"),
+            location=LocationPrefs(remote_only=True, accepted_cities=[]),
+            comp=CompPrefs(floor=170000, target=200000, stretch=250000),
+            experience=ExperiencePrefs(years=25, anchor_phrase="25+ years"),
+            employment=EmploymentPrefs(commitment="Full Time", role_type="IC"),
+            resume=ResumePrefs(
+                master_path="data/master_resume.md",
+                accuracy_rules_path="config/accuracy_rules.yml",
+                output_dir="data/resumes",
+            ),
+            cross_reference=CrossReferencePrefs(repo_path="~/projects/test"),
+        )
+        settings.scoring = None
+        settings.identity = None
+        settings.filters = FiltersConfig(
+            filters=FilterConfig(remote_only=True, us_only=True, hybrid_accepted_cities=[]),
+            title_filters=TitleFilters(),
+        )
+
+        analyze_job(settings, job_id)
+
+        call_args = mock_router.generate.call_args
+        user_prompt = call_args.kwargs["user_prompt"]
+        # Should NOT contain hybrid accepted cities annotation
+        assert "hybrid accepted in:" not in user_prompt
