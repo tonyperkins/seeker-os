@@ -105,3 +105,6 @@ docs/DATABASE_SCHEMA.md
 
 # Logs
 *.log
+
+# Interview prep (local only, never commit)
+nea-ben-interview-crib.md

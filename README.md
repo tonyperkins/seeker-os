@@ -36,6 +36,83 @@ A structured, dashboard-driven job search pipeline.
 6. **Researches** companies with a pluggable retrieval adapter (Tavily as one adapter) — live web search for funding signals and employee sentiment, config-driven thresholds (confidence floor, staleness, source trust ordering), and graceful degradation when no retrieval provider is configured
 7. **Tracks** the full application lifecycle through a web dashboard
 
+## JD Lifecycle — Discovery to Outcome
+
+Every job flows through an automated pipeline (Tiers 1-5), then human review, then a post-apply lifecycle — with every status change recorded in an append-only event log.
+
+```mermaid
+flowchart TD
+    subgraph Pipeline["Automated Pipeline (Tiers 1-5)"]
+        T1["Tier 1: Discovery\nSource adapters fetch job cards\n→ DISCOVERED"] --> DEDUP1{"Duplicate?\nLayers 1-2: source ID\n+ fuzzy title/company"}
+        DEDUP1 -->|Yes| DROP["Skipped — duplicate"]
+        DEDUP1 -->|No| T2["Tier 2: Card-Level Filters\nTitle/seniority/location/workplace\nhard filters"]
+        T2 -->|Pass| T3["Tier 3: Full JD Fetch\nATS API or detail page scrape\n→ JD_FETCHED"]
+        T2 -->|Fail| REJ_SYS["REJECTED\nfilter_rejected"]
+        T3 --> DEDUP2{"Content hash\nduplicate?\nLayer 3"}
+        DEDUP2 -->|Yes| DUP["DUPLICATE_FLAGGED"]
+        DEDUP2 -->|No| T4["Tier 4: Heuristic Scoring\nRegex rubric on title + JD text\n→ score + modifiers"]
+        T3 -->|Fetch fail| REJ_SYS
+        T4 --> HARD{"Hard reject?\nEvidence gate /\nnever-claim patterns"}
+        HARD -->|Yes| REJ_SYS
+        HARD -->|No| THRESH{"Score ≥\npost_threshold?"}
+        THRESH -->|No| REJ_SYS
+        THRESH -->|Yes| READY["READY\nscored_ready"]
+        READY --> T5["Tier 5: Ranking\nPer-company cap + cross-ref"]
+        T5 --> CAP{"Over per-company\ncap?"}
+        CAP -->|Yes| CAPPED["CAPPED"]
+        CAP -->|No| REVIEW["Ready for human review"]
+    end
+
+    subgraph Human["Human Review (Candidate)"]
+        REVIEW --> CHOICE{"Candidate\ndecision"}
+        CHOICE -->|Skip| SKIPPED["SKIPPED\nmanual skip"]
+        CHOICE -->|Reject| REJ_MAN["REJECTED\nmanual reject w/ reason"]
+        CHOICE -->|Review| REV["REVIEWING\ntransient review state"]
+        REV -->|Generate resume| INTERESTED["INTERESTED\nresume_generated"]
+        REV -->|Skip| SKIPPED
+        INTERESTED --> APPLY_DECIDE{"Apply?"}
+        INTERESTED -->|Decline| SKIPPED
+        APPLY_DECIDE -->|Yes| APPLIED["APPLIED\ncandidate submits"]
+        APPLY_DECIDE -->|No| SKIPPED
+    end
+
+    subgraph PostApply["Post-Apply Lifecycle"]
+        APPLIED --> ENGAGE{"Company\nresponds?"}
+        ENGAGE -->|Silent / rejected| COMP_REJ["COMPANY_REJECTED\nterminal"]
+        ENGAGE -->|Candidate withdraws| WITHDRAWN["WITHDRAWN\nterminal"]
+        ENGAGE -->|Engages| ENGAGED["ENGAGED\ninterview / challenge /\noffer sub-events"]
+        ENGAGED --> OFFER{"Offer\nreceived?"}
+        OFFER -->|No offer / rejected| COMP_REJ
+        OFFER -->|Candidate withdraws| WITHDRAWN
+        OFFER -->|Accept| OFFER_ACC["OFFER_ACCEPTED\nterminal ✓"]
+        OFFER -->|Decline| OFFER_DEC["OFFER_DECLINED\nterminal"]
+    end
+
+    REJ_SYS -.->|Refilter/rescore\nmay revive| T4
+    REJ_MAN -.->|Override| REV
+```
+
+**Automated pipeline:**
+
+- **Tier 1: Discovery** — source adapters fetch job cards and normalize them into `JobCard` models. Dedup layers 1-2 (source ID + fuzzy title/company match) run before DB insert.
+- **Tier 2: Card-Level Filters** — hard filters on title patterns, seniority, location, workplace type. Fail → `rejected` with reason.
+- **Tier 3: Full JD Fetch** — fetches complete JD text via ATS API or detail page scrape. Content hash dedup (layer 3) runs after fetch. Fail → `rejected` (retryable on next run).
+- **Tier 4: Heuristic Scoring** — deterministic regex rubric scores title + JD text. Hard rejects or below-threshold → `rejected`. Above threshold → `ready`.
+- **Tier 5: Ranking** — per-company cap limits how many jobs from one company appear in a run. Over-cap → `capped`. Cross-reference against prior application history.
+
+**Human review:**
+
+- **Reviewing** → **Interested** (via resume generation) → **Applied**. Skip and manual reject are dead ends (can be overridden).
+- **Applied** is the handoff from automated pipeline to post-apply lifecycle.
+
+**Post-apply lifecycle:**
+
+- **Engaged** — company responded (interview, challenge, offer sub-events recorded as timeline events).
+- Terminal states: **Offer Accepted** ✓, **Offer Declined**, **Company Rejected**, **Withdrawn**.
+- Transitions are enforced by a `VALID_TRANSITIONS` map — no skipping states.
+
+See [Application Lifecycle](docs/APPLICATION_LIFECYCLE.md) for full details.
+
 ## Why
 
 Replaces scattered-markdown-files approaches with a unified, structured system. The old
