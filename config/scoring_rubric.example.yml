@@ -16,6 +16,13 @@ scoring:
     - pattern: "(principal|staff).*engineer"
       score: 4.5
       label: "Principal/Staff Engineer"
+    # Example: AI application / enablement title tiers (dual-lane)
+    # - pattern: "(forward.?deployed|applied ai|ai engineer|ai software engineer)"
+    #   score: 4.5
+    #   label: "Forward-deployed / applied AI title"
+    # - pattern: "(ai enablement|developer (productivity|experience)|devex)"
+    #   score: 4.0
+    #   label: "AI enablement / DevEx title"
     - pattern: "(senior|sr\\.?).*engineer"
       score: 3.5
       label: "Senior Engineer"
@@ -60,16 +67,37 @@ scoring:
       pattern: "small team|startup|series [abc]"
       points: 0.5
       check: "jd"
+    # Example: AI application / enablement signals (dual-lane)
+    # - signal: "named_agentic_tooling"
+    #   pattern: "claude code|cursor (ai|ide)|\bcursor\b(?=.{0,60}(?:windsurf|copilot|claude|coding assistant|codex))|(?:claude|copilot|windsurf|codex|coding assistant).{0,60}\bcursor\b|windsurf|agentic (coding|tools|workflows)"
+    #   points: 1.5
+    #   check: "jd"
+    # - signal: "eval_guardrail_language"
+    #   pattern: "\bevals?\b|guardrails?|quality gates?|llm.as.judge|golden (data )?set|human.in.the.loop"
+    #   points: 1.0
+    #   check: "jd"
+    # - signal: "internal_customer_focus"
+    #   pattern: "internal (customers?|stakeholders?|teams?|tooling)"
+    #   points: 1.0
+    #   check: "jd"
+    # - signal: "build_it_own_it"
+    #   pattern: "you build it.{0,40}you (own|run) it|build it.{0,40}run it|own.{0,60}production|end.to.end ownership"
+    #   points: 1.0
+    #   check: "jd"
+    # - signal: "funded_ai_workflow"
+    #   pattern: "bedrock|enterprise (claude|anthropic|openai)|frontier model access"
+    #   points: 0.5
+    #   check: "jd"
     # Example: culture / practice signal
     # - signal: "you_build_it"
-    #   pattern: "you build it.*you run it|own.*production"
+    #   pattern: "you build it.{0,40}you run it|own.{0,60}production"
     #   points: 1.0
     #   check: "jd"
 
   # Negative modifiers — all matching patterns are summed
   negative_modifiers:
     - signal: "relocation_required"
-      pattern: "on.?site only|in.?office only|must.*relocat|relocation required"
+      pattern: "on.?site only|in.?office only|must.{0,30}relocat|relocation required"
       points: -3.0
       check: "jd"
     - signal: "hybrid_non_local"
@@ -90,14 +118,14 @@ scoring:
       threshold_min: 120000
       threshold_max: 140000
     - signal: "people_management"
-      pattern: "performance review|headcount|hiring decision|manage.*team of"
+      pattern: "performance review|headcount|hiring decision|manage.{0,30}team of"
       points: -2.0
       check: "jd"
     - signal: "large_enterprise"
       pattern: "fortune\\s*(?:500|100|50)|\\b\\d{2,3},000\\+?\\s*employees"
       points: -1.5
       check: "jd"
-      unless: "our customers|customers include|customers range|client.*fortune|fortune.*customer"
+      unless: "our customers|customers include|customers range|client.{0,80}fortune|fortune.{0,80}customer"
     - signal: "staffing_agency"
       pattern: "staffing|consulting llc|recruiting agency"
       points: -1.5
@@ -161,6 +189,9 @@ scoring:
     #     - "research.?scientist"
     #     - "publications?"
     #     - "neurips|icml|iclr|cvpr"
+    #     - "model.?(pre.?)?training.{0,30}(from.?scratch|at.?scale)"
+    #     - "training.?(runs?|clusters?).{0,30}(own|responsib)"
+    #     - "\\bcuda\\b"
     # Never-claim density — scaled penalty for technologies in the
     # identity_rules.yml never_claim list appearing in the JD. No technology
     # names are hardcoded here or in Python — the list comes from identity

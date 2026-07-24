@@ -699,3 +699,427 @@ class TestCompProvenance:
         assert "comp_target" not in result.fired_modifiers
         assert "comp_below_floor" not in result.fired_modifiers
         assert "comp_marginal" not in result.fired_modifiers
+
+
+class TestDualLaneScoring:
+    """Tests for dual-lane scoring: AI application/enablement + platform/SRE."""
+
+    def _make_dual_lane_rubric(self) -> ScoringConfig:
+        return ScoringConfig(
+            post_threshold=6.0,
+            per_company_cap=3,
+            max_score=10,
+            min_score=0,
+            base_scores=[
+                BaseScoreRule(
+                    pattern=r"(principal|staff|senior|sr\.?).*?(ai|ml|llm|genai|inference|model).*?(platform|infra|infrastructure|reliability|ops|serving|engineer)",
+                    score=5.0, label="Senior+ AI/ML infrastructure title",
+                ),
+                BaseScoreRule(
+                    pattern=r"(forward.?deployed|applied ai|ai engineer|ai software engineer)",
+                    score=4.5, label="Forward-deployed / applied AI title",
+                ),
+                BaseScoreRule(
+                    pattern=r"(ai enablement|developer (productivity|experience)|devex)",
+                    score=4.0, label="AI enablement / DevEx title",
+                ),
+                BaseScoreRule(
+                    pattern=r"(llmops|mlops|ai.?platform|ml.?platform|ai.?infrastructure|inference.?engineer|model.?serving|genai.?(platform|infra))",
+                    score=4.5, label="AI infrastructure title match",
+                ),
+                BaseScoreRule(
+                    pattern=r"(principal|staff).*(sre|site reliability|platform|infra|devops|infrastructure)",
+                    score=4.5, label="Principal/Staff SRE/Platform/Infra",
+                ),
+                BaseScoreRule(
+                    pattern=r"(senior|sr\.?).*?(sre|site reliability|platform|infra|infrastructure)",
+                    score=4.0, label="Senior SRE/Platform/Infra",
+                ),
+                BaseScoreRule(score=0, label="No match"),
+            ],
+            positive_modifiers=[
+                ModifierRule(
+                    signal="named_agentic_tooling",
+                    pattern=r"claude code|cursor (ai|ide)|\bcursor\b(?=.{0,60}(?:windsurf|copilot|claude|coding assistant|codex))|(?:claude|copilot|windsurf|codex|coding assistant).{0,60}\bcursor\b|windsurf|agentic (coding|tools|workflows)",
+                    points=1.5, check="jd",
+                ),
+                ModifierRule(
+                    signal="eval_guardrail_language",
+                    pattern=r"\bevals?\b|guardrails?|quality gates?|llm.as.judge|golden (data )?set|human.in.the.loop",
+                    points=1.0, check="jd",
+                ),
+                ModifierRule(
+                    signal="internal_customer_focus",
+                    pattern=r"internal (customers?|stakeholders?|teams?|tooling)",
+                    points=1.0, check="jd",
+                ),
+                ModifierRule(
+                    signal="build_it_own_it",
+                    pattern=r"you build it.{0,40}you (own|run) it|build it.{0,40}run it|own.{0,60}production|end.to.end ownership",
+                    points=1.0, check="jd",
+                ),
+                ModifierRule(
+                    signal="funded_ai_workflow",
+                    pattern=r"bedrock|enterprise (claude|anthropic|openai)|frontier model access",
+                    points=0.5, check="jd",
+                ),
+                ModifierRule(signal="aws", pattern="aws|amazon web services", points=1.0, check="jd"),
+                ModifierRule(signal="terraform", pattern="terraform", points=1.0, check="jd"),
+                ModifierRule(signal="kubernetes", pattern="kubernetes|k8s", points=0.5, check="jd"),
+                ModifierRule(signal="remote_us", pattern="remote", points=1.0, check="jd",
+                              requires="united states|us.?based|within the us"),
+                ModifierRule(signal="comp_target", points=1.0, check="structured_comp", threshold=165000),
+            ],
+            negative_modifiers=[
+                ModifierRule(
+                    signal="large_enterprise",
+                    pattern=r"fortune\s*(?:500|100|50)|\b\d{2,3},000\+?\s*employees",
+                    points=-1.5, check="jd",
+                    unless=r"agentic (coding|tools|workflows)|internal (customers?|stakeholders?|tooling)|you build it.{0,40}you (own|run) it|end.to.end ownership|claude code|cursor (ai|ide)|\bcursor\b(?=.{0,60}(?:windsurf|copilot|claude|coding assistant|codex))|(?:claude|copilot|windsurf|codex|coding assistant).{0,60}\bcursor\b|windsurf",
+                ),
+                ModifierRule(
+                    signal="ml_research_domain",
+                    check="domain_mismatch",
+                    points=-3.0,
+                    min_distinct_hits=2,
+                    patterns=[
+                        r"\bphd\b.{0,30}(required|strongly preferred)",
+                        r"research.?scientist",
+                        r"publications?",
+                        r"neurips|icml|iclr|cvpr",
+                        r"model.?(pre.?)?training.{0,30}(from.?scratch|at.?scale)",
+                        r"training.?(runs?|clusters?).{0,30}(own|responsib)",
+                        r"\bcuda\b",
+                    ],
+                ),
+                ModifierRule(signal="comp_below_floor", points=-3.0, check="structured_comp", threshold_max=140000),
+            ],
+            freshness=FreshnessConfig(),
+        )
+
+    def _make_dual_lane_profile(self) -> ProfileConfig:
+        return ProfileConfig(
+            user=UserIdentity(name="Test", email="test@test.com", location="Austin, TX"),
+            location=LocationPrefs(remote_only=True, accepted_cities=["austin"]),
+            comp=CompPrefs(floor=140000, target=180000, stretch=220000),
+            experience=ExperiencePrefs(years=25, anchor_phrase="25+ years"),
+            employment=EmploymentPrefs(commitment="Full Time", role_type="Individual Contributor"),
+            blacklist=[],
+            resume=ResumePrefs(master_path="~/resume.md", accuracy_rules_path="config/accuracy_rules.yml", output_dir="data/resumes"),
+            cross_reference=CrossReferencePrefs(repo_path="~/projects/job-search"),
+            hard_rejects=[
+                HardReject(
+                    reason="AI/ML Engineer (non-infra)",
+                    pattern=r"ai/ml engineer|machine learning engineer",
+                    unless_pattern=r"ml infra|ml platform|gpu infra|model serving|mlops|llmops|inference|ai infrastructure|llm platform|ai platform|observability|evals|reliability|forward.?deployed|applied ai|ai enablement|developer productivity|developer experience|devex|internal tooling|you build it|end.to.end ownership|agentic|claude code|cursor (ai|ide)|\bcursor\b(?=.{0,60}(?:windsurf|copilot|claude|coding assistant|codex))|(?:claude|copilot|windsurf|codex|coding assistant).{0,60}\bcursor\b|windsurf|llm.as.judge|guardrail",
+                ),
+            ],
+        )
+
+    # --- Base score ordering tests ---
+
+    def test_base_score_ai_enablement_title(self):
+        """AI Enablement Engineer title gets base score 4.0."""
+        jd = "We are hiring an AI Enablement Engineer to build developer tools. " + "x" * 500
+        result = score_job(
+            title="AI Enablement Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.score == 4.0
+        assert not result.fired_modifiers  # no modifiers should fire
+
+    def test_base_score_forward_deployed_title(self):
+        """Forward Deployed Engineer title gets base score 4.5."""
+        jd = "We are hiring a Forward Deployed Engineer. " + "x" * 500
+        result = score_job(
+            title="Forward Deployed Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.score == 4.5
+        assert not result.fired_modifiers
+
+    def test_base_score_applied_ai_title(self):
+        """Applied AI Engineer title gets base score 4.5."""
+        jd = "We are hiring an Applied AI Engineer. " + "x" * 500
+        result = score_job(
+            title="Applied AI Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.score == 4.5
+        assert not result.fired_modifiers
+
+    def test_base_score_senior_ai_infra_outranks_ai_enablement(self):
+        """Senior AI/ML Infrastructure title (5.0) should outrank AI Enablement (4.0) when both match."""
+        jd = "Senior AI/ML Infrastructure Engineer role. " + "x" * 500
+        result = score_job(
+            title="Senior AI/ML Infrastructure Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.score == 5.0
+        assert not result.fired_modifiers
+
+    def test_base_score_devex_title(self):
+        """Developer Experience title gets base score 4.0."""
+        jd = "We are hiring a DevEx Engineer. " + "x" * 500
+        result = score_job(
+            title="DevEx Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.score == 4.0
+        assert not result.fired_modifiers
+
+    def test_base_score_developer_productivity_title(self):
+        """Developer Productivity Engineer title gets base score 4.0."""
+        jd = "We are hiring a Developer Productivity Engineer. " + "x" * 500
+        result = score_job(
+            title="Developer Productivity Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.score == 4.0
+        assert not result.fired_modifiers
+
+    # --- Positive modifier tests ---
+
+    def test_named_agentic_tooling_claude_code(self):
+        """Claude Code in JD fires named_agentic_tooling (+1.5)."""
+        jd = "Senior SRE role using Claude Code for development. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "named_agentic_tooling" in result.fired_modifiers
+        assert result.fired_modifiers["named_agentic_tooling"] == 1.5
+
+    def test_named_agentic_tooling_cursor_with_context(self):
+        """Cursor near coding assistant terms fires named_agentic_tooling."""
+        jd = "Senior SRE role. Experience with Cursor AI IDE preferred. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "named_agentic_tooling" in result.fired_modifiers
+
+    def test_named_agentic_tooling_cursor_near_copilot(self):
+        """Cursor appearing near Copilot fires named_agentic_tooling."""
+        jd = "Senior SRE. You will use Copilot and Cursor for pair programming. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "named_agentic_tooling" in result.fired_modifiers
+
+    def test_named_agentic_tooling_cursor_alone_no_false_positive(self):
+        """Bare 'cursor' without tool context should NOT fire named_agentic_tooling."""
+        jd = "Senior SRE. You will manage database cursor operations and PL/SQL stored procedures. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "named_agentic_tooling" not in result.fired_modifiers
+
+    def test_named_agentic_tooling_windsurf(self):
+        """Windsurf in JD fires named_agentic_tooling."""
+        jd = "Senior SRE role. We use Windsurf for AI-assisted development. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "named_agentic_tooling" in result.fired_modifiers
+
+    def test_eval_guardrail_language(self):
+        """Evals and guardrails in JD fire eval_guardrail_language (+1.0)."""
+        jd = "Senior SRE role. You will build evals and guardrails for LLM output. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "eval_guardrail_language" in result.fired_modifiers
+        assert result.fired_modifiers["eval_guardrail_language"] == 1.0
+
+    def test_internal_customer_focus(self):
+        """Internal customers/tooling in JD fires internal_customer_focus (+1.0)."""
+        jd = "Senior SRE role. You will build tooling for internal customers. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "internal_customer_focus" in result.fired_modifiers
+
+    def test_build_it_own_it_merged_pattern(self):
+        """'you build it you own it' fires build_it_own_it (+1.0)."""
+        jd = "Senior SRE role. We follow you build it you own it philosophy. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "build_it_own_it" in result.fired_modifiers
+
+    def test_build_it_own_it_end_to_end_ownership(self):
+        """'end-to-end ownership' fires build_it_own_it (+1.0)."""
+        jd = "Senior SRE role. You will have end-to-end ownership of production systems. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "build_it_own_it" in result.fired_modifiers
+
+    def test_funded_ai_workflow_bedrock(self):
+        """Bedrock in JD fires funded_ai_workflow (+0.5)."""
+        jd = "Senior SRE role. We use Bedrock for enterprise Claude access. " + "x" * 500
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "funded_ai_workflow" in result.fired_modifiers
+        assert result.fired_modifiers["funded_ai_workflow"] == 0.5
+
+    # --- Large enterprise unless clause tests ---
+
+    def test_large_enterprise_unless_with_agentic_tooling(self):
+        """Large enterprise penalty is suppressed when agentic coding tools are present."""
+        jd = ("Fortune 500 company with 50,000 employees. "
+              "We use Claude Code and agentic coding workflows across engineering. " + "x" * 500)
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "large_enterprise" not in result.fired_modifiers
+
+    def test_large_enterprise_unless_with_build_it_own_it(self):
+        """Large enterprise penalty is suppressed when 'you build it you own it' is present."""
+        jd = ("Fortune 500 company with 50,000 employees. "
+              "We follow you build it you own it model with end-to-end ownership. " + "x" * 500)
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "large_enterprise" not in result.fired_modifiers
+
+    def test_large_enterprise_fires_without_ai_signals(self):
+        """Large enterprise penalty fires when no AI-enablement signals are present."""
+        jd = ("Fortune 500 company with 50,000 employees. "
+              "Traditional enterprise SRE role managing infrastructure. " + "x" * 500)
+        result = score_job(
+            title="Senior SRE", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "large_enterprise" in result.fired_modifiers
+        assert result.fired_modifiers["large_enterprise"] == -1.5
+
+    # --- ML research domain guard tests ---
+
+    def test_ml_research_domain_cuda_fires(self):
+        """CUDA in JD contributes to ml_research_domain penalty."""
+        jd = ("Senior AI Infrastructure Engineer. "
+              "You will optimize CUDA kernels for training clusters. "
+              "PhD strongly preferred. Publications at NeurIPS expected. " + "x" * 500)
+        result = score_job(
+            title="Senior AI Infrastructure Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "ml_research_domain" in result.fired_modifiers
+
+    def test_ml_research_domain_model_training_fires(self):
+        """Model pre-training from scratch contributes to ml_research_domain penalty."""
+        jd = ("Senior AI Infrastructure Engineer. "
+              "You will own model pre-training from scratch at scale. "
+              "Research scientist collaboration required. " + "x" * 500)
+        result = score_job(
+            title="Senior AI Infrastructure Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "ml_research_domain" in result.fired_modifiers
+
+    def test_ml_research_domain_below_threshold_no_fire(self):
+        """Only one research signal (not enough hits) should NOT fire ml_research_domain."""
+        jd = ("Senior AI Infrastructure Engineer. "
+              "You will work with research scientists on model serving. " + "x" * 500)
+        result = score_job(
+            title="Senior AI Infrastructure Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "ml_research_domain" not in result.fired_modifiers
+
+    # --- Hard reject unless_pattern tests ---
+
+    def test_hard_reject_aiml_unless_applied_ai(self):
+        """AI/ML Engineer title with 'applied ai' in JD should NOT be hard rejected."""
+        jd = "Applied AI Engineer building internal tooling with evals and guardrails. " + "x" * 500
+        result = score_job(
+            title="AI/ML Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.hard_reject is False
+
+    def test_hard_reject_aiml_unless_ai_enablement(self):
+        """AI/ML Engineer title with 'ai enablement' in JD should NOT be hard rejected."""
+        jd = "AI enablement role building developer productivity tooling with Claude Code. " + "x" * 500
+        result = score_job(
+            title="AI/ML Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.hard_reject is False
+
+    def test_hard_reject_aiml_unless_cursor_context(self):
+        """AI/ML Engineer title with Cursor AI IDE in JD should NOT be hard rejected."""
+        jd = "Machine learning engineer using Cursor AI IDE and Claude Code for development. " + "x" * 500
+        result = score_job(
+            title="Machine Learning Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.hard_reject is False
+
+    def test_hard_reject_aiml_unless_llm_as_judge(self):
+        """AI/ML Engineer title with LLM-as-judge in JD should NOT be hard rejected."""
+        jd = "ML engineer building LLM-as-judge pipelines and guardrails for AI systems. " + "x" * 500
+        result = score_job(
+            title="AI/ML Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.hard_reject is False
+
+    def test_hard_reject_aiml_without_unless_pattern_fires(self):
+        """AI/ML Engineer title without any unless_pattern signals SHOULD be hard rejected."""
+        jd = "Machine learning engineer building recommendation systems with TensorFlow. " + "x" * 500
+        result = score_job(
+            title="Machine Learning Engineer", jd_text=jd, location="Remote, US",
+            company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert result.hard_reject is True
+        assert "AI/ML" in result.reject_reason or "non-infra" in result.reject_reason
+
+    # --- Greedy regex regression tests ---
+
+    def test_build_it_own_it_no_cross_paragraph_false_positive(self):
+        """Regression: job 2498 (Cloudflare CRE) JD contains 'owns the problems' and
+        'into production' in unrelated paragraphs 7000+ chars apart. The old
+        own.*production greedy pattern matched across that span. The bounded
+        own.{0,60}production pattern must NOT fire on this text."""
+        jd = (
+            "You are the engineer who owns the problems that matter most to the customers. "
+            "You contribute directly to our products and tooling. "
+            + "x" * 7000 +
+            " Ship a detector for WAF false positives. Get it into production before the next renewal cycle. "
+            + "x" * 500
+        )
+        result = score_job(
+            title="Customer Reliability Engineer", jd_text=jd, location="Remote, US",
+            company="Cloudflare", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+        )
+        assert "build_it_own_it" not in result.fired_modifiers
+
+    def test_build_it_own_it_genuine_phrases_still_fire(self):
+        """Bounded pattern must still fire on genuine build-it-own-it phrasing."""
+        genuine_phrases = [
+            "You build it, you own it. " + "x" * 500,
+            "You build it, you run it. " + "x" * 500,
+            "Build it and run it end to end. " + "x" * 500,
+            "Own production systems end to end. " + "x" * 500,
+            "End-to-end ownership of the platform. " + "x" * 500,
+        ]
+        for phrase in genuine_phrases:
+            result = score_job(
+                title="Senior SRE", jd_text=phrase, location="Remote, US",
+                company="TestCo", rubric=self._make_dual_lane_rubric(), profile=self._make_dual_lane_profile(),
+            )
+            assert "build_it_own_it" in result.fired_modifiers, f"Failed on: {phrase[:50]}"

@@ -1,5 +1,7 @@
 """Tests for Tier 2 hard filters."""
 
+from datetime import UTC, datetime, timedelta
+
 from seeker_os.config import (
     FilterConfig, ProfileConfig, TitleFilters,
     UserIdentity, LocationPrefs, CompPrefs, ExperiencePrefs,
@@ -58,7 +60,7 @@ def _make_job(**kwargs) -> JobCard:
         commitment=["Full Time"],
         comp_min=160000,
         comp_max=200000,
-        date_posted="2026-06-20T00:00:00Z",
+        date_posted=(datetime.now(UTC) - timedelta(days=15)).isoformat(),
         discovered_query="senior-sre-remote",
     )
     defaults.update(kwargs)

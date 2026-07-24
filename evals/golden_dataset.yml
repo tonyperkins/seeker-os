@@ -5255,3 +5255,152 @@ cases:
   source: production_scan_2720
   added_at: '2026-07-13T16:02:03.010278+00:00'
   status: active
+- id: case-syn-ai-enablement
+  source_job_id: null
+  jd_text: 'AI Enablement Engineer — Remote (US)
+
+    About Us
+
+    [COMPANY] is a 60-person Series B startup building internal AI tooling for enterprise
+    customers. We use Claude Code, Cursor, and Windsurf across our engineering org and
+    are building the platform that makes AI-first development safe and productive for
+    all our engineers.
+
+    The Role
+
+    We are looking for an AI Enablement Engineer to own the internal developer productivity
+    platform — the guardrails, evals, and agentic workflows that let every engineer ship
+    confidently with AI tooling. You will build it and own it end to end: design, implement,
+    deploy, operate, and iterate.
+
+    What You Will Do
+
+    Build and operate the internal AI developer platform: Claude Code integrations,
+    Cursor IDE configuration, agentic coding workflows, and prompt management
+    Design and implement evals and guardrails for LLM-generated code: golden datasets,
+    LLM-as-judge pipelines, human-in-the-loop review gates, quality gates
+    Own end-to-end ownership of the AI tooling stack — you build it, you run it
+    Partner with internal stakeholders and internal customers to understand workflows
+    and convert them into reusable agentic tools
+    Implement infrastructure as code (Terraform), CI/CD pipelines (GitHub Actions),
+    and observability (Datadog, Grafana) for the AI platform
+
+    What We Are Looking For
+
+    5+ years of production software or platform engineering experience
+    Hands-on experience with AI tooling: Claude Code, Cursor, Copilot, or similar
+    Strong Python and Go skills
+    Kubernetes, Docker, AWS experience
+    Experience building internal tooling or developer productivity platforms
+    Understanding of LLM evaluation: evals, guardrails, golden datasets, LLM-as-judge
+
+    Compensation
+
+    $190,000 - $220,000 + equity
+
+    Benefits
+
+    Fully remote (US), flexible schedule, health/dental/vision, 401k match, unlimited PTO'
+  expected_verdict: APPLY
+  expected_gaps:
+  - Go proficiency depth
+  - LLM-as-judge pipeline production scale
+  source: synthetic_dual_lane_ai_enablement
+  added_at: '2026-07-24T12:00:00+00:00'
+  status: active
+- id: case-syn-ai-washed-swe
+  source_job_id: null
+  jd_text: 'Senior Software Engineer — Remote
+
+    About [COMPANY]
+
+    [COMPANY] is a fast-growing SaaS company with 500+ employees. We are looking for
+    a Senior Software Engineer to join our web application team.
+
+    The Role
+
+    You will be building and maintaining our customer-facing web application using
+    React, Node.js, and PostgreSQL. We use AI features in our product and are looking
+    for someone who is excited about AI.
+
+    What You Will Do
+
+    Build and maintain React frontend components and Node.js backend APIs
+    Write unit tests and integration tests
+    Participate in code reviews and agile ceremonies
+    Work with product managers to define feature requirements
+    Occasionally help with deployment and CI/CD pipeline maintenance
+
+    Requirements
+
+    5+ years of software engineering experience
+    Strong React and Node.js skills
+    PostgreSQL experience
+    Experience with REST APIs
+    Familiarity with AI concepts (ChatGPT, OpenAI API) is a plus
+    Bachelor''s degree in Computer Science or equivalent
+
+    Compensation
+
+    $130,000 - $150,000
+
+    Fully remote (US), health benefits, 401k'
+  expected_verdict: SKIP
+  expected_gaps:
+  - Core role is generic web development, not AI infrastructure or enablement
+  - No AI tooling, evals, guardrails, or agentic systems work
+  - Compensation below floor
+  - No Kubernetes, Terraform, or platform engineering
+  - Large enterprise headcount
+  source: synthetic_dual_lane_ai_washed
+  added_at: '2026-07-24T12:00:00+00:00'
+  status: active
+- id: case-syn-ml-research-gpu
+  source_job_id: null
+  jd_text: 'Senior AI Infrastructure Engineer — Remote (US)
+
+    About [COMPANY]
+
+    [COMPANY] is an AI research lab with 200 employees. We are building the next
+    generation of large language models from scratch.
+
+    The Role
+
+    We are seeking a Senior AI Infrastructure Engineer to own our GPU training
+    clusters and model training pipelines. You will be responsible for provisioning
+    and operating large-scale CUDA-based training infrastructure.
+
+    What You Will Do
+
+    Provision and configure large GPU clusters for model pre-training from scratch
+    at scale
+    Own training runs and training clusters — responsibility for checkpointing,
+    recovery, and reproducibility
+    Optimize CUDA kernels and distributed training frameworks (PyTorch, Megatron, JAX)
+    Collaborate with research scientists on model architecture and training
+    methodologies
+    Publish results at NeurIPS, ICML, and ICLR
+
+    Requirements
+
+    PhD strongly preferred in Computer Science, Machine Learning, or related field
+    5+ years of experience with large-scale training infrastructure
+    Deep understanding of CUDA, NVIDIA drivers, GPU compute fundamentals
+    Experience with distributed training: PyTorch, Ray, Megatron, JAX
+    Publications in top-tier ML venues (NeurIPS, ICML, ICLR, CVPR)
+
+    Compensation
+
+    $200,000 - $280,000 + equity
+
+    Fully remote (US), health benefits, 401k, research budget'
+  expected_verdict: SKIP
+  expected_gaps:
+  - ML research / model training — out of positioning (systems around models, never training)
+  - PhD strongly preferred
+  - Publication expectations (NeurIPS, ICML, ICLR, CVPR)
+  - CUDA / GPU kernel optimization
+  - Model pre-training from scratch
+  source: synthetic_dual_lane_ml_research
+  added_at: '2026-07-24T12:00:00+00:00'
+  status: active

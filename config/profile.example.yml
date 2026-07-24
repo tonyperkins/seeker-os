@@ -70,7 +70,7 @@ hard_rejects:
   #   pattern: "defense contractor|itar|classified"
   # - reason: "AI/ML Engineer (non-infra)"
   #   pattern: "ai/ml engineer|machine learning engineer"
-  #   unless_pattern: "ml infra|ml platform|gpu infra|model serving|mlops|llmops|inference|ai infrastructure|llm platform|ai platform|observability|evals|reliability"
+  #   unless_pattern: "ml infra|ml platform|gpu infra|model serving|mlops|llmops|inference|ai infrastructure|llm platform|ai platform|observability|evals|reliability|forward.?deployed|applied ai|ai enablement|developer productivity|developer experience|devex|internal tooling|you build it|end.to.end ownership|agentic|claude code|llm.as.judge|guardrail"
 
 # Structured contact info — used by resume generator and analysis output.
 # All fields optional; empty strings = not included.
