@@ -14,6 +14,9 @@
 queries:
   # Customize these slugs for your target role(s).
   # Slugs correspond to hiring.cafe URL paths: /jobs/{slug}
+  # search_query enables server-side date filtering (incremental search).
+  # Use max_pages: 2+ sparingly — deeper pagination crosses robots.txt lines.
+  # Dual-lane example: platform/SRE + AI application/enablement queries.
   - source_id: hiring_cafe
     slug: senior-engineer-remote
     label: "Senior Engineer Remote"
@@ -35,3 +38,18 @@ queries:
     max_pages: 1
     enabled: true
     search_query: "principal engineer remote"
+  # Example: AI application / enablement lane
+  # - source_id: hiring_cafe
+  #   slug: ai-engineer-remote
+  #   label: "AI Engineer Remote"
+  #   commitment: full_time
+  #   max_pages: 2
+  #   enabled: true
+  #   search_query: "ai engineer remote"
+  # - source_id: hiring_cafe
+  #   slug: forward-deployed-engineer
+  #   label: "Forward Deployed"
+  #   commitment: full_time
+  #   max_pages: 2
+  #   enabled: true
+  #   search_query: "forward deployed engineer"
