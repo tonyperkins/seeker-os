@@ -46,6 +46,8 @@ export function GenerateResumeButton({
   const [mode, setMode] = useState<"ai" | "manual">("ai");
   const [manualText, setManualText] = useState("");
   const [manualBusy, setManualBusy] = useState(false);
+  const [excludeEarlyCareer, setExcludeEarlyCareer] = useState(false);
+  const [excludePortfolio, setExcludePortfolio] = useState(false);
 
   async function saveManual() {
     if (!manualText.trim()) {
@@ -71,7 +73,11 @@ export function GenerateResumeButton({
     setEvents([]);
 
     try {
-      const { response, controller } = api.resumes.generateStream(jobId, task);
+      const excludeSections: string[] = [];
+      if (excludeEarlyCareer) excludeSections.push("Early Career");
+      if (excludePortfolio) excludeSections.push("Portfolio Projects");
+
+      const { response, controller } = api.resumes.generateStream(jobId, task, excludeSections.length > 0 ? excludeSections : undefined);
       abortRef.current = controller;
 
       const resp = await response;
@@ -151,6 +157,8 @@ export function GenerateResumeButton({
       setResult(null);
       setMode("ai");
       setManualText("");
+      setExcludeEarlyCareer(false);
+      setExcludePortfolio(false);
     }
   }
 
@@ -307,6 +315,29 @@ export function GenerateResumeButton({
                 <option value="resume_generation_standard" className="bg-background text-foreground">Standard</option>
                 <option value="resume_generation_high_value" className="bg-background text-foreground">High Value</option>
               </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Optional sections</label>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={excludeEarlyCareer}
+                    onChange={(e) => setExcludeEarlyCareer(e.target.checked)}
+                    className="size-4 rounded border-input accent-primary"
+                  />
+                  Exclude Early Career
+                </label>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={excludePortfolio}
+                    onChange={(e) => setExcludePortfolio(e.target.checked)}
+                    className="size-4 rounded border-input accent-primary"
+                  />
+                  Exclude Portfolio Projects
+                </label>
+              </div>
             </div>
           </div>
         ) : !busy && mode === "manual" && (

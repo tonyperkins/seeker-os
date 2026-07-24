@@ -151,6 +151,7 @@ def _build_tiering_instructions(
     mid_old_active: bool = False,
     portfolio_active: bool = False,
     competency_active: bool = False,
+    excluded_sections: list[str] | None = None,
 ) -> str:
     """Build recency/relevance tiering instructions from channel_rules config.
 
@@ -212,10 +213,24 @@ def _build_tiering_instructions(
         recent_line,
         mid_line,
         old_line,
-        "- NEVER drop a role entirely or alter dates/titles. This is about bullet COUNT per role, not removing history.",
+    ]
+
+    excluded_set = set(excluded_sections) if excluded_sections else set()
+    if excluded_set:
+        excluded_names = ", ".join(sorted(excluded_set))
+        lines.append(
+            f"- The following sections have been EXCLUDED from this resume: {excluded_names}. "
+            f"They are not present in the master resume text provided — do not add or invent them."
+        )
+    else:
+        lines.append(
+            "- NEVER drop a role entirely or alter dates/titles. This is about bullet COUNT per role, not removing history."
+        )
+
+    lines.extend([
         "- JD-relevance can PROMOTE an older role's bullet: if a bullet from an older role directly matches the target JD's stack or requirements, keep it even when compressing. Recency is the default axis; JD-relevance can override downward compression.",
         "- All honesty/traceability rules still apply. Compressing means SELECTING which true bullets to show — never invent or merge into new claims.",
-    ]
+    ])
 
     if portfolio_active:
         lines.append(
@@ -282,6 +297,7 @@ def _run_deterministic_bullet_selection(
     jd_text: str,
     job_title: str,
     operation_id: str,
+    exclude_sections: list[str] | None = None,
 ) -> tuple[str, dict[str, str], dict[str, str], bool, bool, bool, list[str], list[str]]:
     """Phase 1 + 1d + 3: deterministically select bullets and competency
     categories by JD relevance.
@@ -705,6 +721,7 @@ def _run_deterministic_bullet_selection(
         master_resume_for_prompt = render_filtered_master(
             parsed, selections, dropped_project_ids, dropped_category_line_nos,
             kept_items=cat_result.kept_items if cat_result.kept_items else None,
+            excluded_sections=set(exclude_sections) if exclude_sections else None,
         )
 
         # Extract key terms for PDF key-term survival assertion:
@@ -757,6 +774,7 @@ def generate_resume(
     temperature: float = 0.7,
     max_tokens: int | None = None,
     progress_cb: Callable[[str, str, str, str], None] | None = None,
+    exclude_sections: list[str] | None = None,
 ) -> dict:
     """Generate a tailored resume for a specific job.
 
@@ -816,6 +834,7 @@ def generate_resume(
         jd_text=jd_text,
         job_title=job["title"] or "",
         operation_id=operation_id,
+        exclude_sections=exclude_sections,
     )
 
     # 4. Build prompts
@@ -876,6 +895,7 @@ def generate_resume(
         mid_old_active=mid_old_active,
         portfolio_active=portfolio_active,
         competency_active=competency_active,
+        excluded_sections=exclude_sections,
     )
     if tiering_text:
         system_prompt += f"\n\n--- CONTENT TIERING (resume) ---\n{tiering_text}\n--- END CONTENT TIERING ---\n"

@@ -291,6 +291,7 @@ def render_filtered_master(
     dropped_project_ids: set[str] | None = None,
     dropped_category_line_nos: set[int] | None = None,
     kept_items: dict[str, list[str]] | None = None,
+    excluded_sections: set[str] | None = None,
 ) -> str:
     """Rebuild the master resume text, keeping only the selected bullet
     indices (by original bullet_index, preserving original order) for roles
@@ -318,6 +319,20 @@ def render_filtered_master(
     are always preserved — only bullet lines are subject to selection.
     """
     drop_lines: set[int] = set()
+
+    # Excluded sections: drop all lines for roles/projects in named sections
+    excluded_sections = excluded_sections or set()
+    if excluded_sections:
+        for role in parsed.roles:
+            if role.section in excluded_sections:
+                drop_lines.add(role.heading_line)
+                drop_lines.update(role.content_line_nos)
+                drop_lines.update(b.line_no for b in role.bullets)
+        if _PORTFOLIO_SECTION in excluded_sections:
+            for project in parsed.projects:
+                drop_lines.add(project.heading_line)
+                drop_lines.update(project.stack_line_nos)
+                drop_lines.update(b.line_no for b in project.bullets)
 
     # Role bullet drops
     for role in parsed.roles:

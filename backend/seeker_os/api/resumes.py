@@ -323,6 +323,7 @@ class ResumeGenerateRequest(BaseModel):
     task: str = "resume_generation_standard"  # or "resume_generation_high_value"
     temperature: float = 0.7
     max_tokens: int | None = None  # None = resolve from config/defaults
+    exclude_sections: list[str] = []  # e.g. ["Early Career", "Portfolio Projects"]
 
 
 class ResumeManualCreate(BaseModel):
@@ -582,6 +583,7 @@ def generate_resume(body: ResumeGenerateRequest):
             task=body.task,
             temperature=body.temperature,
             max_tokens=body.max_tokens,
+            exclude_sections=body.exclude_sections,
         )
         return result
     except FileNotFoundError as e:
@@ -640,6 +642,7 @@ def generate_resume_stream(body: ResumeGenerateRequest):
                 task=body.task,
                 temperature=body.temperature,
                 max_tokens=body.max_tokens,
+                exclude_sections=body.exclude_sections,
                 progress_cb=progress_cb,
             )
             logger.info("resume_stream job_id=%s: background thread completed, putting done", body.job_id)

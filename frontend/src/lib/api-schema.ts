@@ -4666,6 +4666,11 @@ export interface components {
             temperature: number;
             /** Max Tokens */
             max_tokens?: number | null;
+            /**
+             * Exclude Sections
+             * @default []
+             */
+            exclude_sections?: string[];
         };
         /**
          * ResumeManualCreate

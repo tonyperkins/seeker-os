@@ -379,12 +379,18 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ job_id: jobId, resume_text: resumeText }),
       }),
-    generateStream: (jobId: number, task?: string) => {
+    generateStream: (jobId: number, task?: string, excludeSections?: string[]) => {
       const controller = new AbortController();
       const response = fetch(`${API_BASE}/api/resumes/generate/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: jobId, task: task || "resume_generation_standard" }),
+        body: JSON.stringify({
+          job_id: jobId,
+          task: task || "resume_generation_standard",
+          ...(excludeSections && excludeSections.length > 0
+            ? { exclude_sections: excludeSections }
+            : {}),
+        }),
         signal: controller.signal,
       });
       return { response, controller };
