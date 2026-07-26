@@ -107,6 +107,7 @@ function JobsPageInner() {
         runId={state.runId}
         verdict={state.verdict}
         hideRejected={state.hideRejected}
+        hideCompanyRejected={state.hideCompanyRejected}
         hideSkipped={state.hideSkipped}
         loading={loading}
         setStatus={setters.setStatus}
@@ -117,6 +118,7 @@ function JobsPageInner() {
         setRunId={setters.setRunId}
         setVerdict={setters.setVerdict}
         setHideRejected={setters.setHideRejected}
+        setHideCompanyRejected={setters.setHideCompanyRejected}
         setHideSkipped={setters.setHideSkipped}
         onReset={resetFilters}
         onRefresh={refetch}

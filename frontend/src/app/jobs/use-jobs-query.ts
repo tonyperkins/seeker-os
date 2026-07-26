@@ -15,6 +15,7 @@ export interface JobsQueryState {
   runId: string;
   verdict: string;
   hideRejected: boolean;
+  hideCompanyRejected: boolean;
   hideSkipped: boolean;
   sortKey: JobSortKey;
   sortDir: "asc" | "desc";
@@ -32,6 +33,7 @@ export interface JobsQueryResult {
     setRunId: (v: string) => void;
     setVerdict: (v: string) => void;
     setHideRejected: (v: boolean) => void;
+    setHideCompanyRejected: (v: boolean) => void;
     setHideSkipped: (v: boolean) => void;
     setSortKey: (v: JobSortKey) => void;
     setSortDir: (v: "asc" | "desc") => void;
@@ -59,6 +61,7 @@ export function useJobsQuery(): JobsQueryResult {
   const [runId, setRunId] = usePersistentState<string>("jobs:filter:runId", searchParams.get("run_id") ?? "", !clearFilters && !searchParams.get("run_id"));
   const [verdict, setVerdict] = usePersistentState<string>("jobs:filter:verdict", searchParams.get("verdict") ?? "", !clearFilters && !searchParams.get("verdict"));
   const [hideRejected, setHideRejected] = usePersistentState<boolean>("jobs:filter:hideRejected", searchParams.get("hide_rejected") === "1", !clearFilters && !searchParams.has("hide_rejected"));
+  const [hideCompanyRejected, setHideCompanyRejected] = usePersistentState<boolean>("jobs:filter:hideCompanyRejected", searchParams.get("hide_company_rejected") === "1", !clearFilters && !searchParams.has("hide_company_rejected"));
   const [hideSkipped, setHideSkipped] = usePersistentState<boolean>("jobs:filter:hideSkipped", searchParams.get("hide_skipped") === "1", !clearFilters && !searchParams.has("hide_skipped"));
   const [sortKey, setSortKey] = usePersistentState<JobSortKey>("jobs:sort:key", (searchParams.get("sort_by") as JobSortKey | null) ?? "score", !clearFilters && !searchParams.has("sort_by"));
   const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">("jobs:sort:dir", searchParams.get("order") === "asc" ? "asc" : "desc", !clearFilters && !searchParams.has("order"));
@@ -95,6 +98,7 @@ export function useJobsQuery(): JobsQueryResult {
       if (verdict) params.verdict = verdict;
       const excluded: string[] = [];
       if (hideRejected) excluded.push("rejected");
+      if (hideCompanyRejected) excluded.push("company_rejected");
       if (hideSkipped) excluded.push("skipped");
       if (excluded.length > 0) params.exclude_status = excluded.join(",");
       const data = await api.jobs.list(params, { signal });
@@ -107,7 +111,7 @@ export function useJobsQuery(): JobsQueryResult {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [status, minScore, debouncedCompany, debouncedSearch, source, debouncedRunId, verdict, hideRejected, hideSkipped, page, sortKey, sortDir]);
+  }, [status, minScore, debouncedCompany, debouncedSearch, source, debouncedRunId, verdict, hideRejected, hideCompanyRejected, hideSkipped, page, sortKey, sortDir]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -122,7 +126,7 @@ export function useJobsQuery(): JobsQueryResult {
     return () => controller.abort();
   }, [fetchJobs, hydrated]);
 
-  const filterKey = `${status}|${minScore}|${company}|${search}|${source}|${runId}|${verdict}|${hideRejected}|${hideSkipped}`;
+  const filterKey = `${status}|${minScore}|${company}|${search}|${source}|${runId}|${verdict}|${hideRejected}|${hideCompanyRejected}|${hideSkipped}`;
   const prevFilterKey = useRef(filterKey);
   useEffect(() => {
     if (prevFilterKey.current !== filterKey) {
@@ -140,13 +144,14 @@ export function useJobsQuery(): JobsQueryResult {
     setRunId("");
     setVerdict("");
     setHideRejected(false);
+    setHideCompanyRejected(false);
     setHideSkipped(false);
     setPage(1);
   }
 
   return {
-    state: { status, minScore, company, search, source, runId, verdict, hideRejected, hideSkipped, sortKey, sortDir, page },
-    setters: { setStatus, setMinScore, setCompany, setSearch, setSource, setRunId, setVerdict, setHideRejected, setHideSkipped, setSortKey, setSortDir, setPage },
+    state: { status, minScore, company, search, source, runId, verdict, hideRejected, hideCompanyRejected, hideSkipped, sortKey, sortDir, page },
+    setters: { setStatus, setMinScore, setCompany, setSearch, setSource, setRunId, setVerdict, setHideRejected, setHideCompanyRejected, setHideSkipped, setSortKey, setSortDir, setPage },
     jobs,
     total,
     loading,

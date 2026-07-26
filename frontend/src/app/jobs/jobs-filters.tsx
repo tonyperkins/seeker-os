@@ -17,6 +17,7 @@ interface JobsFiltersProps {
   runId: string;
   verdict: string;
   hideRejected: boolean;
+  hideCompanyRejected: boolean;
   hideSkipped: boolean;
   loading: boolean;
   setStatus: (v: string) => void;
@@ -27,6 +28,7 @@ interface JobsFiltersProps {
   setRunId: (v: string) => void;
   setVerdict: (v: string) => void;
   setHideRejected: (v: boolean) => void;
+  setHideCompanyRejected: (v: boolean) => void;
   setHideSkipped: (v: boolean) => void;
   onReset: () => void;
   onRefresh: () => void;
@@ -35,13 +37,13 @@ interface JobsFiltersProps {
 export function JobsFilters(props: JobsFiltersProps) {
   const {
     status, minScore, company, search, source, runId, verdict,
-    hideRejected, hideSkipped, loading,
+    hideRejected, hideCompanyRejected, hideSkipped, loading,
     setStatus, setMinScore, setCompany, setSearch, setSource,
-    setRunId, setVerdict, setHideRejected, setHideSkipped,
+    setRunId, setVerdict, setHideRejected, setHideCompanyRejected, setHideSkipped,
     onReset, onRefresh,
   } = props;
 
-  const activeCount = [status, source, minScore, runId, search, company, verdict, hideRejected ? "hr" : null, hideSkipped ? "hs" : null].filter(Boolean).length;
+  const activeCount = [status, source, minScore, runId, search, company, verdict, hideRejected ? "hr" : null, hideCompanyRejected ? "hcr" : null, hideSkipped ? "hs" : null].filter(Boolean).length;
 
   return (
     <CollapsibleCard
@@ -167,6 +169,16 @@ export function JobsFilters(props: JobsFiltersProps) {
               }`}
             >
               Rejected
+            </button>
+            <button
+              onClick={() => setHideCompanyRejected(!hideCompanyRejected)}
+              className={`rounded-md border px-3 py-1 text-xs font-medium transition-all ${
+                hideCompanyRejected
+                  ? "border-border bg-red-600 text-white"
+                  : "border-border bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+              }`}
+            >
+              Company Rejected
             </button>
             <button
               onClick={() => setHideSkipped(!hideSkipped)}
