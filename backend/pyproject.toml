@@ -30,7 +30,8 @@ dev = [
     "mypy>=1.11",
 ]
 browser = [
-    "playwright>=1.40",      # Headless browser fallback for Vercel JS challenges
+    "playwright>=1.40",      # Headless browser fallback for Vercel/Cloudflare JS challenges
+    "playwright-stealth>=2.0",  # Stealth evasions to avoid bot detection (WebGL, canvas, etc.)
 ]
 
 [build-system]
