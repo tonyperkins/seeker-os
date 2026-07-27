@@ -179,25 +179,45 @@ def run_auto_analysis(
 
     candidates = select_unanalyzed_high_scorers(db, scoring, limit=limit)
     total = len(candidates)
+    if total == 0:
+        return {"candidates": 0, "analyzed": 0, "failed": 0, "job_ids": [], "errors": []}
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    max_workers = min(total, 4)
     analyzed_ids: list[int] = []
     errors: list[str] = []
+    completed = 0
 
-    for i, row in enumerate(candidates):
+    def _analyze_one(job_id: int, title: str, company: str) -> tuple[int, str | None]:
         try:
-            analyze_fn(settings=settings, job_id=row["id"])
-            analyzed_ids.append(row["id"])
+            analyze_fn(settings=settings, job_id=job_id)
+            return (job_id, None)
         except Exception as exc:
             logger.warning(
                 "Auto-analysis failed for job %s (%r @ %s): %s",
-                row["id"], row["title"], row["company"], exc,
+                job_id, title, company, exc,
             )
-            errors.append(f"job {row['id']}: {exc}")
+            return (job_id, f"job {job_id}: {exc}")
 
-        if progress_cb:
-            progress_cb(
-                i + 1, total,
-                f"{len(analyzed_ids)} analyzed, {len(errors)} failed — {row['title'][:40]}",
-            )
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_analyze_one, row["id"], row["title"], row["company"]): row
+            for row in candidates
+        }
+        for future in as_completed(futures):
+            row = futures[future]
+            job_id, error = future.result()
+            completed += 1
+            if error:
+                errors.append(error)
+            else:
+                analyzed_ids.append(job_id)
+            if progress_cb:
+                progress_cb(
+                    completed, total,
+                    f"{len(analyzed_ids)} analyzed, {len(errors)} failed — {row['title'][:40]}",
+                )
 
     return {
         "candidates": len(candidates),
