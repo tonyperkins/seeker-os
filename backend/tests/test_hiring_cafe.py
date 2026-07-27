@@ -13,7 +13,7 @@ def _make_config() -> SourceConfig:
     return SourceConfig(
         id="hiring_cafe",
         type="hiring_cafe",
-        base_url="https://hiring.cafe",
+        base_url="https://hiringcafe.com",
         source_map={"grnhse": "greenhouse", "hiring_cafe_pin": "SKIP"},
         request_delay_seconds=0,  # no delay in tests
         user_agent="test-agent",
@@ -59,7 +59,7 @@ def _make_mock_html() -> str:
                     {
                         "id": "hiring_cafe_pin___sponsored___999",
                         "source": "hiring_cafe_pin",
-                        "apply_url": "https://hiring.cafe/sponsored/999",
+                        "apply_url": "https://hiringcafe.com/sponsored/999",
                         "is_hc_pinned": True,
                         "job_information": {"title": "Sponsored Job"},
                         "v5_processed_job_data": {
@@ -130,7 +130,7 @@ class TestHiringCafeAdapter:
         adapter = HiringCafeAdapter(_make_config(), cache)
 
         # Pre-populate cache (page 0 uses bare URL, no ?page=0)
-        cache.set("https://hiring.cafe/jobs/test", _make_mock_html())
+        cache.set("https://hiringcafe.com/jobs/test", _make_mock_html())
 
         query = SourceQuery(source_id="hiring_cafe", slug="test", label="Test")
         page = adapter.fetch_jobs(query, page=0)
@@ -246,7 +246,7 @@ class TestHiringCafeAdapter:
             adapter.fetch_jobs(query, page=0)
 
         assert len(captured_urls) == 1
-        assert captured_urls[0] == "https://hiring.cafe/jobs/senior-sre-remote"
+        assert captured_urls[0] == "https://hiringcafe.com/jobs/senior-sre-remote"
 
     def test_search_query_pagination(self, tmp_path):
         """searchState URL with page > 0 uses &page= param."""
