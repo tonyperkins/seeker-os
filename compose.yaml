@@ -21,13 +21,31 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - GMAIL_OAUTH_CLIENT_ID=${GMAIL_OAUTH_CLIENT_ID:-}
       - GMAIL_OAUTH_CLIENT_SECRET=${GMAIL_OAUTH_CLIENT_SECRET:-}
+      - FLARESOLVERR_URL=${FLARESOLVERR_URL:-http://flaresolverr:8191}
       # Most API keys live in data/.env (mounted volume) and are loaded by
       # python-dotenv. Gmail OAuth values are also passed explicitly above so
       # Dockhand/Compose stack variables reach this container.
+    depends_on:
+      flaresolverr:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=${FLARESOLVERR_LOG_LEVEL:-info}
+      - TZ=${TZ:-UTC}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8191/health')"]
+      interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
