@@ -100,6 +100,13 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 60000) -> str
             page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
 
             content = page.content()
+            logger.info(
+                "Initial page loaded — url=%s, title=%s, content_len=%d, "
+                "has_NEXT_DATA=%s, is_challenge=%s",
+                page.url, page.title(), len(content),
+                "__NEXT_DATA__" in content, _is_challenge_page(content),
+            )
+            logger.debug("Initial page content (first 500 chars): %s", content[:500])
 
             if _is_challenge_page(content):
                 logger.info("JS challenge detected (Vercel/Cloudflare), waiting for JS to resolve...")
@@ -112,6 +119,12 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 60000) -> str
                     logger.warning("networkidle timeout during challenge, continuing to poll...")
 
                 content = page.content()
+                logger.info(
+                    "After networkidle — url=%s, title=%s, content_len=%d, has_NEXT_DATA=%s",
+                    page.url, page.title(), len(content), "__NEXT_DATA__" in content,
+                )
+                logger.debug("Post-networkidle content (first 500 chars): %s", content[:500])
+
                 if "__NEXT_DATA__" not in content:
                     try:
                         page.wait_for_function(
@@ -126,14 +139,28 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 60000) -> str
                         except PlaywrightTimeout:
                             pass
                         content = page.content()
-                        logger.info("Challenge resolved, page loaded: %s", page.title())
+                        logger.info(
+                            "Challenge resolved — url=%s, title=%s, content_len=%d",
+                            page.url, page.title(), len(content),
+                        )
                     except PlaywrightTimeout:
+                        logger.warning(
+                            "Challenge timeout — url=%s, title=%s, content_len=%d, "
+                            "has_NEXT_DATA=%s, content_snippet=%s",
+                            page.url, page.title(), len(content),
+                            "__NEXT_DATA__" in content, content[:300],
+                        )
                         logger.warning("Challenge timeout, trying reload...")
                         page.reload(wait_until="domcontentloaded", timeout=timeout_ms)
                         try:
                             page.wait_for_load_state("networkidle", timeout=timeout_ms)
                         except PlaywrightTimeout:
                             pass
+                        content = page.content()
+                        logger.info(
+                            "After reload — url=%s, title=%s, content_len=%d, has_NEXT_DATA=%s",
+                            page.url, page.title(), len(content), "__NEXT_DATA__" in content,
+                        )
                         try:
                             page.wait_for_function(
                                 """() => {
@@ -143,7 +170,12 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 60000) -> str
                             )
                             content = page.content()
                         except PlaywrightTimeout:
-                            logger.warning("Challenge still unresolved after reload, using best-effort content")
+                            logger.warning(
+                                "Challenge still unresolved after reload — url=%s, title=%s, "
+                                "content_len=%d, has_NEXT_DATA=%s, content_snippet=%s",
+                                page.url, page.title(), len(content),
+                                "__NEXT_DATA__" in content, content[:300],
+                            )
                             content = page.content()
 
             # Only cache cookies if the page actually loaded (has __NEXT_DATA__).
@@ -165,7 +197,11 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 60000) -> str
                     _cookie_timestamps[domain] = time.time()
                     logger.info("Cached %d cookies for %s (challenge solved)", len(cookie_jar), domain)
             else:
-                logger.warning("Not caching cookies — page does not contain __NEXT_DATA__ (challenge unresolved)")
+                logger.warning(
+                    "Not caching cookies — page does not contain __NEXT_DATA__ (challenge unresolved). "
+                    "Final url=%s, title=%s, content_len=%d, content_snippet=%s",
+                    page.url, page.title(), len(content), content[:300],
+                )
 
             return content
         finally:
