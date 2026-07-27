@@ -12,7 +12,7 @@ export const STATUS_OPTIONS = [
 
 export const SOURCE_OPTIONS = [
   { value: "manual", label: "Manual" },
-  { value: "hiring_cafe", label: "hiring.cafe" },
+  { value: "hiring_cafe", label: "hiringcafe.com" },
 ];
 
 export const VERDICT_OPTIONS = [

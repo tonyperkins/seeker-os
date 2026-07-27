@@ -188,7 +188,7 @@ export default function QueriesPage() {
             <DialogHeader>
               <DialogTitle>Add new query</DialogTitle>
               <DialogDescription>
-                Define a hiring.cafe search slug and options.
+                Define a hiringcafe.com search slug and options.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3">

@@ -61,7 +61,7 @@ class HiringCafeAdapter:
     def __init__(self, config: SourceConfig, cache: DiskCache):
         self._id = config.id
         self._type = config.type
-        self.base_url = config.base_url or "https://hiring.cafe"
+        self.base_url = config.base_url or "https://hiringcafe.com"
         self.source_map = config.source_map
         self.request_delay = config.request_delay_seconds
         self.user_agent = config.user_agent
