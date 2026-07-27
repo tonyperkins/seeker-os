@@ -106,11 +106,12 @@ class HiringCafeAdapter:
         # Try httpx — with cached Vercel cookies if we have them.
         # Even after initial block, cached cookies from a browser solve
         # may let httpx work again.
-        from seeker_os.discovery.browser_fetch import get_cached_cookies
+        from seeker_os.discovery.browser_fetch import get_cached_cookies, get_cached_user_agent
         cached_cookies = get_cached_cookies(domain)
+        cached_ua = get_cached_user_agent(domain) if cached_cookies else None
 
         headers = {
-            "User-Agent": self.user_agent,
+            "User-Agent": cached_ua or self.user_agent,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br",
