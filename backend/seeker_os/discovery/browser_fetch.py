@@ -45,11 +45,11 @@ except ImportError:
 _cached_cookies: dict[str, dict[str, str]] = {}
 _cookie_timestamps: dict[str, float] = {}
 _cached_user_agents: dict[str, str] = {}
-_COOKIE_TTL_SECONDS = 300  # 5 minutes — challenge cookies are short-lived
+_COOKIE_TTL_SECONDS = 1800  # 30 minutes — cf_clearance typically lasts 30+ min
 
-# Track domains where stealth Playwright has already failed, so we skip
-# the ~4-minute timeout and go directly to FlareSolverr on subsequent pages.
-_stealth_failed_domains: set[str] = set()
+# FlareSolverr session ID for reuse across requests. Created on first use,
+# reused for subsequent requests to avoid re-solving the challenge.
+_flaresolverr_session_id: str | None = None
 
 # Strings that indicate a JS challenge page (Vercel or Cloudflare).
 _CHALLENGE_MARKERS = [
@@ -117,12 +117,50 @@ def _cache_cookies_from_list(url: str, cookies: list[dict]) -> None:
         logger.info("Cached %d cookies for %s", len(cookie_jar), domain)
 
 
+def _get_or_create_flaresolverr_session(timeout_ms: int = 60000) -> str | None:
+    """Get or create a FlareSolverr session for cookie reuse.
+
+    FlareSolverr sessions keep the browser context alive between requests,
+    so Cloudflare cookies persist and subsequent requests don't need to
+    re-solve the challenge. Returns the session ID, or None if creation fails.
+    """
+    global _flaresolverr_session_id
+    if _flaresolverr_session_id is not None:
+        return _flaresolverr_session_id
+
+    fs_url = _get_flaresolverr_url()
+    if not fs_url:
+        return None
+
+    import httpx
+
+    try:
+        resp = httpx.post(
+            fs_url.rstrip("/") + "/v1",
+            json={"cmd": "sessions.create"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("status") == "ok":
+            _flaresolverr_session_id = data.get("session", "")
+            logger.info("Created FlareSolverr session: %s", _flaresolverr_session_id)
+            return _flaresolverr_session_id
+    except Exception as e:
+        logger.warning("Failed to create FlareSolverr session: %s", e)
+
+    return None
+
+
 def _fetch_with_flaresolverr(url: str, timeout_ms: int = 60000) -> str:
     """Fetch a URL via FlareSolverr proxy, which solves Cloudflare challenges.
 
     FlareSolverr runs as a separate Docker service and exposes an HTTP API
     on port 8191. It uses a real browser with anti-detection measures to
     solve Cloudflare managed challenges.
+
+    Uses a persistent session when possible so that Cloudflare cookies are
+    reused across requests, avoiding re-solving the challenge each time.
     """
     fs_url = _get_flaresolverr_url()
     if not fs_url:
@@ -130,15 +168,21 @@ def _fetch_with_flaresolverr(url: str, timeout_ms: int = 60000) -> str:
 
     import httpx
 
-    logger.info("Trying FlareSolverr fallback for %s", url)
+    session_id = _get_or_create_flaresolverr_session(timeout_ms=timeout_ms)
+
+    logger.info("Trying FlareSolverr for %s (session=%s)", url, session_id or "none")
     try:
+        payload: dict = {
+            "cmd": "request.get",
+            "url": url,
+            "maxTimeout": timeout_ms,
+        }
+        if session_id:
+            payload["session"] = session_id
+
         resp = httpx.post(
             fs_url.rstrip("/") + "/v1",
-            json={
-                "cmd": "request.get",
-                "url": url,
-                "maxTimeout": timeout_ms,
-            },
+            json=payload,
             timeout=timeout_ms / 1000 + 30,
         )
         resp.raise_for_status()
@@ -315,40 +359,31 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 60000) -> str
 
 
 def fetch_with_browser(url: str, timeout_ms: int = 60000) -> str:
-    """Fetch a URL using a headless browser with stealth evasions, solving any JS challenge.
+    """Fetch a URL using a headless browser, solving any JS challenge.
 
-    Tries Playwright with playwright-stealth first. If the challenge remains
-    unresolved (no __NEXT_DATA__ in final content), falls back to FlareSolverr
-    if configured via FLARESOLVERR_URL env var.
+    When FlareSolverr is configured (FLARESOLVERR_URL env var), goes directly
+    to FlareSolverr — it's faster (~11s vs ~4min for stealth to fail) and
+    actually works in Docker/Xvfb environments where stealth Playwright
+    can't pass Cloudflare's WebGL fingerprinting.
 
-    If stealth has already failed for this domain (tracked in
-    _stealth_failed_domains), skips directly to FlareSolverr to avoid
-    wasting ~4 minutes per page on a known-failing stealth attempt.
+    Falls back to stealth Playwright only when FlareSolverr is not configured.
 
     Raises RuntimeError if neither Playwright nor FlareSolverr is available.
     Raises TimeoutError if the page doesn't load within timeout_ms.
     """
-    from urllib.parse import urlparse
-    domain = urlparse(url).hostname or ""
     fs_url = _get_flaresolverr_url()
 
-    # If stealth already failed for this domain and FlareSolverr is available,
-    # skip the ~4-minute Playwright timeout and go directly to FlareSolverr.
-    if fs_url and domain in _stealth_failed_domains:
-        logger.info("Stealth previously failed for %s, using FlareSolverr directly", domain)
+    # FlareSolverr is the preferred path — it works in Docker, stealth doesn't.
+    if fs_url:
         return _fetch_with_flaresolverr(url, timeout_ms=timeout_ms)
 
+    # No FlareSolverr — try stealth Playwright as last resort.
     content = _solve_challenge_and_cache_cookies(url, timeout_ms=timeout_ms)
 
     if "__NEXT_DATA__" not in content:
-        if fs_url:
-            logger.warning("Stealth browser failed to resolve challenge, falling back to FlareSolverr")
-            _stealth_failed_domains.add(domain)
-            content = _fetch_with_flaresolverr(url, timeout_ms=timeout_ms)
-        else:
-            logger.warning(
-                "Challenge unresolved and FlareSolverr not configured (FLARESOLVERR_URL env var). "
-                "Consider adding FlareSolverr to docker-compose for Cloudflare challenges."
-            )
+        logger.warning(
+            "Challenge unresolved and FlareSolverr not configured (FLARESOLVERR_URL env var). "
+            "Consider adding FlareSolverr to docker-compose for Cloudflare challenges."
+        )
 
     return content
