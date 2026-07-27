@@ -72,7 +72,7 @@ def _is_challenge_page(content: str) -> bool:
     return any(marker in content for marker in _CHALLENGE_MARKERS)
 
 
-def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 30000) -> str:
+def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 60000) -> str:
     """Launch browser, solve JS challenge (Vercel or Cloudflare), cache cookies, return HTML.
 
     This is the full browser path — used when we don't have cached cookies.
@@ -103,18 +103,16 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 30000) -> str
 
             if _is_challenge_page(content):
                 logger.info("JS challenge detected (Vercel/Cloudflare), waiting for JS to resolve...")
+                # Cloudflare's managed challenge makes network requests to
+                # challenges.cloudflare.com before redirecting. Wait for
+                # network to settle first, then poll for __NEXT_DATA__.
                 try:
-                    page.wait_for_function(
-                        """() => {
-                            return document.querySelector('script#__NEXT_DATA__') !== null;
-                        }""",
-                        timeout=timeout_ms,
-                    )
-                    content = page.content()
-                    logger.info("Challenge resolved, page loaded: %s", page.title())
+                    page.wait_for_load_state("networkidle", timeout=timeout_ms)
                 except PlaywrightTimeout:
-                    logger.warning("Challenge timeout, trying reload...")
-                    page.reload(wait_until="domcontentloaded", timeout=timeout_ms)
+                    logger.warning("networkidle timeout during challenge, continuing to poll...")
+
+                content = page.content()
+                if "__NEXT_DATA__" not in content:
                     try:
                         page.wait_for_function(
                             """() => {
@@ -122,10 +120,31 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 30000) -> str
                             }""",
                             timeout=timeout_ms,
                         )
+                        # Ensure the redirected page is fully loaded
+                        try:
+                            page.wait_for_load_state("networkidle", timeout=10000)
+                        except PlaywrightTimeout:
+                            pass
                         content = page.content()
+                        logger.info("Challenge resolved, page loaded: %s", page.title())
                     except PlaywrightTimeout:
-                        logger.warning("Challenge still unresolved after reload, using best-effort content")
-                        content = page.content()
+                        logger.warning("Challenge timeout, trying reload...")
+                        page.reload(wait_until="domcontentloaded", timeout=timeout_ms)
+                        try:
+                            page.wait_for_load_state("networkidle", timeout=timeout_ms)
+                        except PlaywrightTimeout:
+                            pass
+                        try:
+                            page.wait_for_function(
+                                """() => {
+                                    return document.querySelector('script#__NEXT_DATA__') !== null;
+                                }""",
+                                timeout=timeout_ms,
+                            )
+                            content = page.content()
+                        except PlaywrightTimeout:
+                            logger.warning("Challenge still unresolved after reload, using best-effort content")
+                            content = page.content()
 
             # Only cache cookies if the page actually loaded (has __NEXT_DATA__).
             # Caching cookies from an unresolved challenge page poisons subsequent
@@ -153,7 +172,7 @@ def _solve_challenge_and_cache_cookies(url: str, timeout_ms: int = 30000) -> str
             browser.close()
 
 
-def fetch_with_browser(url: str, timeout_ms: int = 30000) -> str:
+def fetch_with_browser(url: str, timeout_ms: int = 60000) -> str:
     """Fetch a URL using a headless browser, solving any JS challenge.
 
     Launches Chromium in non-headless mode (Vercel/Cloudflare challenges detect
