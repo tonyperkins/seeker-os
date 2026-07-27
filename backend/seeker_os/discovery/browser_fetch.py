@@ -44,7 +44,12 @@ except ImportError:
 # Keyed by domain. Expires after _COOKIE_TTL_SECONDS.
 _cached_cookies: dict[str, dict[str, str]] = {}
 _cookie_timestamps: dict[str, float] = {}
+_cached_user_agents: dict[str, str] = {}
 _COOKIE_TTL_SECONDS = 300  # 5 minutes — challenge cookies are short-lived
+
+# Track domains where stealth Playwright has already failed, so we skip
+# the ~4-minute timeout and go directly to FlareSolverr on subsequent pages.
+_stealth_failed_domains: set[str] = set()
 
 # Strings that indicate a JS challenge page (Vercel or Cloudflare).
 _CHALLENGE_MARKERS = [
@@ -75,8 +80,16 @@ def get_cached_cookies(domain: str) -> dict[str, str] | None:
     if time.time() - ts > _COOKIE_TTL_SECONDS:
         _cached_cookies.pop(domain, None)
         _cookie_timestamps.pop(domain, None)
+        _cached_user_agents.pop(domain, None)
         return None
     return cookies
+
+
+def get_cached_user_agent(domain: str) -> str | None:
+    """Return the User-Agent associated with cached cookies for a domain."""
+    if domain not in _cached_cookies:
+        return None
+    return _cached_user_agents.get(domain)
 
 
 def _is_challenge_page(content: str) -> bool:
@@ -153,7 +166,10 @@ def _fetch_with_flaresolverr(url: str, timeout_ms: int = 60000) -> str:
             _cache_cookies_from_list(url, cookies)
         user_agent = solution.get("userAgent", "")
         if user_agent:
-            logger.info("FlareSolverr user-agent: %s", user_agent[:80])
+            from urllib.parse import urlparse
+            domain = urlparse(url).hostname or ""
+            _cached_user_agents[domain] = user_agent
+            logger.info("FlareSolverr user-agent cached for %s: %s", domain, user_agent[:80])
 
     return html
 
@@ -305,15 +321,29 @@ def fetch_with_browser(url: str, timeout_ms: int = 60000) -> str:
     unresolved (no __NEXT_DATA__ in final content), falls back to FlareSolverr
     if configured via FLARESOLVERR_URL env var.
 
+    If stealth has already failed for this domain (tracked in
+    _stealth_failed_domains), skips directly to FlareSolverr to avoid
+    wasting ~4 minutes per page on a known-failing stealth attempt.
+
     Raises RuntimeError if neither Playwright nor FlareSolverr is available.
     Raises TimeoutError if the page doesn't load within timeout_ms.
     """
+    from urllib.parse import urlparse
+    domain = urlparse(url).hostname or ""
+    fs_url = _get_flaresolverr_url()
+
+    # If stealth already failed for this domain and FlareSolverr is available,
+    # skip the ~4-minute Playwright timeout and go directly to FlareSolverr.
+    if fs_url and domain in _stealth_failed_domains:
+        logger.info("Stealth previously failed for %s, using FlareSolverr directly", domain)
+        return _fetch_with_flaresolverr(url, timeout_ms=timeout_ms)
+
     content = _solve_challenge_and_cache_cookies(url, timeout_ms=timeout_ms)
 
     if "__NEXT_DATA__" not in content:
-        fs_url = _get_flaresolverr_url()
         if fs_url:
             logger.warning("Stealth browser failed to resolve challenge, falling back to FlareSolverr")
+            _stealth_failed_domains.add(domain)
             content = _fetch_with_flaresolverr(url, timeout_ms=timeout_ms)
         else:
             logger.warning(

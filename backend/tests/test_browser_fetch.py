@@ -18,9 +18,13 @@ class _FakeTimeout(Exception):
 def _reset_cookie_cache():
     browser_fetch._cached_cookies.clear()
     browser_fetch._cookie_timestamps.clear()
+    browser_fetch._cached_user_agents.clear()
+    browser_fetch._stealth_failed_domains.clear()
     yield
     browser_fetch._cached_cookies.clear()
     browser_fetch._cookie_timestamps.clear()
+    browser_fetch._cached_user_agents.clear()
+    browser_fetch._stealth_failed_domains.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -255,3 +259,77 @@ class TestFlareSolverrFallback:
         monkeypatch.delenv("SEEKER_OS_NO_BROWSER", raising=False)
         with patch.object(browser_fetch, "_PLAYWRIGHT_AVAILABLE", False):
             assert browser_fetch.is_available() is False
+
+    def test_flaresolverr_caches_user_agent(self, monkeypatch):
+        """FlareSolverr should cache the user-agent alongside cookies."""
+        monkeypatch.setenv("FLARESOLVERR_URL", "http://flaresolverr:8191")
+        challenge_html = '<html><title>Just a moment...</title>challenge</html>'
+        real_html = '<html><script id="__NEXT_DATA__" type="application/json">{"props":{}}</script></html>'
+        fs_user_agent = "Mozilla/5.0 (X11; Linux x86_64) Chrome/148.0.0.0"
+
+        mock_pw = _make_mock_playwright(
+            content_sequence=[challenge_html, challenge_html, challenge_html, challenge_html],
+            cookies=[],
+        )
+
+        mock_fs_resp = MagicMock()
+        mock_fs_resp.json.return_value = {
+            "status": "ok",
+            "solution": {
+                "response": real_html,
+                "url": "https://hiringcafe.com/jobs/test",
+                "status": 200,
+                "cookies": [
+                    {"name": "cf_clearance", "value": "valid_cf_token", "domain": ".hiringcafe.com"}
+                ],
+                "userAgent": fs_user_agent,
+            },
+        }
+        mock_fs_resp.raise_for_status = MagicMock()
+
+        with patch.object(browser_fetch, "_PLAYWRIGHT_AVAILABLE", True), \
+             patch.object(browser_fetch, "_STEALTH_AVAILABLE", False), \
+             patch("seeker_os.discovery.browser_fetch.sync_playwright", return_value=mock_pw, create=True), \
+             patch("seeker_os.discovery.browser_fetch.PlaywrightTimeout", _FakeTimeout, create=True), \
+             patch("httpx.post", return_value=mock_fs_resp):
+            browser_fetch.fetch_with_browser("https://hiringcafe.com/jobs/test")
+
+        assert browser_fetch.get_cached_user_agent("hiringcafe.com") == fs_user_agent
+
+    def test_stealth_skip_after_first_failure(self, monkeypatch):
+        """After stealth fails once, subsequent calls should go directly to FlareSolverr."""
+        monkeypatch.setenv("FLARESOLVERR_URL", "http://flaresolverr:8191")
+        challenge_html = '<html><title>Just a moment...</title>challenge</html>'
+        real_html = '<html><script id="__NEXT_DATA__" type="application/json">{"props":{}}</script></html>'
+
+        mock_pw = _make_mock_playwright(
+            content_sequence=[challenge_html, challenge_html, challenge_html, challenge_html],
+            cookies=[],
+        )
+
+        mock_fs_resp = MagicMock()
+        mock_fs_resp.json.return_value = {
+            "status": "ok",
+            "solution": {
+                "response": real_html,
+                "url": "https://hiringcafe.com/jobs/test",
+                "status": 200,
+                "cookies": [],
+                "userAgent": "Mozilla/5.0 test",
+            },
+        }
+        mock_fs_resp.raise_for_status = MagicMock()
+
+        with patch.object(browser_fetch, "_PLAYWRIGHT_AVAILABLE", True), \
+             patch.object(browser_fetch, "_STEALTH_AVAILABLE", False), \
+             patch("seeker_os.discovery.browser_fetch.sync_playwright", return_value=mock_pw, create=True), \
+             patch("seeker_os.discovery.browser_fetch.PlaywrightTimeout", _FakeTimeout, create=True), \
+             patch("httpx.post", return_value=mock_fs_resp) as mock_post:
+            # First call: stealth fails, falls back to FlareSolverr
+            browser_fetch.fetch_with_browser("https://hiringcafe.com/jobs/test")
+            assert mock_post.call_count == 1
+            assert "hiringcafe.com" in browser_fetch._stealth_failed_domains
+
+            # Second call: should skip stealth, go directly to FlareSolverr
+            browser_fetch.fetch_with_browser("https://hiringcafe.com/jobs/test")
+            assert mock_post.call_count == 2  # FlareSolverr called again, Playwright not invoked
