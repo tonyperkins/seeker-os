@@ -1,0 +1,929 @@
+{
+  "audit_type": "Phase 2C Cost Recomputation V3 (Complete)",
+  "audit_date": "2026-07-28",
+  "supersedes": [
+    "cost_recomputation.json (v1)",
+    "cost_recomputation_v2.json (v2)"
+  ],
+  "v2_pricing_error": {
+    "gpt-5.6-terra": {
+      "v2_prompt_per_Mtok": 3.0,
+      "v2_completion_per_Mtok": 15.0,
+      "correct_prompt_per_Mtok": 2.5,
+      "correct_completion_per_Mtok": 15.0,
+      "evidence": "Raw JSON cost $2.1982 for JD matches $2.5/$15.0 exactly, not $3.0/$15.0"
+    },
+    "gpt-5.6-luna": {
+      "v2_prompt_per_Mtok": 0.5,
+      "v2_completion_per_Mtok": 2.0,
+      "correct_prompt_per_Mtok": 1.0,
+      "correct_completion_per_Mtok": 6.0,
+      "evidence": "Raw JSON cost $0.9776 for JD matches $1.0/$6.0 exactly, not $0.5/$2.0"
+    }
+  },
+  "methodology": "prompt_tokens \u00d7 input_price_per_Mtok + completion_tokens \u00d7 output_price_per_Mtok. Completion tokens include reasoning tokens. Token counts from raw JSON tokenUsage fields (main model only, excluding judge/assertion tokens). List-price basis (no prompt-cache discounts).",
+  "pricing_sources": {
+    "kilo_api": "https://api.kilo.ai/api/gateway/models (fetched 2026-07-27)",
+    "anthropic": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "openai": "OpenAI pricing pages (via Kilo API data)",
+    "google": "https://ai.google.dev/gemini-api/docs/pricing",
+    "mistral": "https://mistral.ai/pricing/api/ (Mistral Large 3 2512: $0.50/$1.50)",
+    "cohere": "https://cohere.com/pricing (Command A: $2.50/$10.00)",
+    "moonshot": "Moonshot official pricing (K2 series: $0.60/$2.50, EOL May 25, 2026)",
+    "deepseek": "https://deepseek.ai/pricing (V4-Flash: $0.14/$0.28, V4-Pro: $0.435/$0.87)",
+    "meta_llama": "DeepInfra pricing (Llama 4 Maverick: $0.15/$0.60, cheapest host July 2026)"
+  },
+  "pricing_basis_notes": {
+    "claude-sonnet-5": "Introductory $2/$10 pricing (valid through Aug 31, 2026; evals ran Jul 13, 2026). Standard $3/$15 gives $8.92 raw JSON cost. Introductory is the correct basis \u2014 that was the listed price when evals ran.",
+    "meta-llama_llama-4-maverick": "DeepInfra pricing ($0.15/$0.60), cheapest verified host July 2026. Model accessed via Kilo Gateway; Kilo may have charged more at eval time. Multi-host model \u2014 pricing varies by provider ($0.15-$0.90/M input).",
+    "gpt-5.6-sol": "Raw JSON JD cost $3.7345 reflects prompt-cache discounts (cache tokens at $0.50/M vs $5.00/M). Recomputed $4.0373 uses list price without cache discount for consistency across all models."
+  },
+  "models": {
+    "claude-haiku-4-5-20251001": {
+      "model": "claude-haiku-4-5-20251001",
+      "pricing": {
+        "in_mtok": 1.0,
+        "out_mtok": 5.0,
+        "source": "Anthropic pricing page"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 436624,
+          "completion_tokens": 103996,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 103996,
+          "raw_json_cost": 0.9566,
+          "recomputed_cost": 0.9566,
+          "arithmetic": "436624 \u00d7 $1.0/M + 103996 \u00d7 $5.0/M = $0.9566"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 135902,
+          "completion_tokens": 38895,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 38895,
+          "raw_json_cost": 0.3304,
+          "recomputed_cost": 0.3304,
+          "arithmetic": "135902 \u00d7 $1.0/M + 38895 \u00d7 $5.0/M = $0.3304"
+        }
+      },
+      "total_recomputed_cost": 1.287,
+      "total_raw_json_cost": 1.287,
+      "findings_cost": 0.26,
+      "draft_cost": 0.26
+    },
+    "claude-sonnet-5": {
+      "model": "claude-sonnet-5",
+      "pricing": {
+        "in_mtok": 2.0,
+        "out_mtok": 10.0,
+        "source": "Anthropic pricing page (introductory $2/$10 through Aug 31, 2026)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 627414,
+          "completion_tokens": 325089,
+          "reasoning_tokens": 226816,
+          "visible_completion_tokens": 98273,
+          "raw_json_cost": 6.7586,
+          "recomputed_cost": 4.5057,
+          "arithmetic": "627414 \u00d7 $2.0/M + 325089 \u00d7 $10.0/M = $4.5057"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 199756,
+          "completion_tokens": 104347,
+          "reasoning_tokens": 32703,
+          "visible_completion_tokens": 71644,
+          "raw_json_cost": 2.1645,
+          "recomputed_cost": 1.443,
+          "arithmetic": "199756 \u00d7 $2.0/M + 104347 \u00d7 $10.0/M = $1.4430"
+        }
+      },
+      "total_recomputed_cost": 5.9487,
+      "total_raw_json_cost": 8.9231,
+      "findings_cost": 5.95,
+      "draft_cost": 5.95
+    },
+    "cohere_command-a": {
+      "model": "cohere_command-a",
+      "pricing": {
+        "in_mtok": 2.5,
+        "out_mtok": 10.0,
+        "source": "Cohere official pricing (Command A)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 404071,
+          "completion_tokens": 28131,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 28131,
+          "raw_json_cost": 0,
+          "recomputed_cost": 1.2915,
+          "arithmetic": "404071 \u00d7 $2.5/M + 28131 \u00d7 $10.0/M = $1.2915"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 123395,
+          "completion_tokens": 26526,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 26526,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.5737,
+          "arithmetic": "123395 \u00d7 $2.5/M + 26526 \u00d7 $10.0/M = $0.5737"
+        }
+      },
+      "total_recomputed_cost": 1.8652,
+      "total_raw_json_cost": 0,
+      "findings_cost": 1.86,
+      "draft_cost": 1.86
+    },
+    "deepseek_deepseek-v4-flash": {
+      "model": "deepseek_deepseek-v4-flash",
+      "pricing": {
+        "in_mtok": 0.14,
+        "out_mtok": 0.28,
+        "source": "DeepSeek official pricing page"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 390843,
+          "completion_tokens": 202900,
+          "reasoning_tokens": 157322,
+          "visible_completion_tokens": 45578,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.1115,
+          "arithmetic": "390843 \u00d7 $0.14/M + 202900 \u00d7 $0.28/M = $0.1115"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 120881,
+          "completion_tokens": 67342,
+          "reasoning_tokens": 25730,
+          "visible_completion_tokens": 41612,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.0358,
+          "arithmetic": "120881 \u00d7 $0.14/M + 67342 \u00d7 $0.28/M = $0.0358"
+        }
+      },
+      "total_recomputed_cost": 0.1473,
+      "total_raw_json_cost": 0,
+      "findings_cost": 0.21,
+      "draft_cost": 0.21
+    },
+    "deepseek_deepseek-v4-pro_discounted": {
+      "model": "deepseek_deepseek-v4-pro_discounted",
+      "pricing": {
+        "in_mtok": 0.435,
+        "out_mtok": 0.87,
+        "source": "DeepSeek official pricing page (discounted tier)"
+      },
+      "configs": {
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 120881,
+          "completion_tokens": 98627,
+          "reasoning_tokens": 68102,
+          "visible_completion_tokens": 30525,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.1384,
+          "arithmetic": "120881 \u00d7 $0.435/M + 98627 \u00d7 $0.87/M = $0.1384"
+        }
+      },
+      "total_recomputed_cost": 0.1384,
+      "total_raw_json_cost": 0,
+      "findings_cost": null,
+      "draft_cost": null
+    },
+    "google_gemini-2.5-flash": {
+      "model": "google_gemini-2.5-flash",
+      "pricing": {
+        "in_mtok": 0.3,
+        "out_mtok": 2.5,
+        "source": "Google AI pricing (Gemini 2.5 Flash stable)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 397299,
+          "completion_tokens": 217552,
+          "reasoning_tokens": 146957,
+          "visible_completion_tokens": 70595,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.6631,
+          "arithmetic": "397299 \u00d7 $0.3/M + 217552 \u00d7 $2.5/M = $0.6631"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 122904,
+          "completion_tokens": 59931,
+          "reasoning_tokens": 23548,
+          "visible_completion_tokens": 36383,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.1867,
+          "arithmetic": "122904 \u00d7 $0.3/M + 59931 \u00d7 $2.5/M = $0.1867"
+        }
+      },
+      "total_recomputed_cost": 0.8498,
+      "total_raw_json_cost": 0,
+      "findings_cost": 0.85,
+      "draft_cost": 0.85
+    },
+    "google_gemini-3.5-flash": {
+      "model": "google_gemini-3.5-flash",
+      "pricing": {
+        "in_mtok": 1.5,
+        "out_mtok": 9.0,
+        "source": "Google AI pricing (Gemini 3.5 Flash)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 397299,
+          "completion_tokens": 43740,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 43740,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.9896,
+          "arithmetic": "397299 \u00d7 $1.5/M + 43740 \u00d7 $9.0/M = $0.9896"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 122904,
+          "completion_tokens": 36447,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 36447,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.5124,
+          "arithmetic": "122904 \u00d7 $1.5/M + 36447 \u00d7 $9.0/M = $0.5124"
+        }
+      },
+      "total_recomputed_cost": 1.502,
+      "total_raw_json_cost": 0,
+      "findings_cost": 1.5,
+      "draft_cost": 1.5
+    },
+    "gpt-5.6-luna": {
+      "model": "gpt-5.6-luna",
+      "pricing": {
+        "in_mtok": 1.0,
+        "out_mtok": 6.0,
+        "source": "Kilo API / OpenAI pricing page"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 379355,
+          "completion_tokens": 99715,
+          "reasoning_tokens": 39490,
+          "visible_completion_tokens": 60225,
+          "raw_json_cost": 0.9776,
+          "recomputed_cost": 0.9776,
+          "arithmetic": "379355 \u00d7 $1.0/M + 99715 \u00d7 $6.0/M = $0.9776"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 118394,
+          "completion_tokens": 35167,
+          "reasoning_tokens": 5597,
+          "visible_completion_tokens": 29570,
+          "raw_json_cost": 0.3294,
+          "recomputed_cost": 0.3294,
+          "arithmetic": "118394 \u00d7 $1.0/M + 35167 \u00d7 $6.0/M = $0.3294"
+        }
+      },
+      "total_recomputed_cost": 1.307,
+      "total_raw_json_cost": 1.307,
+      "findings_cost": 1.31,
+      "draft_cost": 1.31
+    },
+    "gpt-5.6-sol": {
+      "model": "gpt-5.6-sol",
+      "pricing": {
+        "in_mtok": 5.0,
+        "out_mtok": 30.0,
+        "source": "Kilo API / OpenAI pricing page"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 301435,
+          "completion_tokens": 84339,
+          "reasoning_tokens": 36374,
+          "visible_completion_tokens": 47965,
+          "raw_json_cost": 3.7345,
+          "recomputed_cost": 4.0373,
+          "arithmetic": "301435 \u00d7 $5.0/M + 84339 \u00d7 $30.0/M = $4.0373"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 118394,
+          "completion_tokens": 42843,
+          "reasoning_tokens": 11677,
+          "visible_completion_tokens": 31166,
+          "raw_json_cost": 1.8773,
+          "recomputed_cost": 1.8773,
+          "arithmetic": "118394 \u00d7 $5.0/M + 42843 \u00d7 $30.0/M = $1.8773"
+        }
+      },
+      "total_recomputed_cost": 5.9146,
+      "total_raw_json_cost": 5.6118,
+      "findings_cost": 5.91,
+      "draft_cost": 5.91
+    },
+    "gpt-5.6-terra": {
+      "model": "gpt-5.6-terra",
+      "pricing": {
+        "in_mtok": 2.5,
+        "out_mtok": 15.0,
+        "source": "Kilo API / OpenAI pricing page"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 379355,
+          "completion_tokens": 83319,
+          "reasoning_tokens": 25447,
+          "visible_completion_tokens": 57872,
+          "raw_json_cost": 2.1982,
+          "recomputed_cost": 2.1982,
+          "arithmetic": "379355 \u00d7 $2.5/M + 83319 \u00d7 $15.0/M = $2.1982"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 118394,
+          "completion_tokens": 34794,
+          "reasoning_tokens": 6716,
+          "visible_completion_tokens": 28078,
+          "raw_json_cost": 0.8179,
+          "recomputed_cost": 0.8179,
+          "arithmetic": "118394 \u00d7 $2.5/M + 34794 \u00d7 $15.0/M = $0.8179"
+        }
+      },
+      "total_recomputed_cost": 3.0161,
+      "total_raw_json_cost": 3.0161,
+      "findings_cost": 3.02,
+      "draft_cost": 3.02
+    },
+    "meta-llama_llama-4-maverick": {
+      "model": "meta-llama_llama-4-maverick",
+      "pricing": {
+        "in_mtok": 0.15,
+        "out_mtok": 0.6,
+        "source": "DeepInfra pricing (cheapest verified host, July 2026)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 377885,
+          "completion_tokens": 27044,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 27044,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.0729,
+          "arithmetic": "377885 \u00d7 $0.15/M + 27044 \u00d7 $0.6/M = $0.0729"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 118040,
+          "completion_tokens": 12632,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 12632,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.0253,
+          "arithmetic": "118040 \u00d7 $0.15/M + 12632 \u00d7 $0.6/M = $0.0253"
+        }
+      },
+      "total_recomputed_cost": 0.0982,
+      "total_raw_json_cost": 0,
+      "findings_cost": 0.13,
+      "draft_cost": 0.13
+    },
+    "mistralai_mistral-large-2512": {
+      "model": "mistralai_mistral-large-2512",
+      "pricing": {
+        "in_mtok": 0.5,
+        "out_mtok": 1.5,
+        "source": "Mistral official pricing (Mistral Large 3 2512, released Dec 1, 2025)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 404347,
+          "completion_tokens": 58929,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 58929,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.2906,
+          "arithmetic": "404347 \u00d7 $0.5/M + 58929 \u00d7 $1.5/M = $0.2906"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 125518,
+          "completion_tokens": 23776,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 23776,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.0984,
+          "arithmetic": "125518 \u00d7 $0.5/M + 23776 \u00d7 $1.5/M = $0.0984"
+        }
+      },
+      "total_recomputed_cost": 0.389,
+      "total_raw_json_cost": 0,
+      "findings_cost": 0.39,
+      "draft_cost": 0.39
+    },
+    "mistralai_mistral-medium-3.1": {
+      "model": "mistralai_mistral-medium-3.1",
+      "pricing": {
+        "in_mtok": 0.4,
+        "out_mtok": 2.0,
+        "source": "Mistral official pricing (Mistral Medium 3.1)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 404347,
+          "completion_tokens": 87278,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 87278,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.3363,
+          "arithmetic": "404347 \u00d7 $0.4/M + 87278 \u00d7 $2.0/M = $0.3363"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 125518,
+          "completion_tokens": 24837,
+          "reasoning_tokens": 0,
+          "visible_completion_tokens": 24837,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.0999,
+          "arithmetic": "125518 \u00d7 $0.4/M + 24837 \u00d7 $2.0/M = $0.0999"
+        }
+      },
+      "total_recomputed_cost": 0.4362,
+      "total_raw_json_cost": 0,
+      "findings_cost": 0.44,
+      "draft_cost": 0.44
+    },
+    "moonshotai_kimi-k2": {
+      "model": "moonshotai_kimi-k2",
+      "pricing": {
+        "in_mtok": 0.6,
+        "out_mtok": 2.5,
+        "source": "Moonshot official pricing (K2 series, EOL May 25, 2026)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 379704,
+          "completion_tokens": 83424,
+          "reasoning_tokens": 9765,
+          "visible_completion_tokens": 73659,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.4364,
+          "arithmetic": "379704 \u00d7 $0.6/M + 83424 \u00d7 $2.5/M = $0.4364"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 118624,
+          "completion_tokens": 48647,
+          "reasoning_tokens": 16076,
+          "visible_completion_tokens": 32571,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.1928,
+          "arithmetic": "118624 \u00d7 $0.6/M + 48647 \u00d7 $2.5/M = $0.1928"
+        }
+      },
+      "total_recomputed_cost": 0.6292,
+      "total_raw_json_cost": 0,
+      "findings_cost": 0.59,
+      "draft_cost": 0.59
+    },
+    "moonshotai_kimi-k2-thinking": {
+      "model": "moonshotai_kimi-k2-thinking",
+      "pricing": {
+        "in_mtok": 0.6,
+        "out_mtok": 2.5,
+        "source": "Moonshot official pricing (K2 thinking, same price as K2)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 379672,
+          "completion_tokens": 207949,
+          "reasoning_tokens": 157160,
+          "visible_completion_tokens": 50789,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.7477,
+          "arithmetic": "379672 \u00d7 $0.6/M + 207949 \u00d7 $2.5/M = $0.7477"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 118613,
+          "completion_tokens": 85334,
+          "reasoning_tokens": 60990,
+          "visible_completion_tokens": 24344,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.2845,
+          "arithmetic": "118613 \u00d7 $0.6/M + 85334 \u00d7 $2.5/M = $0.2845"
+        }
+      },
+      "total_recomputed_cost": 1.0322,
+      "total_raw_json_cost": 0,
+      "findings_cost": 1.03,
+      "draft_cost": 1.03
+    },
+    "poolside_laguna-m.1": {
+      "model": "poolside_laguna-m.1",
+      "pricing": {
+        "in_mtok": null,
+        "out_mtok": null,
+        "source": "NOT AVAILABLE \u2014 delisted from Kilo API"
+      },
+      "configs": {
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 121669,
+          "completion_tokens": 36127,
+          "reasoning_tokens": 9867,
+          "visible_completion_tokens": 26260,
+          "raw_json_cost": 0,
+          "recomputed_cost": null,
+          "arithmetic": "CANNOT COMPUTE \u2014 pricing unavailable"
+        }
+      },
+      "total_recomputed_cost": null,
+      "total_raw_json_cost": 0,
+      "findings_cost": null,
+      "draft_cost": null
+    },
+    "tencent_hy3_free": {
+      "model": "tencent_hy3_free",
+      "pricing": {
+        "in_mtok": 0.0,
+        "out_mtok": 0.0,
+        "source": "Kilo API: isFree=true"
+      },
+      "configs": {
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 121264,
+          "completion_tokens": 143861,
+          "reasoning_tokens": 105342,
+          "visible_completion_tokens": 38519,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.0,
+          "arithmetic": "121264 \u00d7 $0.0/M + 143861 \u00d7 $0.0/M = $0.0000"
+        }
+      },
+      "total_recomputed_cost": null,
+      "total_raw_json_cost": 0,
+      "findings_cost": null,
+      "draft_cost": null
+    },
+    "z-ai_glm-5.2": {
+      "model": "z-ai_glm-5.2",
+      "pricing": {
+        "in_mtok": 1.4,
+        "out_mtok": 4.4,
+        "source": "Kilo API gateway models endpoint"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 382716,
+          "completion_tokens": 395308,
+          "reasoning_tokens": 337496,
+          "visible_completion_tokens": 57812,
+          "raw_json_cost": 0,
+          "recomputed_cost": 2.2752,
+          "arithmetic": "382716 \u00d7 $1.4/M + 395308 \u00d7 $4.4/M = $2.2752"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 119835,
+          "completion_tokens": 185375,
+          "reasoning_tokens": 157417,
+          "visible_completion_tokens": 27958,
+          "raw_json_cost": 0,
+          "recomputed_cost": 0.9834,
+          "arithmetic": "119835 \u00d7 $1.4/M + 185375 \u00d7 $4.4/M = $0.9834"
+        }
+      },
+      "total_recomputed_cost": 3.2586,
+      "total_raw_json_cost": 0,
+      "findings_cost": 2.67,
+      "draft_cost": 2.67
+    },
+    "~google_gemini-pro-latest": {
+      "model": "~google_gemini-pro-latest",
+      "pricing": {
+        "in_mtok": 2.0,
+        "out_mtok": 12.0,
+        "source": "Google AI pricing (Gemini 3.1 Pro \u2014 closest match to gemini-pro-latest)"
+      },
+      "configs": {
+        "jd_analysis": {
+          "num_tests": 34,
+          "prompt_tokens": 397299,
+          "completion_tokens": 132759,
+          "reasoning_tokens": 85768,
+          "visible_completion_tokens": 46991,
+          "raw_json_cost": 0,
+          "recomputed_cost": 2.3877,
+          "arithmetic": "397299 \u00d7 $2.0/M + 132759 \u00d7 $12.0/M = $2.3877"
+        },
+        "resume_generation": {
+          "num_tests": 14,
+          "prompt_tokens": 122904,
+          "completion_tokens": 76084,
+          "reasoning_tokens": 41450,
+          "visible_completion_tokens": 34634,
+          "raw_json_cost": 0,
+          "recomputed_cost": 1.1588,
+          "arithmetic": "122904 \u00d7 $2.0/M + 76084 \u00d7 $12.0/M = $1.1588"
+        }
+      },
+      "total_recomputed_cost": 3.5465,
+      "total_raw_json_cost": 0,
+      "findings_cost": 3.55,
+      "draft_cost": 3.55
+    }
+  },
+  "leaderboard_diff": {
+    "gpt-5.6-terra": {
+      "post_cost": 3.02,
+      "recomputed_cost": 3.0161,
+      "findings_cost": 3.02,
+      "diff_pct": -0.1,
+      "flag": ""
+    },
+    "claude-sonnet-5": {
+      "post_cost": 5.95,
+      "recomputed_cost": 5.9487,
+      "findings_cost": 5.95,
+      "diff_pct": -0.0,
+      "flag": ""
+    },
+    "gpt-5.6-luna": {
+      "post_cost": 1.31,
+      "recomputed_cost": 1.307,
+      "findings_cost": 1.31,
+      "diff_pct": -0.2,
+      "flag": ""
+    },
+    "mistralai_mistral-large-2512": {
+      "post_cost": 0.39,
+      "recomputed_cost": 0.389,
+      "findings_cost": 0.39,
+      "diff_pct": -0.3,
+      "flag": ""
+    },
+    "gpt-5.6-sol": {
+      "post_cost": 5.91,
+      "recomputed_cost": 5.9146,
+      "findings_cost": 5.91,
+      "diff_pct": 0.1,
+      "flag": ""
+    },
+    "moonshotai_kimi-k2": {
+      "post_cost": 0.59,
+      "recomputed_cost": 0.6292,
+      "findings_cost": 0.59,
+      "diff_pct": 6.6,
+      "flag": ""
+    },
+    "z-ai_glm-5.2": {
+      "post_cost": 2.67,
+      "recomputed_cost": 3.2586,
+      "findings_cost": 2.67,
+      "diff_pct": 22.0,
+      "flag": "\u26a0\ufe0f >20%"
+    },
+    "moonshotai_kimi-k2-thinking": {
+      "post_cost": 1.03,
+      "recomputed_cost": 1.0322,
+      "findings_cost": 1.03,
+      "diff_pct": 0.2,
+      "flag": ""
+    },
+    "~google_gemini-pro-latest": {
+      "post_cost": 3.55,
+      "recomputed_cost": 3.5465,
+      "findings_cost": 3.55,
+      "diff_pct": -0.1,
+      "flag": ""
+    },
+    "google_gemini-3.5-flash": {
+      "post_cost": 1.5,
+      "recomputed_cost": 1.502,
+      "findings_cost": 1.5,
+      "diff_pct": 0.1,
+      "flag": ""
+    },
+    "mistralai_mistral-medium-3.1": {
+      "post_cost": 0.44,
+      "recomputed_cost": 0.4362,
+      "findings_cost": 0.44,
+      "diff_pct": -0.9,
+      "flag": ""
+    },
+    "deepseek_deepseek-v4-flash": {
+      "post_cost": 0.21,
+      "recomputed_cost": 0.1473,
+      "findings_cost": 0.21,
+      "diff_pct": -29.9,
+      "flag": "\u26a0\ufe0f >20%"
+    },
+    "cohere_command-a": {
+      "post_cost": 1.86,
+      "recomputed_cost": 1.8652,
+      "findings_cost": 1.86,
+      "diff_pct": 0.3,
+      "flag": ""
+    },
+    "claude-haiku-4-5-20251001": {
+      "post_cost": 0.26,
+      "recomputed_cost": 1.287,
+      "findings_cost": 0.26,
+      "diff_pct": 395.0,
+      "flag": "\u26a0\ufe0f >20%"
+    },
+    "google_gemini-2.5-flash": {
+      "post_cost": 0.85,
+      "recomputed_cost": 0.8498,
+      "findings_cost": 0.85,
+      "diff_pct": -0.0,
+      "flag": ""
+    },
+    "meta-llama_llama-4-maverick": {
+      "post_cost": 0.13,
+      "recomputed_cost": 0.0982,
+      "findings_cost": 0.13,
+      "diff_pct": -24.5,
+      "flag": "\u26a0\ufe0f >20%"
+    }
+  },
+  "per_job_production_costs": {
+    "all_terra": {
+      "research": {
+        "cost": 0.03232,
+        "assumed": "50% of JD analysis cost (company research uses similar prompt/completion profile)"
+      },
+      "jd": {
+        "cost": 0.06465,
+        "arithmetic": "11157.5 \u00d7 $2.5/M + 2450.56 \u00d7 $15.0/M = $0.06465"
+      },
+      "resume": {
+        "cost": 0.05842,
+        "arithmetic": "8456.71 \u00d7 $2.5/M + 2485.29 \u00d7 $15.0/M = $0.05842"
+      },
+      "judge": {
+        "cost": 0.03287014285714286,
+        "assumed": "Haiku pricing for traceability judge (ASSUMED \u2014 judge not evaluated separately). Token counts derived from v2."
+      },
+      "total": 0.18826
+    },
+    "all_deepseek": {
+      "research": {
+        "cost": 0.00164,
+        "assumed": "50% of JD analysis cost"
+      },
+      "jd": {
+        "cost": 0.00328,
+        "arithmetic": "11495.38 \u00d7 $0.14/M + 5967.65 \u00d7 $0.28/M = $0.00328"
+      },
+      "resume": {
+        "cost": 0.00256,
+        "arithmetic": "8634.36 \u00d7 $0.14/M + 4810.14 \u00d7 $0.28/M = $0.00256"
+      },
+      "judge": {
+        "cost": 0.0013488100000000002,
+        "assumed": "DeepSeek pricing for traceability judge (ASSUMED). Token counts derived from v2."
+      },
+      "total": 0.00883
+    },
+    "hybrid": {
+      "research": {
+        "cost": 0.00164,
+        "assumed": "DeepSeek company research (ASSUMED \u2014 not evaluated separately)"
+      },
+      "jd": {
+        "cost": 0.00855,
+        "arithmetic": "11892.56 \u00d7 $0.5/M + 1733.21 \u00d7 $1.5/M = $0.00855"
+      },
+      "resume": {
+        "cost": 0.02353,
+        "arithmetic": "8456.71 \u00d7 $1.0/M + 2511.93 \u00d7 $6.0/M = $0.02353"
+      },
+      "judge": {
+        "cost": 0.012207285714285714,
+        "assumed": "Haiku pricing for traceability judge (ASSUMED \u2014 not evaluated separately). Token counts derived from v2."
+      },
+      "total": 0.04593
+    }
+  },
+  "v2_per_job_comparison": {
+    "all_terra": {
+      "v2_total": 0.20087,
+      "v3_total": 0.18826,
+      "delta_pct": -6.3,
+      "root_cause": "v2 used $3.0/$15.0 for terra (wrong), v3 uses $2.5/$15.0 (confirmed by raw JSON)"
+    },
+    "all_deepseek": {
+      "v2_total": 0.00882,
+      "v3_total": 0.00883,
+      "delta_pct": 0.1,
+      "root_cause": "No change \u2014 deepseek pricing correct in v2"
+    },
+    "hybrid": {
+      "v2_total": 0.03165,
+      "v3_total": 0.04593,
+      "delta_pct": 45.1,
+      "root_cause": "v2 used $0.5/$2.0 for luna (wrong), v3 uses $1.0/$6.0 (confirmed by raw JSON). Luna resume leg jumps from $0.00925 to $0.02353."
+    }
+  },
+  "weekly_100_jobs": {
+    "all_terra": {
+      "v3": 18.83,
+      "v2": 20.09,
+      "draft": 15.5
+    },
+    "all_deepseek": {
+      "v3": 0.88,
+      "v2": 0.88,
+      "draft": null
+    },
+    "hybrid": {
+      "v3": 4.59,
+      "v2": 3.16,
+      "draft": 2.6
+    }
+  },
+  "ratio": {
+    "all_terra_vs_hybrid": {
+      "v3": 4.1,
+      "v2": 6.3,
+      "draft": 6.0
+    },
+    "all_terra_vs_all_deepseek": {
+      "v3": 21.3,
+      "v2": 22.8
+    }
+  },
+  "downstream_ratios": {
+    "mistral_large_vs_sol": {
+      "mistral_cost": 0.389,
+      "sol_cost": 5.9146,
+      "ratio": 15.2,
+      "post_claim": "1/15th the cost",
+      "corrected": "1/15 the cost"
+    },
+    "sol_vs_terra": {
+      "sol_cost": 5.9146,
+      "terra_cost": 3.0161,
+      "ratio": 2.0,
+      "post_claim": "2x more than terra"
+    },
+    "gemini_pro_vs_mistral": {
+      "gemini_pro_cost": 3.5465,
+      "mistral_cost": 0.389,
+      "ratio": 9.1,
+      "post_claim": "9x more than Mistral Large"
+    },
+    "gemini_pro_vs_glm": {
+      "gemini_pro_cost": 3.5465,
+      "glm_cost": 3.2586,
+      "post_claim": "Gemini Pro at $3.55 worse than GLM-5.2 at $2.67",
+      "corrected": "Gemini Pro at $3.55 vs GLM-5.2 at $3.26"
+    },
+    "budget_per_6_dollars": {
+      "terra_jobs": 32,
+      "deepseek_jobs": 680,
+      "post_claim": "38 jobs with terra / 428 with deepseek",
+      "corrected": "~32 jobs with terra / ~680 with deepseek"
+    },
+    "eval_cost_range": {
+      "min": 0.0982,
+      "max": 5.9487,
+      "post_claim": "$0-6 per model"
+    }
+  },
+  "conclusion": {
+    "hybrid_recommendation_holds": true,
+    "cost_advantage_v3": "4.1x (v2 said 6.3x, draft says 6x)",
+    "v2_pricing_error_impact": "v2 overestimated all_terra by 6.6% and underestimated hybrid by 45.2%, inflating the ratio from 4.1x to 6.3x",
+    "optimal_judge_unchanged": true,
+    "haiku_note": "Draft likely used Haiku 3.5 pricing for $0.009. Corrected: $0.0122/job.",
+    "unevaluated_legs": [
+      "Company research (ASSUMED)",
+      "Traceability judge (ASSUMED)"
+    ]
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "audit_type": "Phase 1C Resolutions",
+  "audit_date": "2026-07-28",
+  "items": {
+    "item5_three_models_83_3pct_screen": {
+      "claim": "Three models scored 83.3% on the 6-test screen",
+      "verdict": "CONFIRMED",
+      "models": [
+        {
+          "model": "deepseek/deepseek-v4-flash:discounted",
+          "file": "jd_analysis_deepseek_deepseek-v4-flash_discounted.json",
+          "tests": 6,
+          "passed": 5,
+          "pct": 83.3
+        },
+        {
+          "model": "deepseek/deepseek-v4-pro:discounted",
+          "file": "jd_analysis_deepseek_deepseek-v4-pro_discounted.json",
+          "tests": 6,
+          "passed": 5,
+          "pct": 83.3
+        },
+        {
+          "model": "tencent/hy3:free",
+          "file": "jd_analysis_tencent_hy3_free.json",
+          "tests": 6,
+          "passed": 5,
+          "pct": 83.3
+        }
+      ],
+      "all_13_screen_results": [
+        {"model": "deepseek/deepseek-v4-flash:discounted", "tests": 6, "passed": 5, "pct": 83.3},
+        {"model": "deepseek/deepseek-v4-pro", "tests": 6, "passed": 4, "pct": 66.7},
+        {"model": "deepseek/deepseek-v4-pro:discounted", "tests": 6, "passed": 5, "pct": 83.3},
+        {"model": "minimax/minimax-m3", "tests": 6, "passed": 2, "pct": 33.3},
+        {"model": "poolside/laguna-m.1", "tests": 6, "passed": 4, "pct": 66.7},
+        {"model": "poolside/laguna-m.1:free", "tests": 6, "passed": 4, "pct": 66.7},
+        {"model": "qwen/qwen3.7-plus", "tests": 6, "passed": 4, "pct": 66.7},
+        {"model": "stepfun/step-3.7-flash", "tests": 6, "passed": 2, "pct": 33.3},
+        {"model": "stepfun/step-3.7-flash:free", "tests": 6, "passed": 2, "pct": 33.3},
+        {"model": "tencent/hy3-preview", "tests": 6, "passed": 4, "pct": 66.7},
+        {"model": "tencent/hy3", "tests": 6, "passed": 3, "pct": 50.0},
+        {"model": "tencent/hy3:free", "tests": 6, "passed": 5, "pct": 83.3},
+        {"model": "z-ai/glm-5.2", "tests": 34, "passed": 21, "pct": 61.8, "note": "Full 34-test run, NOT a 6-test screen"}
+      ]
+    },
+    "item6_glm_85pct_reasoning": {
+      "claim": "GLM-5.2 spent ~85% of completion tokens on internal thinking",
+      "verdict": "CONFIRMED",
+      "data": {
+        "jd_analysis": {"completion_tokens": 395308, "reasoning_tokens": 337496, "pct": 85.4},
+        "resume_generation": {"completion_tokens": 185375, "reasoning_tokens": 157417, "pct": 84.9},
+        "combined": {"completion_tokens": 580683, "reasoning_tokens": 494913, "pct": 85.2}
+      },
+      "source_files": ["jd_analysis_z-ai_glm-5.2.json", "resume_generation_z-ai_glm-5.2.json"],
+      "token_field": "tokenUsage.completionDetails.reasoning"
+    },
+    "item7_glm_straight_to_full_run": {
+      "claim": "GLM-5.2 went straight to the full run (no 6-test screen)",
+      "verdict": "CONFIRMED",
+      "evidence": "jd_analysis_z-ai_glm-5.2.json contains 34 tests (full run), not 6. No separate 6-test screen file exists for GLM-5.2. All 13 screen files belong to other models.",
+      "note": "GLM-5.2 is the only model that skipped the 6-test screen and went directly to the full 34-test JD analysis run."
+    },
+    "item8_cohere_vs_deepseek": {
+      "claim": "Cohere was 'worse than deepseek'",
+      "verdict": "WRONG — they are TIED",
+      "data": {
+        "cohere_command-a": {"combined_score": "27/48", "combined_pct": 56.2},
+        "deepseek_deepseek-v4-flash": {"combined_score": "27/48", "combined_pct": 56.2}
+      },
+      "source": "error_categorization.json, findings_vs_raw_audit.json",
+      "corrected_claim": "Cohere and DeepSeek tied at 56.2% combined (27/48)"
+    }
+  }
+}
