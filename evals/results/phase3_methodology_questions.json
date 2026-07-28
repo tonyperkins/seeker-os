@@ -1,0 +1,96 @@
+{
+  "audit_type": "Phase 3 Methodology Questions",
+  "audit_date": "2026-07-27",
+  "questions": [
+    {
+      "id": 1,
+      "topic": "UNSOURCED: medium effort for OpenAI models",
+      "draft_line": 56,
+      "claim": "I ran three OpenAI models on \"medium effort\" with the full dataset",
+      "finding": "No effort/reasoning_effort parameter found in raw JSON, promptfoo configs, or compare_models.sh at eval-time commit 1e387e9",
+      "question": "Was this set in config/providers.yml (gitignored, unrecoverable)? Or is this an inference? If inference, it must be removed or marked as assumption.",
+      "status": "UNSOURCED — requires Tony's input"
+    },
+    {
+      "id": 2,
+      "topic": "Haiku cost discrepancy",
+      "draft_line": 111,
+      "claim": "claude-haiku-4.5 Eval Cost $0.26",
+      "finding": "Recomputed total is $1.29 ($0.96 JD + $0.33 resume). FINDINGS $0.26 matches Haiku 3.5 pricing ($0.80/$4.00) for resume gen only. Raw JSON cost $1.29 (matches Haiku 4.5 pricing $1/$5). compare_models.sh has model name mismatch so would compute $0.00.",
+      "question": "Was $0.26 intentionally resume-only? If so, the leaderboard label 'Eval Cost' is misleading. Or was this computed with wrong pricing?",
+      "status": "DISCREPANCY — requires Tony's input"
+    },
+    {
+      "id": 3,
+      "topic": "Kimi K2 Thinking parse failures",
+      "draft_line": 84,
+      "claim": "had 6 parse failures from reasoning text prepended to JSON output",
+      "finding": "Raw JSON shows only 1 true parse failure (Test 15: Missing required fields). FINDINGS classified 9 verdict mismatches as parse_fail in its breakdown table (lines 441-444). All 10 failed tests have outputs starting with 'Thinking:' but JSON was successfully parsed for 9 of them — the verdicts just didn't match.",
+      "question": "Did FINDINGS use a different definition of 'parse failure'? Or was this an error in the FINDINGS analysis?",
+      "status": "DISCREPANCY — requires Tony's input"
+    },
+    {
+      "id": 4,
+      "topic": "Per-job production costs",
+      "draft_lines": "117-121",
+      "claim": "$0.155/job for terra, $0.014 for deepseek, $0.026 hybrid, $2.60/week hybrid, $15.50/week terra",
+      "finding": "Cannot be verified from eval artifacts. Eval has aggregate token counts for 34 JD + 14 resume tests, not per-call production usage. The draft's per-job costs appear to be estimates based on assumed token counts per call.",
+      "question": "Were these computed from assumed token counts per call? What are the assumptions? Can you provide the per-call token estimates?",
+      "status": "UNVERIFIABLE from artifacts — requires Tony's input"
+    },
+    {
+      "id": 5,
+      "topic": "Kilo pricing not persisted",
+      "draft_lines": "all cost figures for Kilo models",
+      "claim": "Various cost figures for Kilo models (GLM, DeepSeek, Kimi, Mistral, Cohere, Llama, Gemini, Tencent)",
+      "finding": "compare_models.sh fetches Kilo API pricing at runtime but doesn't save it. Kilo model costs in FINDINGS cannot be exactly reproduced. Current published prices differ from eval-time prices for DeepSeek (-30%) and Llama (-24.5%).",
+      "question": "Should the draft note that Kilo costs are approximate and based on pricing at eval time (Jul 13-14, 2026)?",
+      "status": "METHODOLOGY GAP — requires Tony's decision"
+    },
+    {
+      "id": 6,
+      "topic": "Sonnet 5 pricing: introductory vs standard",
+      "draft_line": 99,
+      "claim": "claude-sonnet-5 Eval Cost $5.95",
+      "finding": "Raw JSON cost $8.92 (promptfoo used standard $3/$15 at runtime). FINDINGS $5.95 uses introductory $2/$10 (valid through Aug 31, 2026; evals ran Jul 13, 2026). Recomputed matches FINDINGS at introductory pricing.",
+      "question": "The eval was run during the introductory period, but promptfoo charged at standard rate. Which should the draft cite? The introductory price ($5.95) or the actual cost charged ($8.92)?",
+      "status": "CLARIFICATION needed — requires Tony's decision"
+    },
+    {
+      "id": 7,
+      "topic": "config/providers.yml unrecoverable",
+      "draft_lines": "various",
+      "claim": "Implies provider-level settings were configured",
+      "finding": "config/providers.yml is gitignored and cannot be recovered. Cannot verify provider-level settings (base URLs, auth, model mappings, effort parameters).",
+      "question": "Should this be noted as a methodology gap? Can you provide the contents of config/providers.yml at eval time?",
+      "status": "METHODOLOGY GAP — requires Tony's input"
+    },
+    {
+      "id": 8,
+      "topic": "Cohere Command A API error",
+      "draft_line": 86,
+      "claim": "Cohere Command A was overpriced and underperformed — 56.2% combined",
+      "finding": "Test 7 is an API error (422 Unprocessable Entity: 'No valid response generated'), not a parse failure. FINDINGS counts it as 1 parse failure. This error is not mentioned in the draft.",
+      "question": "Should the draft distinguish API errors from parse failures? Should the 422 error be disclosed?",
+      "status": "MINOR — requires Tony's decision"
+    },
+    {
+      "id": 9,
+      "topic": "DeepSeek v4 Pro non-discounted never fully run",
+      "draft_line": 129,
+      "claim": "DeepSeek Pro scored worse than DeepSeek Flash",
+      "finding": "Only the discounted variant got a resume run (28.6% on 14 tests). The non-discounted Pro was screened 4/6 on JD but never fully evaluated. The draft's claim appears to be based on the discounted variant's resume-only result.",
+      "question": "Is the draft's 'DeepSeek Pro' claim referring to the discounted variant's resume-only result? Should this be clarified?",
+      "status": "CLARIFICATION needed — requires Tony's input"
+    },
+    {
+      "id": 10,
+      "topic": "Golden dataset drift",
+      "draft_line": 20,
+      "claim": "I exported 34 JD analysis cases from my scan history",
+      "finding": "Golden dataset had 34 cases at eval-time commit 1e387e9. It now has 37 cases (modified after evals). Frozen copy saved as golden_dataset_v1_34cases.yml and committed.",
+      "question": "Should the draft note the dataset version/commit used for the evals?",
+      "status": "METHODOLOGY — requires Tony's decision"
+    }
+  ]
+}
