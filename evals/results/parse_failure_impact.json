@@ -1,0 +1,264 @@
+{
+  "audit_type": "Phase 2D Parse Failure Impact",
+  "audit_date": "2026-07-27",
+  "total_parse_failures": 14,
+  "prod_parser_also_fails": 0,
+  "prod_parser_would_flip_to_pass": 2,
+  "prod_parser_verdict_mismatch": 3,
+  "prod_parser_no_verdict_field": 9,
+  "parse_failures": [
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "test_index": 20,
+      "expected_verdict": "SKIP",
+      "eval_error": "Invalid JSON: Extra data: line 157 column 1 (char 10118)",
+      "output_length": 12071,
+      "output_preview": "```json\n{\n  \"company\": \"[COMPANY]\",\n  \"title\": \"Senior Infrastructure Engineer\",\n  \"url\": \"\",\n  \"verdict\": \"CONDITIONAL\",\n  \"weighted_score\": 7.2,\n  \"one_line\": \"Strong infrastructure fit with product",
+      "prod_parser_success": true,
+      "prod_verdict": "CONDITIONAL",
+      "prod_would_pass": false
+    },
+    {
+      "model": "deepseek_deepseek-v4-flash",
+      "test_index": 33,
+      "expected_verdict": "SKIP",
+      "eval_error": "Invalid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+      "output_length": 26310,
+      "output_preview": "Thinking: We are analyzing a job posting for \"Senior Platform Engineer, Data & AI\" at a company (NDR) that is a debt relief company. The company name is redacted as [COMPANY], but the description says",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    },
+    {
+      "model": "google_gemini-2.5-flash",
+      "test_index": 6,
+      "expected_verdict": "CONDITIONAL",
+      "eval_error": "Missing required fields: {'confidence'}",
+      "output_length": 6248,
+      "output_preview": "```json\n{\n  \"company\": \"[COMPANY]\",\n  \"title\": \"Platform DevOps Engineer\",\n  \"url\": null,\n  \"verdict\": \"CONDITIONAL\",\n  \"weighted_score\": 7.5,\n  \"one_line\": \"A strong technical fit for platform engine",
+      "prod_parser_success": true,
+      "prod_verdict": "CONDITIONAL",
+      "prod_would_pass": true
+    },
+    {
+      "model": "google_gemini-2.5-flash",
+      "test_index": 7,
+      "expected_verdict": "CONDITIONAL",
+      "eval_error": "Invalid JSON: Extra data: line 213 column 1 (char 6891)",
+      "output_length": 13804,
+      "output_preview": "```json\n{\n  \"company\": \"[COMPANY]\",\n  \"title\": \"Senior SRE Engineer\",\n  \"url\": null,\n  \"verdict\": \"APPLY\",\n  \"weighted_score\": 10.0,\n  \"one_line\": \"Strong fit for an SRE role with an AI focus, though ",
+      "prod_parser_success": true,
+      "prod_verdict": "APPLY",
+      "prod_would_pass": false
+    },
+    {
+      "model": "google_gemini-2.5-flash",
+      "test_index": 22,
+      "expected_verdict": "SKIP",
+      "eval_error": "Missing required fields: {'confidence'}",
+      "output_length": 5602,
+      "output_preview": "```json\n{\n  \"company\": \"Trulieve\",\n  \"title\": \"Platform Engineer\",\n  \"url\": \"https://careers.trulieve.com/job/Tallahassee-Platform-Engineer-FL-32312/1077755800/\",\n  \"verdict\": \"SKIP\",\n  \"weighted_scor",
+      "prod_parser_success": true,
+      "prod_verdict": "SKIP",
+      "prod_would_pass": true
+    },
+    {
+      "model": "mistralai_mistral-medium-3.1",
+      "test_index": 17,
+      "expected_verdict": "SKIP",
+      "eval_error": "Invalid JSON: Expecting property name enclosed in double quotes: line 4 column 51 (char 138)",
+      "output_length": 8079,
+      "output_preview": "```json\n{\n  \"company\": \"[COMPANY]\",\n  \"title\": \"Staff Platform Engineer (U.S.-based required)\",\n  \"url\": \"https://[COMPANY].com/job-posting-url\", /* Placeholder \u2014 replace with actual URL if available ",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    },
+    {
+      "model": "mistralai_mistral-medium-3.1",
+      "test_index": 23,
+      "expected_verdict": "SKIP",
+      "eval_error": "Invalid JSON: Expecting property name enclosed in double quotes: line 4 column 65 (char 132)",
+      "output_length": 10817,
+      "output_preview": "```json\n{\n  \"company\": \"[COMPANY]\",\n  \"title\": \"Principal DevOps Engineer\",\n  \"url\": \"https://careers.nbcunicareers.com/job/-/-/123456789\", /* Placeholder URL; replace with actual if available */\n  \"v",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    },
+    {
+      "model": "mistralai_mistral-medium-3.1",
+      "test_index": 32,
+      "expected_verdict": "SKIP",
+      "eval_error": "Invalid JSON: Expecting property name enclosed in double quotes: line 4 column 45 (char 117)",
+      "output_length": 10568,
+      "output_preview": "```json\n{\n  \"company\": \"[COMPANY]\",\n  \"title\": \"Principal AI Platform Engineer\",\n  \"url\": \"https://example.com/job-posting\", /* Placeholder; replace with actual URL if available */\n  \"verdict\": \"CONDI",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    },
+    {
+      "model": "moonshotai_kimi-k2-thinking",
+      "test_index": 15,
+      "expected_verdict": "SKIP",
+      "eval_error": "Missing required fields: {'named_gaps', 'confidence', 'verdict', 'weighted_score'}",
+      "output_length": 23747,
+      "output_preview": "Thinking: The user wants me to evaluate a job posting against the candidate's profile (Tony Perkins) and produce a fit verdict in valid JSON format.\n\nLet me analyze the job posting:\n- Company is a cry",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    },
+    {
+      "model": "z-ai_glm-5.2",
+      "test_index": 0,
+      "expected_verdict": "APPLY",
+      "eval_error": "Invalid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+      "output_length": 62649,
+      "output_preview": "Thinking: Let me analyze this job posting against the candidate's profile carefully.\n\n**Company:** Domino (domino.ai)\n**Title:** SRE (Site Reliability Engineer) - the posting describes an SRE role foc",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    },
+    {
+      "model": "z-ai_glm-5.2",
+      "test_index": 11,
+      "expected_verdict": "CONDITIONAL",
+      "eval_error": "Invalid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+      "output_length": 64965,
+      "output_preview": "Thinking: Let me analyze this job posting carefully against the candidate's profile.\n\n**Job Posting Analysis:**\n- Title: Senior Software Development Engineer, CoreTech\n- Company: [COMPANY] (appears to",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    },
+    {
+      "model": "z-ai_glm-5.2",
+      "test_index": 27,
+      "expected_verdict": "SKIP",
+      "eval_error": "Invalid JSON: Extra data: line 2 column 1 (char 76)",
+      "output_length": 62273,
+      "output_preview": "Thinking: Let me analyze this job posting against the candidate's profile.\n\n**Job Details:**\n- Title: Principal Site Reliability Engineer\n- Company: [COMPANY] (e-commerce shipping space, founded 2009,",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    },
+    {
+      "model": "z-ai_glm-5.2",
+      "test_index": 28,
+      "expected_verdict": "SKIP",
+      "eval_error": "Invalid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+      "output_length": 64763,
+      "output_preview": "Thinking: Let me analyze this job posting against the candidate's profile carefully.\n\n**Job Posting Analysis:**\n- Title: Senior Software Engineer, Agentic AI\n- Company: [COMPANY] (name redacted)\n- Loc",
+      "prod_parser_success": true,
+      "prod_verdict": "CONDITIONAL",
+      "prod_would_pass": false
+    },
+    {
+      "model": "z-ai_glm-5.2",
+      "test_index": 29,
+      "expected_verdict": "SKIP",
+      "eval_error": "Invalid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+      "output_length": 64176,
+      "output_preview": "Thinking: Let me analyze this job posting carefully against the candidate's profile.\n\n**Job Posting Analysis:**\n- Title: Senior AI Infrastructure Engineer\n- Company: [COMPANY] (appears to be CrowdStri",
+      "prod_parser_success": true,
+      "prod_verdict": "",
+      "prod_would_pass": null
+    }
+  ],
+  "corrected_pass_rates": {
+    "claude-haiku-4-5-20251001": {
+      "as_run": "13/34 (38.2%)",
+      "prod_corrected": "13/34 (38.2%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "claude-sonnet-5": {
+      "as_run": "24/34 (70.6%)",
+      "prod_corrected": "24/34 (70.6%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "cohere_command-a": {
+      "as_run": "21/34 (61.8%)",
+      "prod_corrected": "21/34 (61.8%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "deepseek_deepseek-v4-flash": {
+      "as_run": "21/34 (61.8%)",
+      "prod_corrected": "21/34 (61.8%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "google_gemini-2.5-flash": {
+      "as_run": "17/34 (50.0%)",
+      "prod_corrected": "19/34 (55.9%)",
+      "delta_pp": 5.882352941176471,
+      "flips": 2
+    },
+    "google_gemini-3.5-flash": {
+      "as_run": "21/34 (61.8%)",
+      "prod_corrected": "21/34 (61.8%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "gpt-5.6-luna": {
+      "as_run": "23/34 (67.6%)",
+      "prod_corrected": "23/34 (67.6%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "gpt-5.6-sol": {
+      "as_run": "22/34 (64.7%)",
+      "prod_corrected": "22/34 (64.7%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "gpt-5.6-terra": {
+      "as_run": "28/34 (82.4%)",
+      "prod_corrected": "28/34 (82.4%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "meta-llama_llama-4-maverick": {
+      "as_run": "16/34 (47.1%)",
+      "prod_corrected": "16/34 (47.1%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "mistralai_mistral-large-2512": {
+      "as_run": "26/34 (76.5%)",
+      "prod_corrected": "26/34 (76.5%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "mistralai_mistral-medium-3.1": {
+      "as_run": "23/34 (67.6%)",
+      "prod_corrected": "23/34 (67.6%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "moonshotai_kimi-k2-thinking": {
+      "as_run": "24/34 (70.6%)",
+      "prod_corrected": "24/34 (70.6%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "moonshotai_kimi-k2": {
+      "as_run": "25/34 (73.5%)",
+      "prod_corrected": "25/34 (73.5%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "z-ai_glm-5.2": {
+      "as_run": "21/34 (61.8%)",
+      "prod_corrected": "21/34 (61.8%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    },
+    "~google_gemini-pro-latest": {
+      "as_run": "22/34 (64.7%)",
+      "prod_corrected": "22/34 (64.7%)",
+      "delta_pp": 0.0,
+      "flips": 0
+    }
+  },
+  "conclusion": "0 tests would flip from FAIL to PASS under the production parser. All 14 parse failures either (a) parse under production but yield a wrong verdict, or (b) parse but have no verdict field. The production parser is more capable but does not change any model's pass rate."
+}
