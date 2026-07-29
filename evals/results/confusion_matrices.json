@@ -1,0 +1,948 @@
+{
+  "audit_type": "Phase 2C Confusion Matrices",
+  "audit_date": "2026-07-27",
+  "description": "4x4 expected-vs-actual verdict matrix per model for all 16 full JD runs (34 tests each). Non-verdict outcomes (PARSE_FAIL, API_ERROR, etc.) included as separate columns.",
+  "verdicts": [
+    "APPLY",
+    "CONDITIONAL",
+    "MONITOR",
+    "SKIP"
+  ],
+  "matrices": {
+    "claude-haiku-4-5-20251001": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 8,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 3,
+        "CONDITIONAL": 8,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "claude-sonnet-5": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 3,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 1,
+        "SKIP": 5,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "cohere_command-a": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 4,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 1,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 3,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 2,
+        "CONDITIONAL": 2,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 1,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "deepseek_deepseek-v4-flash": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 3,
+        "CONDITIONAL": 0,
+        "MONITOR": 1,
+        "SKIP": 2,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 5,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "google_gemini-2.5-flash": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 4,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 4,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 1,
+        "CONDITIONAL": 3,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 1,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "google_gemini-3.5-flash": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 8,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 3,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "gpt-5.6-luna": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 2,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 1,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 6,
+        "MONITOR": 1,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "gpt-5.6-sol": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 3,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 7,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "gpt-5.6-terra": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 2,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 3,
+        "MONITOR": 1,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "meta-llama_llama-4-maverick": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 4,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 14,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "mistralai_mistral-large-2512": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 3,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 1,
+        "CONDITIONAL": 0,
+        "MONITOR": 1,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 3,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "mistralai_mistral-medium-3.1": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 3,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 2,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 2,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 2,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "moonshotai_kimi-k2-thinking": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 3,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 1,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 3,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 2,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "moonshotai_kimi-k2": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 1,
+        "CONDITIONAL": 0,
+        "MONITOR": 1,
+        "SKIP": 2,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 4,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "z-ai_glm-5.2": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 3,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 1,
+        "CONDITIONAL": 0,
+        "MONITOR": 1,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 0,
+        "CONDITIONAL": 2,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 1,
+        "CONDITIONAL": 3,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    },
+    "~google_gemini-pro-latest": {
+      "APPLY": {
+        "APPLY": 0,
+        "CONDITIONAL": 1,
+        "MONITOR": 0,
+        "SKIP": 1,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "CONDITIONAL": {
+        "APPLY": 2,
+        "CONDITIONAL": 0,
+        "MONITOR": 1,
+        "SKIP": 3,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "MONITOR": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "SKIP": {
+        "APPLY": 2,
+        "CONDITIONAL": 2,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      },
+      "?": {
+        "APPLY": 0,
+        "CONDITIONAL": 0,
+        "MONITOR": 0,
+        "SKIP": 0,
+        "PARSE_FAIL": 0,
+        "API_ERROR": 0,
+        "TIMEOUT": 0,
+        "EMPTY": 0,
+        "UNKNOWN": 0
+      }
+    }
+  },
+  "directional_claims": {
+    "gpt_upgrade_claim": {
+      "claim": "GPT models predominantly upgrade (SKIP\u2192CONDITIONAL)",
+      "terra": {
+        "SKIP\u2192CONDITIONAL": 3,
+        "CONDITIONAL\u2192APPLY": 0
+      },
+      "luna": {
+        "SKIP\u2192CONDITIONAL": 6,
+        "CONDITIONAL\u2192APPLY": 1
+      },
+      "sol": {
+        "SKIP\u2192CONDITIONAL": 1,
+        "CONDITIONAL\u2192APPLY": 0
+      }
+    },
+    "sonnet_downgrade_claim": {
+      "claim": "Sonnet-5 predominantly downgrades (CONDITIONAL\u2192SKIP)",
+      "CONDITIONAL\u2192SKIP": 5,
+      "APPLY\u2192CONDITIONAL": 3,
+      "APPLY\u2192SKIP": 0
+    }
+  }
+}

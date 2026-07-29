@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from seeker_os.llm.json_utils import extract_json_text
 
@@ -53,7 +54,11 @@ Rules:
 - For company, look for the company name in the JD text (e.g. "Chainguard is the trusted source...", "About Us: Acme Corp"). Use the proper capitalized name.
 - For location, extract the primary work location from the JD (e.g. "Austin, TX", "Reston, VA", "Remote, US"). If multiple locations are listed, use the first or primary one.
 - For compensation, look for salary ranges, base salary, or pay bands. Convert to annual integers (strip commas/currency symbols). If only an hourly/monthly rate is given, annualize it (hourly * 2080, monthly * 12).
-- For workplace_type, infer from phrases like "remote-first", "work from anywhere", "hybrid", "in-office", "on-site".
+- For workplace_type, classify as "Remote", "Hybrid", or "On-Site" using these priority rules:
+  * "Remote" if the JD says "remote-first", "work from anywhere", "fully remote", or explicitly offers remote as an option (e.g. "remote OK", "remote OK too", "open to remote", "open to fully remote for the right person").
+  * "Hybrid" only if the JD requires some in-office presence AND does NOT offer fully remote as an alternative. Phrases like "hybrid preferred" or "hybrid preferred / remote OK" mean remote IS an option — classify as "Remote".
+  * "On-Site" if the JD requires working from an office with no remote or hybrid option mentioned.
+  * When both hybrid and remote are mentioned, default to "Remote" if the JD indicates remote is an available option.
 - For seniority_level, infer from the job title and experience requirements (e.g. "5-7 years" → "Senior", "10+ years" → "Staff/Principal").
 - For role_type, infer from the job title and responsibilities (IC vs management).
 - For countries, extract from location strings and JD text (e.g. "Canada - Remote; United States - Remote" → ["Canada", "United States"]).
@@ -82,6 +87,43 @@ class ExtractedMetadata(BaseModel):
         if v is None:
             return None
         return int(round(float(v)))
+
+
+_REMOTE_OK_PATTERNS = [
+    re.compile(r"remote\s*ok", re.IGNORECASE),
+    re.compile(r"remote\s+ok(?:ay)?\s+too", re.IGNORECASE),
+    re.compile(r"open\s+to\s+(?:fully\s+)?remote", re.IGNORECASE),
+    re.compile(r"remote[- ]?first", re.IGNORECASE),
+    re.compile(r"work\s+from\s+anywhere", re.IGNORECASE),
+    re.compile(r"fully\s+remote\s+for\s+the\s+right\s+person", re.IGNORECASE),
+    re.compile(r"remote\s+(?:is\s+)?(?:also\s+)?(?:an?\s+)?option", re.IGNORECASE),
+    re.compile(r"remote\s+friendly", re.IGNORECASE),
+]
+
+
+def _post_process_workplace_type(workplace_type: str, jd_text: str) -> str:
+    """Safety-net: override Hybrid→Remote when JD text contains unambiguous
+    signals that remote work is an available option.
+
+    This catches cases where the LLM latches onto "hybrid" in the JD without
+    considering that the posting also explicitly offers remote as an option
+    (e.g. "Hybrid Seattle preferred / Remote OK too").
+    """
+    wt = (workplace_type or "").strip()
+    if wt.lower() != "hybrid":
+        return wt
+
+    text_lower = jd_text.lower()
+    for pattern in _REMOTE_OK_PATTERNS:
+        if pattern.search(text_lower):
+            logger.info(
+                "workplace_type post-process: overriding Hybrid→Remote "
+                "(matched pattern %s in JD text)",
+                pattern.pattern,
+            )
+            return "Remote"
+
+    return wt
 
 
 def extract_metadata_from_jd(
@@ -153,6 +195,10 @@ def extract_metadata_from_jd(
         logger.warning("LLM metadata extraction returned invalid JSON: %s", text[:200])
         return ExtractedMetadata()
 
+    workplace_type = data.get("workplace_type")
+    if workplace_type:
+        workplace_type = _post_process_workplace_type(workplace_type, jd_text)
+
     try:
         return ExtractedMetadata(
             jd_text=data.get("jd_text"),
@@ -162,7 +208,7 @@ def extract_metadata_from_jd(
             comp_min=data.get("comp_min"),
             comp_max=data.get("comp_max"),
             comp_currency=data.get("comp_currency"),
-            workplace_type=data.get("workplace_type"),
+            workplace_type=workplace_type,
             seniority_level=data.get("seniority_level"),
             role_type=data.get("role_type"),
             commitment=data.get("commitment"),

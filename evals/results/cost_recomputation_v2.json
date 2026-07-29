@@ -1,0 +1,139 @@
+{
+  "audit_type": "Phase 2C Cost Recomputation V2",
+  "audit_date": "2026-07-27",
+  "pricing": {
+    "gpt-5.6-terra": {
+      "prompt": 3.0,
+      "completion": 15.0
+    },
+    "gpt-5.6-luna": {
+      "prompt": 0.5,
+      "completion": 2.0
+    },
+    "claude-haiku-4.5": {
+      "prompt": 1.0,
+      "completion": 5.0
+    },
+    "mistralai/mistral-large-2512": {
+      "prompt": 0.5,
+      "completion": 1.5
+    },
+    "deepseek/deepseek-v4-flash": {
+      "prompt": 0.14,
+      "completion": 0.28
+    },
+    "moonshotai/kimi-k2": {
+      "prompt": 0.6,
+      "completion": 2.5
+    }
+  },
+  "assumptions": {
+    "company_research": "ASSUMED: 50% of JD analysis token count. NOT EVALUATED.",
+    "traceability_judge": "ASSUMED: judge prompt ~ resume gen prompt, completion ~500 tokens. NOT EVALUATED.",
+    "token_source": "Per-test average from eval aggregate / test count."
+  },
+  "per_test_tokens": {
+    "jd_analysis": {
+      "terra": {
+        "prompt_per_test": 11157.5,
+        "completion_per_test": 2450.5588235294117
+      },
+      "luna": {
+        "prompt_per_test": 11157.5,
+        "completion_per_test": 2932.794117647059
+      },
+      "haiku": {
+        "prompt_per_test": 12841.882352941177,
+        "completion_per_test": 3058.705882352941
+      },
+      "ml2512": {
+        "prompt_per_test": 11892.558823529413,
+        "completion_per_test": 1733.2058823529412
+      },
+      "ds_flash": {
+        "prompt_per_test": 11495.382352941177,
+        "completion_per_test": 5967.64705882353
+      },
+      "kimi_k2": {
+        "prompt_per_test": 11167.764705882353,
+        "completion_per_test": 2453.6470588235293
+      }
+    },
+    "resume_generation": {
+      "terra": {
+        "prompt_per_test": 8456.714285714286,
+        "completion_per_test": 2485.285714285714
+      },
+      "luna": {
+        "prompt_per_test": 8456.714285714286,
+        "completion_per_test": 2511.9285714285716
+      },
+      "haiku": {
+        "prompt_per_test": 9707.285714285714,
+        "completion_per_test": 2778.214285714286
+      },
+      "ml2512": {
+        "prompt_per_test": 8965.57142857143,
+        "completion_per_test": 1698.2857142857142
+      },
+      "ds_flash": {
+        "prompt_per_test": 8634.357142857143,
+        "completion_per_test": 4810.142857142857
+      },
+      "kimi_k2": {
+        "prompt_per_test": 8473.142857142857,
+        "completion_per_test": 3474.785714285714
+      }
+    }
+  },
+  "per_job_costs": {
+    "all_terra": {
+      "research": 0.035115441176470585,
+      "jd": 0.07023088235294117,
+      "resume": 0.06264942857142856,
+      "judge": 0.03287014285714286,
+      "total": 0.20086589495798318,
+      "draft_claim": 0.155
+    },
+    "all_deepseek": {
+      "research": 0.0016401473529411767,
+      "jd": 0.0032802947058823534,
+      "resume": 0.0025556500000000005,
+      "judge": 0.0013488100000000002,
+      "total": 0.00882490205882353,
+      "draft_claim": 0.014
+    },
+    "hybrid": {
+      "research": 0.0016401473529411767,
+      "jd": 0.008546088235294118,
+      "resume": 0.009252214285714287,
+      "judge": 0.012207285714285714,
+      "total": 0.031645735588235295,
+      "draft_claim": 0.026
+    }
+  },
+  "weekly_100_jobs": {
+    "hybrid": {
+      "recomputed": 3.1645735588235295,
+      "draft": 2.6
+    },
+    "all_terra": {
+      "recomputed": 20.086589495798318,
+      "draft": 15.5
+    }
+  },
+  "ratio": {
+    "recomputed": 6.3473289915453135,
+    "draft": 5.961538461538462
+  },
+  "conclusion": {
+    "hybrid_recommendation_holds": true,
+    "cost_advantage": "6.3x (draft claims 6x)",
+    "optimal_judge_unchanged": true,
+    "haiku_note": "Draft likely used Haiku 3.5 pricing for $0.009. Corrected: $0.0122/job.",
+    "unevaluated_legs": [
+      "Company research (ASSUMED)",
+      "Traceability judge (ASSUMED)"
+    ]
+  }
+}

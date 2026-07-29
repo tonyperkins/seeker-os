@@ -1,0 +1,171 @@
+{
+  "audit_type": "Phase 2 FINDINGS vs Raw JSON Audit",
+  "audit_date": "2026-07-27",
+  "pass_rates": {
+    "verdict": "ALL 16 models' pass rates MATCH FINDINGS exactly for both JD analysis (34 tests) and resume generation (14 tests).",
+    "models_checked": 16,
+    "discrepancies": 0
+  },
+  "parse_failures": {
+    "glm-5.2": {
+      "findings_claims": 5,
+      "raw_json": 5,
+      "match": true,
+      "details": "Tests 0, 11, 27, 28, 29 \u2014 all 'Invalid JSON' errors"
+    },
+    "deepseek-v4-flash": {
+      "findings_claims": 1,
+      "raw_json": 1,
+      "match": true,
+      "details": "Test 33 \u2014 'Invalid JSON' error"
+    },
+    "mistral-medium-3.1": {
+      "findings_claims": 3,
+      "raw_json": 3,
+      "match": true,
+      "details": "Tests 17, 23, 32 \u2014 all 'Invalid JSON' errors"
+    },
+    "gemini-2.5-flash": {
+      "findings_claims": 3,
+      "raw_json": 3,
+      "match": true,
+      "details": "Tests 6 (Missing required fields: confidence), 7 (Invalid JSON: Extra data), 22 (Missing required fields: confidence)"
+    },
+    "kimi-k2-thinking": {
+      "findings_claims": 6,
+      "raw_json": 1,
+      "match": false,
+      "discrepancy": "FINDINGS claims 6 parse failures but raw JSON shows only 1 (Test 15: Missing required fields). FINDINGS classified 9 verdict mismatches as parse_fail in its breakdown table (lines 441-444). The outputs start with 'Thinking:' but JSON was successfully parsed and verdicts extracted \u2014 the verdicts just didn't match expected values.",
+      "raw_details": "Test 15 is the only true parse failure. Tests 1,2,3 (APPLY\u2192SKIP), 6,8,9 (CONDITIONAL\u2192SKIP), 13 (CONDITIONAL\u2192APPLY), 27,31 (SKIP\u2192CONDITIONAL) are all verdict mismatches, not parse failures.",
+      "draft_line": 84,
+      "draft_claim": "had 6 parse failures from reasoning text prepended to JSON output",
+      "verdict": "DISCREPANCY: FINDINGS and draft claim 6 parse failures; raw JSON shows 1. The other 5 'parse failures' in FINDINGS are verdict mismatches misclassified as parse failures."
+    },
+    "cohere-command-a": {
+      "findings_claims": 1,
+      "raw_json": 0,
+      "match": false,
+      "discrepancy": "FINDINGS claims 1 parse failure but raw JSON shows 0 parse failures. Test 7 is an API error (422 Unprocessable Entity), not a parse failure. FINDINGS may have counted this API error as a parse failure.",
+      "raw_details": "Test 7: API error 422 'No valid response generated' \u2014 model returned no output. All other failures are verdict mismatches."
+    }
+  },
+  "false_positives": {
+    "claude-haiku-4-5": {
+      "raw_json": 11,
+      "findings_claims": "11 (line 276 area)",
+      "match": true
+    },
+    "gemini-3.5-flash": {
+      "raw_json": 11,
+      "findings_claims": "11 (line 78 area)",
+      "match": true
+    },
+    "gemini-2.5-flash": {
+      "raw_json": 5,
+      "findings_claims": "5 (line 543)",
+      "match": true
+    },
+    "cohere-command-a": {
+      "raw_json": 3,
+      "findings_claims": "3 (line 427)",
+      "match": true
+    },
+    "deepseek-v4-flash": {
+      "raw_json": 3,
+      "findings_claims": "3 (line 64-68)",
+      "match": true
+    },
+    "kimi-k2": {
+      "raw_json": 1,
+      "findings_claims": "1 (line 18)",
+      "match": true
+    },
+    "kimi-k2-thinking": {
+      "raw_json": 1,
+      "findings_claims": "0 (line 448: 'Zero false positives')",
+      "match": true
+    },
+    "mistral-large-2512": {
+      "raw_json": 1,
+      "findings_claims": "1 (line 406)",
+      "match": true
+    },
+    "gpt-5.6-luna": {
+      "raw_json": 1,
+      "findings_claims": "?",
+      "match": "unverified"
+    }
+  },
+  "api_errors": {
+    "gpt-5.6-sol": {
+      "raw_json": 7,
+      "findings_claims": 7,
+      "match": true,
+      "details": "All 429 Quota exceeded errors on tests 26-33"
+    },
+    "cohere-command-a": {
+      "raw_json": 1,
+      "findings_claims": 0,
+      "match": false,
+      "details": "Test 7: 422 Unprocessable Entity. FINDINGS doesn't mention this API error."
+    }
+  },
+  "durations": {
+    "verdict": "All FINDINGS durations match comparison file entries exactly.",
+    "deepseek-v4-flash JD": {
+      "findings": 579,
+      "raw": 579,
+      "match": true
+    },
+    "glm-5.2 JD": {
+      "findings": 1449,
+      "raw": 1449,
+      "match": true
+    },
+    "glm-5.2 resume": {
+      "findings": 628,
+      "raw": 628,
+      "match": true
+    },
+    "hy3-free resume": {
+      "findings": 962,
+      "raw": 962,
+      "match": true
+    },
+    "deepseek-v4-flash resume": {
+      "findings": 282,
+      "raw": 282,
+      "match": true,
+      "note": "Multiple runs exist (104-732s); 282s is the last run"
+    },
+    "poolside laguna-m.1 resume": {
+      "findings": 217,
+      "raw": 217,
+      "match": true
+    },
+    "deepseek-v4-pro discounted resume": {
+      "findings": 525,
+      "raw": 525,
+      "match": true
+    },
+    "k2-thinking total": {
+      "findings": "36m",
+      "raw": 2221,
+      "raw_minutes": 37,
+      "match": "approximate"
+    },
+    "k2 total": {
+      "findings": "18m",
+      "raw": 1112,
+      "raw_minutes": 18.5,
+      "match": true
+    }
+  },
+  "summary": {
+    "pass_rates": "All 16 models match exactly.",
+    "parse_failures": "2 discrepancies: Kimi K2 Thinking (6 claimed, 1 actual) and Cohere Command A (1 claimed, 0 actual).",
+    "false_positives": "All verified claims match.",
+    "api_errors": "1 discrepancy: Cohere Command A has 1 API error (422) not mentioned in FINDINGS.",
+    "durations": "All match exactly."
+  }
+}

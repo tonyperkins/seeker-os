@@ -1,0 +1,365 @@
+{
+  "audit_type": "Phase 2C Parser Permissiveness",
+  "audit_date": "2026-07-27",
+  "description": "Comparison of eval backwards-scanning JSON extractor vs production extract_json_text (forward raw_decode). Count of outputs that parse under eval but fail under production.",
+  "eval_extractor": "Backwards scan: rfind({), try json.loads(candidate), fallback to first {",
+  "prod_extractor": "Forward scan: find({), raw_decode, forward scan through all { positions",
+  "summary": {
+    "total_eval_only_passes": 0,
+    "total_both_pass": 525,
+    "total_neither_pass": 265,
+    "interpretation": "0 outputs parse under eval but fail under production. This is the permissiveness gap."
+  },
+  "per_model": {
+    "claude-haiku-4-5-20251001|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 33,
+      "eval_parses": 33,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 33,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "claude-sonnet-5|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "cohere_command-a|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 33,
+      "eval_parses": 33,
+      "prod_parses": 33,
+      "eval_only_passes": 0,
+      "both_pass": 33,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "deepseek_deepseek-v4-flash|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 33,
+      "eval_parses": 33,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 33,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "google_gemini-2.5-flash|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 33,
+      "eval_parses": 33,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 33,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "google_gemini-3.5-flash|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "gpt-5.6-luna|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "gpt-5.6-sol|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 27,
+      "eval_parses": 27,
+      "prod_parses": 27,
+      "eval_only_passes": 0,
+      "both_pass": 27,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "gpt-5.6-terra|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "meta-llama_llama-4-maverick|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "mistralai_mistral-large-2512|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "mistralai_mistral-medium-3.1|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 31,
+      "eval_parses": 31,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 31,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "moonshotai_kimi-k2-thinking|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "moonshotai_kimi-k2|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "z-ai_glm-5.2|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 29,
+      "eval_parses": 29,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 29,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "~google_gemini-pro-latest|jd_analysis": {
+      "total_tests": 34,
+      "outputs_with_content": 34,
+      "eval_parses": 34,
+      "prod_parses": 34,
+      "eval_only_passes": 0,
+      "both_pass": 34,
+      "neither_pass": 0,
+      "divergent_examples": []
+    },
+    "claude-haiku-4-5-20251001|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "claude-sonnet-5|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "cohere_command-a|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 13,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 13,
+      "divergent_examples": []
+    },
+    "deepseek_deepseek-v4-flash|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "deepseek_deepseek-v4-pro_discounted|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "google_gemini-2.5-flash|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "google_gemini-3.5-flash|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "gpt-5.6-luna|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "gpt-5.6-sol|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "gpt-5.6-terra|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "meta-llama_llama-4-maverick|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "mistralai_mistral-large-2512|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "mistralai_mistral-medium-3.1|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "moonshotai_kimi-k2-thinking|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "moonshotai_kimi-k2|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "poolside_laguna-m.1|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "tencent_hy3_free|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "z-ai_glm-5.2|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    },
+    "~google_gemini-pro-latest|resume_generation": {
+      "total_tests": 14,
+      "outputs_with_content": 14,
+      "eval_parses": 0,
+      "prod_parses": 0,
+      "eval_only_passes": 0,
+      "both_pass": 0,
+      "neither_pass": 14,
+      "divergent_examples": []
+    }
+  }
+}

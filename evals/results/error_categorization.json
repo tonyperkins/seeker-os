@@ -1,0 +1,177 @@
+{
+  "audit_type": "Phase 2C Error Categorization",
+  "audit_date": "2026-07-27",
+  "description": "Clean breakdown of all failures across 16 full JD runs: verdict mismatch / parse failure / API error (with status code) / timeout / empty output.",
+  "categories": {
+    "claude-haiku-4-5-20251001": {
+      "total": 34,
+      "passed": 13,
+      "verdict_mismatch": 20,
+      "parse_failure": 1,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "claude-sonnet-5": {
+      "total": 34,
+      "passed": 24,
+      "verdict_mismatch": 10,
+      "parse_failure": 0,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "cohere_command-a": {
+      "total": 34,
+      "passed": 21,
+      "verdict_mismatch": 12,
+      "parse_failure": 0,
+      "api_error": 1,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": [
+        "Test 7: 422 Unprocessable Entity"
+      ]
+    },
+    "deepseek_deepseek-v4-flash": {
+      "total": 34,
+      "passed": 21,
+      "verdict_mismatch": 12,
+      "parse_failure": 1,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "google_gemini-2.5-flash": {
+      "total": 34,
+      "passed": 17,
+      "verdict_mismatch": 14,
+      "parse_failure": 3,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "google_gemini-3.5-flash": {
+      "total": 34,
+      "passed": 21,
+      "verdict_mismatch": 13,
+      "parse_failure": 0,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "gpt-5.6-luna": {
+      "total": 34,
+      "passed": 23,
+      "verdict_mismatch": 11,
+      "parse_failure": 0,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "gpt-5.6-sol": {
+      "total": 34,
+      "passed": 22,
+      "verdict_mismatch": 5,
+      "parse_failure": 0,
+      "api_error": 7,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": [
+        "Test 26: 429/quota",
+        "Test 27: 429/quota",
+        "Test 29: 429/quota",
+        "Test 30: 429/quota",
+        "Test 31: 429/quota",
+        "Test 32: 429/quota",
+        "Test 33: 429/quota"
+      ]
+    },
+    "gpt-5.6-terra": {
+      "total": 34,
+      "passed": 28,
+      "verdict_mismatch": 6,
+      "parse_failure": 0,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "meta-llama_llama-4-maverick": {
+      "total": 34,
+      "passed": 16,
+      "verdict_mismatch": 18,
+      "parse_failure": 0,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "mistralai_mistral-large-2512": {
+      "total": 34,
+      "passed": 26,
+      "verdict_mismatch": 8,
+      "parse_failure": 0,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "mistralai_mistral-medium-3.1": {
+      "total": 34,
+      "passed": 23,
+      "verdict_mismatch": 8,
+      "parse_failure": 3,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "moonshotai_kimi-k2-thinking": {
+      "total": 34,
+      "passed": 24,
+      "verdict_mismatch": 9,
+      "parse_failure": 1,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "moonshotai_kimi-k2": {
+      "total": 34,
+      "passed": 25,
+      "verdict_mismatch": 9,
+      "parse_failure": 0,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "z-ai_glm-5.2": {
+      "total": 34,
+      "passed": 21,
+      "verdict_mismatch": 8,
+      "parse_failure": 5,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    },
+    "~google_gemini-pro-latest": {
+      "total": 34,
+      "passed": 22,
+      "verdict_mismatch": 12,
+      "parse_failure": 0,
+      "api_error": 0,
+      "timeout": 0,
+      "empty_output": 0,
+      "api_error_details": []
+    }
+  }
+}

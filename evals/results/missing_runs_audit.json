@@ -1,0 +1,63 @@
+{
+  "audit_type": "Phase 2 Missing Runs Audit",
+  "audit_date": "2026-07-27",
+  "never_run_models": [
+    {
+      "model": "minimax/minimax-m3",
+      "screen_score": "2/6 (33.3%)",
+      "failure_mode": "Over-conservative: 2 APPLY\u2192SKIP, 2 CONDITIONAL\u2192SKIP. Never says APPLY."
+    },
+    {
+      "model": "poolside/laguna-m.1:free",
+      "screen_score": "4/6 (66.7%)",
+      "failure_mode": "2 CONDITIONAL\u2192SKIP verdict mismatches."
+    },
+    {
+      "model": "qwen/qwen3.7-plus",
+      "screen_score": "4/6 (66.7%)",
+      "failure_mode": "1 APPLY\u2192CONDITIONAL, 1 CONDITIONAL\u2192SKIP."
+    },
+    {
+      "model": "stepfun/step-3.7-flash",
+      "screen_score": "2/6 (33.3%)",
+      "failure_mode": "2 JSON parse failures (markdown fences), 1 APPLY\u2192CONDITIONAL, 1 CONDITIONAL\u2192SKIP."
+    },
+    {
+      "model": "stepfun/step-3.7-flash:free",
+      "screen_score": "2/6 (33.3%)",
+      "failure_mode": "2 JSON parse failures (markdown fences), 1 APPLY\u2192SKIP, 1 CONDITIONAL\u2192SKIP."
+    },
+    {
+      "model": "tencent/hy3",
+      "screen_score": "3/6 (50.0%)",
+      "failure_mode": "2 APPLY\u2192CONDITIONAL, 1 CONDITIONAL\u2192SKIP."
+    },
+    {
+      "model": "tencent/hy3-preview",
+      "screen_score": "4/6 (66.7%)",
+      "failure_mode": "1 APPLY\u2192CONDITIONAL, 1 CONDITIONAL\u2192SKIP."
+    }
+  ],
+  "excluded_duplicates": [
+    {
+      "model": "anthropic/claude-sonnet-5 (via Kilo)",
+      "reason": "Duplicate of claude-sonnet-5 tested via Anthropic direct API. Screened 0/6 (0.0%)."
+    },
+    {
+      "model": "deepseek/deepseek-v4-flash:discounted",
+      "reason": "Variant of deepseek-v4-flash (fully run). Screened 5/6 (83.3%)."
+    },
+    {
+      "model": "deepseek/deepseek-v4-pro (non-discounted)",
+      "reason": "Variant of deepseek-v4-pro:discounted (resume run only). Screened 4/6 (66.7%)."
+    }
+  ],
+  "grok": {
+    "model": "grok-4.3 / grok-4.5",
+    "status": "Never run, not even screened",
+    "reason": "Cost (~$11-25 per run)",
+    "findings_reference": "FINDINGS line 300",
+    "draft_reference": "Draft line 139"
+  },
+  "suggested_disclosure": "Seven models screened on the 6-test quick screen never advanced to full evaluation: Minimax M3 (33.3%), Qwen 3.7 Plus (66.7%), StepFun 3.7 Flash (33.3%), StepFun 3.7 Flash Free (33.3%), Tencent Hy3 (50.0%), Tencent Hy3 Preview (66.7%), and Poolside Laguna M.1 Free (66.7%). Grok 4.3/4.5 was not tested at all due to cost (~$11-25 per run)."
+}

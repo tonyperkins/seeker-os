@@ -1,0 +1,288 @@
+{
+  "audit_type": "Phase 2C Model Status Reconciliation (Deduplicated)",
+  "audit_date": "2026-07-27",
+  "table": {
+    "gpt-5.6-terra": {
+      "provider": "OpenAI direct",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "gpt-5.6-luna": {
+      "provider": "OpenAI direct",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "gpt-5.6-sol": {
+      "provider": "OpenAI direct",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "claude-sonnet-5": {
+      "provider": "Anthropic direct",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "claude-haiku-4.5": {
+      "provider": "Anthropic direct",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "z-ai/glm-5.2": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "deepseek/deepseek-v4-flash": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "moonshotai/kimi-k2": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "moonshotai/kimi-k2-thinking": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "mistralai/mistral-large-2512": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "mistralai/mistral-medium-3.1": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "cohere/command-a": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "meta-llama/llama-4-maverick": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "google/gemini-2.5-flash": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "google/gemini-3.5-flash": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "~google/gemini-pro-latest": {
+      "provider": "Kilo",
+      "status": "full_run",
+      "jd_tests": 34,
+      "resume_tests": 14,
+      "note": ""
+    },
+    "deepseek/deepseek-v4-pro:discounted": {
+      "provider": "Kilo",
+      "status": "screen + resume only",
+      "jd_tests": 6,
+      "resume_tests": 14,
+      "note": "Resume only; JD was 6-test screen (5/6)"
+    },
+    "poolside/laguna-m.1": {
+      "provider": "Kilo",
+      "status": "screen + resume only",
+      "jd_tests": 6,
+      "resume_tests": 14,
+      "note": "Resume only; JD was 6-test screen (4/6)"
+    },
+    "tencent/hy3:free": {
+      "provider": "Kilo",
+      "status": "screen + resume only",
+      "jd_tests": 6,
+      "resume_tests": 14,
+      "note": "Resume only; JD was 6-test screen (5/6). Free tier ($0.00)"
+    },
+    "minimax/minimax-m3": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 2/6. 33.3% screen score"
+    },
+    "qwen/qwen3.7-plus": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 4/6. 66.7% screen score"
+    },
+    "stepfun/step-3.7-flash": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 2/6. 33.3%, 2 JSON parse failures"
+    },
+    "stepfun/step-3.7-flash:free": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 2/6. 33.3%, 2 JSON parse failures"
+    },
+    "tencent/hy3": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 3/6. 50.0% screen score"
+    },
+    "tencent/hy3-preview": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 4/6. 66.7% screen score"
+    },
+    "poolside/laguna-m.1:free": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 4/6. 66.7% screen score"
+    },
+    "deepseek/deepseek-v4-pro": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 4/6. 66.7% screen; discounted variant got resume run"
+    },
+    "deepseek/deepseek-v4-flash:discounted": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 5/6. 83.3% screen; non-discounted variant got full run"
+    },
+    "anthropic/claude-sonnet-5 (via Kilo)": {
+      "provider": "Kilo",
+      "status": "screened_only",
+      "jd_tests": 6,
+      "resume_tests": 0,
+      "note": "Screen 0/6. 0.0% screen; succeeded via Anthropic direct API"
+    },
+    "anthropic/claude-opus-4.8": {
+      "provider": "Kilo",
+      "status": "attempted_and_failed",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "exit_code=1, no output"
+    },
+    "anthropic/claude-opus-4.8-fast": {
+      "provider": "Kilo",
+      "status": "attempted_and_failed",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "exit_code=1, no output"
+    },
+    "stealth/claude-opus-4.8": {
+      "provider": "Kilo",
+      "status": "attempted_and_failed",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "exit_code=1, no output"
+    },
+    "openai/gpt-5.6-sol-pro": {
+      "provider": "Kilo",
+      "status": "attempted_and_failed",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "exit_code=1, no output"
+    },
+    "openai/gpt-5.6-terra-pro": {
+      "provider": "Kilo",
+      "status": "attempted_and_failed",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "exit_code=1, no output"
+    },
+    "openai/gpt-5.6-luna-pro": {
+      "provider": "Kilo",
+      "status": "attempted_and_failed",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "exit_code=1, no output"
+    },
+    "google/gemini-3.1-pro-preview": {
+      "provider": "Kilo",
+      "status": "attempted_and_failed",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "exit_code=1, no output"
+    },
+    "grok-4.3": {
+      "provider": "xAI",
+      "status": "never_attempted",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "Not tested. FINDINGS: ~$11-25 per run"
+    },
+    "grok-4.5": {
+      "provider": "xAI",
+      "status": "never_attempted",
+      "jd_tests": 0,
+      "resume_tests": 0,
+      "note": "Not tested. FINDINGS: ~$11-25 per run"
+    }
+  },
+  "status_counts": {
+    "full_run": 16,
+    "screen + resume only": 3,
+    "screened_only": 10,
+    "attempted_and_failed": 7,
+    "never_attempted": 2
+  },
+  "notes": {
+    "full_run": "16 unique models with both JD 34-test and resume 14-test runs",
+    "screen + resume only": "3 models with 6-test JD screen + 14-test resume run (no full JD)",
+    "screened_only": "10 models with 6-test JD screen only, never advanced",
+    "attempted_and_failed": "7 models that failed with exit_code=1 and left no output",
+    "never_attempted": "2 models (Grok 4.3/4.5) never tested due to cost",
+    "duplicate_note": "openai/gpt-5.6-sol, terra, luna appear in comparison files as attempted_and_failed via Kilo, but succeeded via OpenAI direct API. The Kilo attempts are not counted separately.",
+    "anthropic_claude-sonnet-5_via_kilo": "Screened 0/6 via Kilo Gateway. Succeeded via Anthropic direct API. Counted as screened_only for the Kilo attempt."
+  }
+}
