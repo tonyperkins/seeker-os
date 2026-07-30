@@ -34,7 +34,7 @@ def _make_filters() -> FilterConfig:
         seniority_reject=["Mid Level", "Entry Level", "Junior", "Associate"],
         seniority_unknown_passes=True,
         freshness_days=30,
-        commitment_required="Full Time",
+        commitment_required=["Full Time"],
     )
 
 
@@ -151,10 +151,43 @@ class TestHardFilters:
         assert result.passed is False
 
     def test_rejects_wrong_commitment(self):
+        """A Part Time job is rejected when only Full Time is required."""
         job = _make_job(commitment=["Part Time"])
         result = apply_filters(job, _make_profile(), _make_filters(), _make_title_filters())
         assert result.passed is False
         assert "commitment" in result.reason.lower()
+
+    def test_multi_commitment_passes_contract(self):
+        """A Contract job passes when commitment_required is [Full Time, Contract]."""
+        filters = _make_filters()
+        filters.commitment_required = ["Full Time", "Contract"]
+        job = _make_job(commitment=["Contract"])
+        result = apply_filters(job, _make_profile(), filters, _make_title_filters())
+        assert result.passed is True
+
+    def test_multi_commitment_rejects_part_time(self):
+        """A Part Time job is rejected when required is [Full Time, Contract]."""
+        filters = _make_filters()
+        filters.commitment_required = ["Full Time", "Contract"]
+        job = _make_job(commitment=["Part Time"])
+        result = apply_filters(job, _make_profile(), filters, _make_title_filters())
+        assert result.passed is False
+        assert "commitment" in result.reason.lower()
+
+    def test_empty_commitment_required_passes_any(self):
+        """Empty commitment_required list means no filter — any commitment passes."""
+        filters = _make_filters()
+        filters.commitment_required = []
+        job = _make_job(commitment=["Part Time"])
+        result = apply_filters(job, _make_profile(), filters, _make_title_filters())
+        assert result.passed is True
+
+    def test_commitment_required_accepts_bare_string(self):
+        """Legacy YAML with a bare string is coerced to a single-element list."""
+        filters = FilterConfig(
+            remote_only=True, us_only=True, commitment_required="Full Time",
+        )
+        assert filters.commitment_required == ["Full Time"]
 
     # --- Phase 3a: Defense blocklist + clearance gate ---
 

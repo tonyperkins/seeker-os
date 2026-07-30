@@ -129,16 +129,31 @@ export function FilterForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">Commitment Required</Label>
-          <select
-            value={f.commitment_required}
-            onChange={(e) => updateFilters({ commitment_required: e.target.value })}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-          >
-            <option value="Full Time" className="bg-background text-foreground">Full Time</option>
-            <option value="Part Time" className="bg-background text-foreground">Part Time</option>
-            <option value="Contract" className="bg-background text-foreground">Contract</option>
-            <option value="" className="bg-background text-foreground">Any</option>
-          </select>
+          <div className="flex flex-wrap gap-3 pt-1">
+            {["Full Time", "Part Time", "Contract"].map((opt) => {
+              const checked = (f.commitment_required ?? []).includes(opt);
+              return (
+                <label key={opt} className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const current = f.commitment_required ?? [];
+                      const next = e.target.checked
+                        ? [...current, opt]
+                        : current.filter((c) => c !== opt);
+                      updateFilters({ commitment_required: next });
+                    }}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  {opt}
+                </label>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Job passes if its commitment matches any selected. None selected = any.
+          </p>
         </div>
       </div>
 

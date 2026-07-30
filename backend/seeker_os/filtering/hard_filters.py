@@ -200,11 +200,17 @@ def apply_filters(
             return FilterResult(passed=False, reason=f"Blacklisted company ({job.company})")
 
     # 10. Commitment
+    # commitment_required is a list of acceptable commitments (e.g. ["Full Time", "Contract"]).
+    # A job passes if its commitment list intersects the required set.
+    # Empty list = no filter (any commitment passes, including jobs with no commitment data).
     if filters.commitment_required:
-        commitments = [c.lower() for c in job.commitment]
-        required = filters.commitment_required.lower()
-        if commitments and required not in commitments:
-            return FilterResult(passed=False, reason=f"Commitment mismatch (need {filters.commitment_required})")
+        required = {c.lower() for c in filters.commitment_required}
+        commitments = {c.lower() for c in job.commitment}
+        if commitments and not (commitments & required):
+            return FilterResult(
+                passed=False,
+                reason=f"Commitment mismatch (need any of {filters.commitment_required})",
+            )
 
     # 11. Visa sponsorship
     if filters.visa_sponsorship_required:

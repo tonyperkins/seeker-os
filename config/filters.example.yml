@@ -23,7 +23,11 @@ filters:
   comp_sanity_max: 10000000
 
   freshness_days: 30
-  commitment_required: "Full Time"
+  # Commitment types you're open to. A job passes if its commitment intersects
+  # this list. Empty list = any (no commitment filter).
+  # hiring.cafe exposes a single-dimension enum: Full Time / Part Time / Contract.
+  # A bare string is accepted for backward compat but the list form is preferred.
+  commitment_required: ["Full Time"]
   # Locations to exclude even if us_only passes (states or cities).
   location_exclude: []
   # Cities where hybrid jobs are allowed even when remote_only=true.

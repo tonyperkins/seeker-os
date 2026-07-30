@@ -200,7 +200,8 @@ def run_pipeline(
                     if fc.hybrid_accepted_cities:
                         sq_workplace_types = ["Remote", "Hybrid"]
                 if fc.commitment_required:
-                    # Map our config value to hiring.cafe's format
+                    # Map each config value to hiring.cafe's format. Values already
+                    # in hiring.cafe format (e.g. "Full Time") pass through unchanged.
                     commitment_map = {
                         "full_time": "Full Time",
                         "full-time": "Full Time",
@@ -208,8 +209,10 @@ def run_pipeline(
                         "part-time": "Part Time",
                         "contract": "Contract",
                     }
-                    mapped = commitment_map.get(fc.commitment_required.lower(), fc.commitment_required)
-                    sq_commitments = [mapped]
+                    sq_commitments = [
+                        commitment_map.get(c.lower(), c)
+                        for c in fc.commitment_required
+                    ]
                 if fc.seniority_floor:
                     sq_seniority_levels = list(fc.seniority_floor)
                 # role_types: no config field yet, leave as None

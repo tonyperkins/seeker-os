@@ -65,7 +65,7 @@ def settings():
     s.filters.filters.seniority_unknown_passes = True
     s.filters.filters.seniority_title_override = []
     s.filters.filters.junior_title_patterns = []
-    s.filters.filters.commitment_required = None
+    s.filters.filters.commitment_required = []
     s.filters.filters.visa_sponsorship_required = False
     s.filters.filters.location_exclude = []
     s.filters.title_filters = MagicMock()
