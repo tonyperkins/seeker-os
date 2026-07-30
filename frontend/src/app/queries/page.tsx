@@ -210,32 +210,16 @@ export default function QueriesPage() {
                   onChange={(e) => setNewLabel(e.target.value)}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="q-commitment">Commitment</Label>
-                  <select
-                    id="q-commitment"
-                    value={newCommitment}
-                    onChange={(e) => setNewCommitment(e.target.value)}
-                    className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-                  >
-                    <option value="full-time" className="bg-background text-foreground">full-time</option>
-                    <option value="part-time" className="bg-background text-foreground">part-time</option>
-                    <option value="contract" className="bg-background text-foreground">contract</option>
-                    <option value="any" className="bg-background text-foreground">any</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="q-pages">Max pages</Label>
-                  <Input
-                    id="q-pages"
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={newMaxPages}
-                    onChange={(e) => setNewMaxPages(e.target.value)}
-                  />
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="q-pages">Max pages</Label>
+                <Input
+                  id="q-pages"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={newMaxPages}
+                  onChange={(e) => setNewMaxPages(e.target.value)}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="q-search">Search query (optional)</Label>
@@ -287,7 +271,6 @@ export default function QueriesPage() {
                   <TableHead className="w-16">On</TableHead>
                   <TableHead>Label</TableHead>
                   <TableHead className="max-w-[20rem]">Slug</TableHead>
-                  <TableHead className="w-28">Commitment</TableHead>
                   <TableHead className="w-20">Pages</TableHead>
                   <TableHead className="w-36">Last run</TableHead>
                   <TableHead className="w-48 text-right">Actions</TableHead>
@@ -348,22 +331,6 @@ export default function QueriesPage() {
                             )
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <select
-                            value={editCommitment}
-                            onChange={(e) => setEditCommitment(e.target.value)}
-                            className="h-7 rounded-md border border-input bg-background px-1.5 text-xs text-foreground outline-none dark:bg-input/30"
-                          >
-                            <option value="full-time" className="bg-background text-foreground">full-time</option>
-                            <option value="part-time" className="bg-background text-foreground">part-time</option>
-                            <option value="contract" className="bg-background text-foreground">contract</option>
-                            <option value="any" className="bg-background text-foreground">any</option>
-                          </select>
-                        ) : (
-                          <span className="text-muted-foreground">{q.commitment}</span>
-                        )}
                       </TableCell>
                       <TableCell>
                         {isEditing ? (

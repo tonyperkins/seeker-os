@@ -664,7 +664,7 @@ export interface FiltersData {
     comp_floor_margin_pct: number;
     comp_unknown_passes: boolean;
     freshness_days: number;
-    commitment_required: string;
+    commitment_required: string[];
     location_exclude: string[];
     visa_sponsorship_required: boolean;
   };

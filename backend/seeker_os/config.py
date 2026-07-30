@@ -382,7 +382,23 @@ class FilterConfig(BaseModel):
     # from clearing the comp floor.
     comp_sanity_max: int = 10_000_000
     freshness_days: int = 30
-    commitment_required: str = "Full Time"
+    # Commitment types the user is open to (e.g. ["Full Time", "Contract"]).
+    # hiring.cafe exposes a single-dimension enum: Full Time / Part Time / Contract.
+    # A job passes if its commitment intersects this list. Empty list = any (no filter).
+    # Accepts a bare string in YAML for backward compat (coerced to [str] by validator).
+    commitment_required: list[str] = ["Full Time"]
+
+    @field_validator("commitment_required", mode="before")
+    @classmethod
+    def _coerce_commitment_list(cls, v):
+        """Coerce a bare string (legacy YAML) into a single-element list.
+        Empty string → empty list (means 'any'). None → default handled by pydantic."""
+        if v is None:
+            return v
+        if isinstance(v, str):
+            stripped = v.strip()
+            return [stripped] if stripped else []
+        return v
     # NEW: locations to exclude even if us_only passes (states or cities)
     location_exclude: list[str] = []
     # NEW: cities where hybrid jobs are allowed even when remote_only=true
